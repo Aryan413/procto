@@ -1,0 +1,13 @@
+# ExamShield – requirements.txt
+# Install with:  pip install -r requirements.txt
+
+flask>=3.0.0
+flask-socketio>=5.3.6
+python-socketio[client]>=5.11.0   # WebSocket client for audio
+eventlet>=0.35.0                   # async transport (or use gevent)
+
+opencv-python>=4.9.0
+Pillow>=10.3.0
+numpy>=1.26.0
+sounddevice>=0.4.6
+requests>=2.31.0
