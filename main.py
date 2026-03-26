@@ -2313,6 +2313,8 @@ class InterviewStudentWindow:
                                   text="Starting camera…", fg="#5f6368",
                                   font=("Helvetica",10))
         self.cam_self.grid(row=0, column=0, sticky="nsew")
+        # Prevent label from resizing to image content — tile controls the size
+        self_tile.grid_propagate(False)
         self_name = tk.Frame(self_tile, bg="#1a1a1d"); self_name.grid(row=1, column=0, sticky="ew")
         tk.Label(self_name, text="  You", font=("Helvetica",9,"bold"),
                  bg="#1a1a1d", fg=GM_TEXT).pack(side="left", padx=8, pady=4)
@@ -2329,6 +2331,7 @@ class InterviewStudentWindow:
                                  text="Waiting for interviewer…", fg="#5f6368",
                                  font=("Helvetica",10))
         self.cam_pro.grid(row=0, column=0, sticky="nsew")
+        pro_tile.grid_propagate(False)
         pro_name = tk.Frame(pro_tile, bg="#1a1a1d"); pro_name.grid(row=1, column=0, sticky="ew")
         tk.Label(pro_name, text="  Interviewer", font=("Helvetica",9,"bold"),
                  bg="#1a1a1d", fg="#ffd93d").pack(side="left", padx=8, pady=4)
@@ -4173,6 +4176,7 @@ class MultiStudentProctorWindow:
                             highlightthickness=2, highlightbackground="#3c4043")
         pro_tile.grid(row=0, column=0, sticky="nsew", padx=(8,4), pady=8)
         pro_tile.columnconfigure(0, weight=1); pro_tile.rowconfigure(0, weight=1)
+        pro_tile.grid_propagate(False)   # tile size set by grid, not image content
 
         self._pro_self_lbl = tk.Label(pro_tile, bg="#1a1a1d",
                                        text="Starting your camera…", fg="#5f6368",
@@ -4576,6 +4580,13 @@ class MultiStudentProctorWindow:
             if cols != self._grid_cols:
                 self._grid_cols = cols
                 self._reflow_grid()
+            # In interview mode: size each card to fill canvas height
+            if self.mode == "interview":
+                ch = event.height if event.height > 50 else self._cam_canvas.winfo_height()
+                tile_h = max(200, ch - 8)
+                tile_w = max(200, event.width // self._grid_cols - 8)
+                for tile in self._student_tiles.values():
+                    tile["card"].configure(width=tile_w, height=tile_h)
         except Exception: pass
 
     def _reflow_grid(self):
@@ -4618,6 +4629,7 @@ class MultiStudentProctorWindow:
         card = tk.Frame(self._cam_inner, bg=_card_bg, bd=0,
                         highlightthickness=2, highlightbackground=_border_c)
         card.grid(row=r, column=c, padx=4, pady=4, sticky="nsew")
+        card.grid_propagate(False)   # tile controls its own size, not child content
         for col in range(self._grid_cols):
             self._cam_inner.columnconfigure(col, weight=1)
 
@@ -4657,14 +4669,9 @@ class MultiStudentProctorWindow:
         cam_lbl.pack(fill="both", expand=True)
 
         if _is_meet:
-            # Keep cam_frame at 16:9 relative to its width
-            def _fix_ratio(event, f=cam_frame):
-                try:
-                    desired_h = max(120, int(event.width * 9 / 16))
-                    f.configure(height=desired_h)
-                except Exception:
-                    pass
-            cam_frame.bind("<Configure>", _fix_ratio)
+            # Prevent cam_frame from growing to image size
+            cam_frame.pack_propagate(False)
+            cam_lbl.config(width=1, height=1)
 
         # ── Stats row ──
         stats_row = tk.Frame(card, bg=_stats_bg); stats_row.pack(fill="x")
