@@ -2302,7 +2302,9 @@ class InterviewStudentWindow:
         # Lock tile area height to 16:9 based on its width (each tile gets half)
         def _lock_tile_ratio(event, ta=self._tile_area):
             try:
-                desired_h = max(200, int(event.width / 2 * 9 / 16))
+                # Each tile is half the tile_area width; lock height to 16:9 + 28px name bar
+                tile_w = max(1, event.width // 2 - 16)   # account for padx=4 on each side
+                desired_h = max(200, int(tile_w * 9 / 16) + 28)
                 ta.configure(height=desired_h)
             except Exception:
                 pass
@@ -2406,11 +2408,11 @@ class InterviewStudentWindow:
             self._poll_chat()
 
         # ── Bottom control bar (Google Meet style) ────────────────────────────
-        ctrl_bar = tk.Frame(self.root, bg="#202124", height=80)
+        ctrl_bar = tk.Frame(self.root, bg="#202124", height=64)
         ctrl_bar.pack(fill="x", side="bottom"); ctrl_bar.pack_propagate(False)
 
         # center button cluster
-        center = tk.Frame(ctrl_bar, bg=GM_BG); center.pack(expand=True)
+        center = tk.Frame(ctrl_bar, bg=GM_BG); center.pack(expand=True, fill="both")
 
         # Mic toggle
         def _toggle_mic():
@@ -2425,7 +2427,7 @@ class InterviewStudentWindow:
                 text="🔇" if self._mic_muted else "🎤",
                 fg=GM_RED if self._mic_muted else GM_GREEN)
         self._btn_mic = self._make_meet_btn(center, "🎤", GM_SURF2, GM_TEXT, _toggle_mic)
-        self._btn_mic.pack(side="left", padx=8, pady=18)
+        self._btn_mic.pack(side="left", padx=8, pady=10)
         tk.Label(center, text="Mic", font=("Helvetica",7), bg=GM_BG,
                  fg=GM_MUTED).pack(side="left", padx=(0,8))
 
@@ -2439,7 +2441,7 @@ class InterviewStudentWindow:
                 self.cam_self.configure(image="", text="Camera off", fg="#5f6368")
                 self.cam_self.image = None
         self._btn_cam = self._make_meet_btn(center, "📹", GM_SURF2, GM_TEXT, _toggle_cam)
-        self._btn_cam.pack(side="left", padx=8, pady=18)
+        self._btn_cam.pack(side="left", padx=8, pady=10)
         tk.Label(center, text="Cam", font=("Helvetica",7), bg=GM_BG,
                  fg=GM_MUTED).pack(side="left", padx=(0,8))
 
@@ -2452,7 +2454,7 @@ class InterviewStudentWindow:
                 if _voice_student: _voice_student.stop(); _voice_student = None
                 self.root.destroy()
         btn_end = self._make_meet_btn(center, "✆", GM_RED, "#fff", _end_call, width=56, height=44, font_size=18)
-        btn_end.pack(side="left", padx=16, pady=18)
+        btn_end.pack(side="left", padx=16, pady=10)
         tk.Label(center, text="Leave", font=("Helvetica",7), bg=GM_BG,
                  fg=GM_MUTED).pack(side="left", padx=(0,8))
 
@@ -2469,7 +2471,7 @@ class InterviewStudentWindow:
                 self._sidebar_frame.grid_forget()
                 self._update_meet_btn(self._btn_chat_ctrl, "💬", GM_SURF2)
         self._btn_chat_ctrl = self._make_meet_btn(center, "💬", GM_SURF2, GM_TEXT, _toggle_chat)
-        self._btn_chat_ctrl.pack(side="left", padx=8, pady=18)
+        self._btn_chat_ctrl.pack(side="left", padx=8, pady=10)
         tk.Label(center, text="Chat", font=("Helvetica",7), bg=GM_BG,
                  fg=GM_MUTED).pack(side="left", padx=(0,8))
 
@@ -2486,7 +2488,7 @@ class InterviewStudentWindow:
                 self._sidebar_frame.grid_forget()
                 self._update_meet_btn(self._btn_notes_ctrl, "📝", GM_SURF2)
         self._btn_notes_ctrl = self._make_meet_btn(center, "📝", GM_SURF2, GM_TEXT, _toggle_notes)
-        self._btn_notes_ctrl.pack(side="left", padx=8, pady=18)
+        self._btn_notes_ctrl.pack(side="left", padx=8, pady=10)
         tk.Label(center, text="Notes", font=("Helvetica",7), bg=GM_BG,
                  fg=GM_MUTED).pack(side="left", padx=(0,8))
 
@@ -4159,9 +4161,14 @@ class MultiStudentProctorWindow:
         self._pro_chat_open = False
         self._pro_ppl_open  = False
 
+        # ── Bottom control bar — MUST be packed before the body so side=bottom works ──
+        ctrl_bar = tk.Frame(self.root, bg=GM_BG, height=64)
+        ctrl_bar.pack(fill="x", side="bottom"); ctrl_bar.pack_propagate(False)
+        center_p = tk.Frame(ctrl_bar, bg=GM_BG); center_p.pack(expand=True, fill="both")
+
         # ── Body: LEFT proctor cam | RIGHT student grid | optional sidebar ───
         body = tk.Frame(self.root, bg=GM_BG)
-        body.pack(fill="both", expand=True)
+        body.pack(fill="both", expand=True, side="top")
         body.columnconfigure(0, weight=1)   # proctor half
         body.columnconfigure(1, weight=1)   # student half
         body.columnconfigure(2, weight=0)   # sidebar (hidden by default)
@@ -4177,7 +4184,7 @@ class MultiStudentProctorWindow:
         # Lock self-view to 16:9 based on tile width
         def _lock_pro_tile_ratio(event, t=pro_tile):
             try:
-                desired_h = max(200, int(event.width * 9 / 16)) + 28  # +28 for name bar
+                desired_h = max(200, int(event.width * 9 / 16) + 28)  # +28 for name bar
                 t.configure(height=desired_h)
             except Exception:
                 pass
@@ -4323,10 +4330,7 @@ class MultiStudentProctorWindow:
 
         _sw_pro_tab("chat")
 
-        # ── Bottom control bar ────────────────────────────────────────────────
-        ctrl_bar = tk.Frame(self.root, bg=GM_BG, height=80)
-        ctrl_bar.pack(fill="x", side="bottom"); ctrl_bar.pack_propagate(False)
-        center_p = tk.Frame(ctrl_bar, bg=GM_BG); center_p.pack(expand=True)
+        # ── Buttons in control bar ────────────────────────────────────────────
 
         # Mic
         def _toggle_pro_mic():
@@ -4347,7 +4351,7 @@ class MultiStudentProctorWindow:
             except Exception:
                 pass
         self._pbtn_mic = self._make_meet_btn_p(center_p, "🎤", GM_SURF2, GM_TEXT, _toggle_pro_mic)
-        self._pbtn_mic.pack(side="left", padx=8, pady=18)
+        self._pbtn_mic.pack(side="left", padx=8, pady=10)
         tk.Label(center_p, text="Mic", font=("Helvetica",7), bg=GM_BG, fg=GM_MUTED).pack(side="left", padx=(0,8))
 
         # Camera
@@ -4361,7 +4365,7 @@ class MultiStudentProctorWindow:
                 self._start_pro_cam()
                 self._update_meet_btn_p(self._pbtn_cam, "📹", GM_SURF2)
         self._pbtn_cam = self._make_meet_btn_p(center_p, "📹", GM_SURF2, GM_TEXT, _toggle_pro_cam_btn)
-        self._pbtn_cam.pack(side="left", padx=8, pady=18)
+        self._pbtn_cam.pack(side="left", padx=8, pady=10)
         # keep legacy refs so _toggle_audio etc. still work
         self._btn_cam_toggle = self._pbtn_cam
         tk.Label(center_p, text="Cam", font=("Helvetica",7), bg=GM_BG, fg=GM_MUTED).pack(side="left", padx=(0,8))
@@ -4372,7 +4376,7 @@ class MultiStudentProctorWindow:
             if _mb.askyesno("Leave", "End this interview session?", parent=self.root):
                 self._logout()
         btn_end_p = self._make_meet_btn_p(center_p, "✆", GM_RED, "#fff", _end_call_pro, width=56, height=44, font_size=18)
-        btn_end_p.pack(side="left", padx=16, pady=18)
+        btn_end_p.pack(side="left", padx=16, pady=10)
         tk.Label(center_p, text="End", font=("Helvetica",7), bg=GM_BG, fg=GM_MUTED).pack(side="left", padx=(0,8))
 
         # Chat toggle
@@ -4388,7 +4392,7 @@ class MultiStudentProctorWindow:
                 self._pro_sidebar.grid_forget()
                 self._update_meet_btn_p(self._pbtn_chat, "💬", GM_SURF2)
         self._pbtn_chat = self._make_meet_btn_p(center_p, "💬", GM_SURF2, GM_TEXT, _toggle_pro_chat)
-        self._pbtn_chat.pack(side="left", padx=8, pady=18)
+        self._pbtn_chat.pack(side="left", padx=8, pady=10)
         tk.Label(center_p, text="Chat", font=("Helvetica",7), bg=GM_BG, fg=GM_MUTED).pack(side="left", padx=(0,8))
 
         # Participants toggle
