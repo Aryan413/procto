@@ -2286,29 +2286,23 @@ class InterviewStudentWindow:
                                     fg=GM_GREEN if self.proctor_url else GM_MUTED)
         self.lbl_status.pack(side="right", padx=10)
 
+        # ── Bottom control bar — MUST pack before body so side=bottom works ───
+        ctrl_bar_s = tk.Frame(self.root, bg=GM_BG, height=64)
+        ctrl_bar_s.pack(fill="x", side="bottom"); ctrl_bar_s.pack_propagate(False)
+        self._student_ctrl_bar = ctrl_bar_s   # wired up later
+
         # ── Main area — video tiles left, optional sidebar right ─────────────
         self._body = tk.Frame(self.root, bg=GM_BG)
         self._body.pack(fill="both", expand=True, side="top")
         self._body.columnconfigure(0, weight=1)
         self._body.rowconfigure(0, weight=1)
 
-        # Video tile area
+        # Video tile area — fills body, tiles split 50/50 width, full height
         self._tile_area = tk.Frame(self._body, bg=GM_BG)
         self._tile_area.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
         self._tile_area.columnconfigure(0, weight=1)
         self._tile_area.columnconfigure(1, weight=1)
         self._tile_area.rowconfigure(0, weight=1)
-
-        # Lock tile area height to 16:9 based on its width (each tile gets half)
-        def _lock_tile_ratio(event, ta=self._tile_area):
-            try:
-                # Each tile is half the tile_area width; lock height to 16:9 + 28px name bar
-                tile_w = max(1, event.width // 2 - 16)   # account for padx=4 on each side
-                desired_h = max(200, int(tile_w * 9 / 16) + 28)
-                ta.configure(height=desired_h)
-            except Exception:
-                pass
-        self._tile_area.bind("<Configure>", _lock_tile_ratio)
 
         # Self tile (bottom-left in Meet style — appears as a labelled video box)
         self_tile = tk.Frame(self._tile_area, bg="#1a1a1d",
@@ -2407,9 +2401,8 @@ class InterviewStudentWindow:
         if self.proctor_url:
             self._poll_chat()
 
-        # ── Bottom control bar (Google Meet style) ────────────────────────────
-        ctrl_bar = tk.Frame(self.root, bg="#202124", height=64)
-        ctrl_bar.pack(fill="x", side="bottom"); ctrl_bar.pack_propagate(False)
+        # ── Bottom control bar buttons (bar was already packed above the body) ─
+        ctrl_bar = self._student_ctrl_bar
 
         # center button cluster
         center = tk.Frame(ctrl_bar, bg=GM_BG); center.pack(expand=True, fill="both")
@@ -4180,15 +4173,6 @@ class MultiStudentProctorWindow:
                             highlightthickness=2, highlightbackground="#3c4043")
         pro_tile.grid(row=0, column=0, sticky="nsew", padx=(8,4), pady=8)
         pro_tile.columnconfigure(0, weight=1); pro_tile.rowconfigure(0, weight=1)
-
-        # Lock self-view to 16:9 based on tile width
-        def _lock_pro_tile_ratio(event, t=pro_tile):
-            try:
-                desired_h = max(200, int(event.width * 9 / 16) + 28)  # +28 for name bar
-                t.configure(height=desired_h)
-            except Exception:
-                pass
-        pro_tile.bind("<Configure>", _lock_pro_tile_ratio)
 
         self._pro_self_lbl = tk.Label(pro_tile, bg="#1a1a1d",
                                        text="Starting your camera…", fg="#5f6368",
