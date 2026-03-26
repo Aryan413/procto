@@ -2165,81 +2165,266 @@ class InterviewStudentWindow:
         tk.Button(self.root,text="Close",font=("Helvetica",11,"bold"),bg="#333",fg="#fff",
             bd=0,relief="flat",cursor="hand2",command=self.root.destroy).pack(pady=30,ipady=8,padx=80,fill="x")
 
+    # ── Google-Meet-style control bar helpers ────────────────────────────────
+    def _make_meet_btn(self, parent, text, bg, fg, cmd, width=44, height=44, font_size=16):
+        """Round icon button matching Google Meet control bar style."""
+        c = tk.Canvas(parent, width=width, height=height, bg="#202124",
+                      highlightthickness=0, cursor="hand2")
+        r = min(width, height) // 2
+        c.create_oval(2, 2, width-2, height-2, fill=bg, outline="")
+        c.create_text(width//2, height//2, text=text,
+                      font=("Segoe UI Emoji", font_size), fill=fg)
+        c.bind("<Button-1>", lambda e: cmd())
+        c.bind("<Enter>",    lambda e: c.itemconfig(1, fill=self._lighten(bg)))
+        c.bind("<Leave>",    lambda e: c.itemconfig(1, fill=bg))
+        c._bg = bg; c._text_id = 2
+        return c
+
+    def _lighten(self, hex_color):
+        try:
+            h = hex_color.lstrip("#")
+            r,g,b = int(h[0:2],16), int(h[2:4],16), int(h[4:6],16)
+            r = min(255, r+30); g = min(255, g+30); b = min(255, b+30)
+            return f"#{r:02x}{g:02x}{b:02x}"
+        except: return hex_color
+
+    def _update_meet_btn(self, canvas, text, bg):
+        """Update icon + background of a meet button."""
+        canvas._bg = bg
+        canvas.itemconfig(1, fill=bg)
+        canvas.itemconfig(2, text=text)
+
     def _build(self):
-        bar=tk.Frame(self.root,bg="#161b22",height=52); bar.pack(fill="x"); bar.pack_propagate(False)
-        tk.Label(bar,text="🎙  ExamShield — INTERVIEW MODE",font=("Helvetica",13,"bold"),
-                 bg="#161b22",fg="#ffd93d").pack(side="left",padx=16,pady=12)
-        self.lbl_timer=tk.Label(bar,text="⏱ 00:00",font=("Helvetica",11,"bold"),
-                                 bg="#161b22",fg="#0be881")
-        self.lbl_timer.pack(side="right",padx=16)
-        self.lbl_status=tk.Label(bar,text="● Connected",font=("Helvetica",9),
-                                  bg="#161b22",fg="#0be881")
-        self.lbl_status.pack(side="right",padx=16)
-        # Voice status badge + mute toggle
-        voice_ready = _VOICE_BRIDGE_AVAILABLE and _SOUNDDEVICE_AVAILABLE and self.proctor_url
-        mic_text = "🎤 Voice ON" if voice_ready else "🔇 Voice OFF"
-        mic_col  = "#0be881"   if voice_ready else "#8b949e"
-        self._lbl_voice_badge = tk.Label(bar, text=mic_text,
-                 font=("Helvetica",9,"bold"), bg="#161b22", fg=mic_col)
-        self._lbl_voice_badge.pack(side="right", padx=4)
+        GM_BG   = "#202124"   # Google Meet dark background
+        GM_SURF = "#292a2d"   # surface cards
+        GM_SURF2= "#3c4043"   # lighter surface
+        GM_TEXT = "#e8eaed"
+        GM_MUTED= "#9aa0a6"
+        GM_RED  = "#ea4335"
+        GM_GREEN= "#34a853"
 
-        if voice_ready:
-            self._student_muted = False
-            def _toggle_student_mute():
+        self.root.configure(bg=GM_BG)
+        self._mic_muted = False
+        self._cam_off   = False
+        self._chat_open = False
+        self._notes_open= False
+        self._start     = time.time()
+
+        # ── Top bar ──────────────────────────────────────────────────────────
+        topbar = tk.Frame(self.root, bg=GM_BG, height=56)
+        topbar.pack(fill="x", side="top"); topbar.pack_propagate(False)
+
+        tk.Label(topbar, text="ExamShield Interview",
+                 font=("Helvetica",13,"bold"), bg=GM_BG, fg=GM_TEXT
+                 ).pack(side="left", padx=18, pady=12)
+        self.lbl_timer = tk.Label(topbar, text="00:00",
+                                   font=("Helvetica",11), bg=GM_BG, fg=GM_MUTED)
+        self.lbl_timer.pack(side="left", padx=4)
+
+        # security badge (top-right)
+        self.lbl_warn = tk.Label(topbar, text="● Secure  |  Warnings: 0/5",
+                                  font=("Helvetica",8), bg=GM_BG, fg="#2a2a3a")
+        self.lbl_warn.pack(side="right", padx=14)
+        self.lbl_status = tk.Label(topbar,
+                                    text="● Connected" if self.proctor_url else "● Local",
+                                    font=("Helvetica",9), bg=GM_BG,
+                                    fg=GM_GREEN if self.proctor_url else GM_MUTED)
+        self.lbl_status.pack(side="right", padx=10)
+
+        # ── Main area — video tiles left, optional sidebar right ─────────────
+        self._body = tk.Frame(self.root, bg=GM_BG)
+        self._body.pack(fill="both", expand=True, side="top")
+        self._body.columnconfigure(0, weight=1)
+        self._body.rowconfigure(0, weight=1)
+
+        # Video tile area
+        self._tile_area = tk.Frame(self._body, bg=GM_BG)
+        self._tile_area.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
+        self._tile_area.columnconfigure(0, weight=1)
+        self._tile_area.columnconfigure(1, weight=1)
+        self._tile_area.rowconfigure(0, weight=1)
+
+        # Self tile (bottom-left in Meet style — appears as a labelled video box)
+        self_tile = tk.Frame(self._tile_area, bg="#1a1a1d",
+                             highlightthickness=1, highlightbackground="#3c4043")
+        self_tile.grid(row=0, column=0, sticky="nsew", padx=4, pady=4)
+        self_tile.rowconfigure(0, weight=1); self_tile.columnconfigure(0, weight=1)
+        self.cam_self = tk.Label(self_tile, bg="#1a1a1d",
+                                  text="Starting camera…", fg="#5f6368",
+                                  font=("Helvetica",10))
+        self.cam_self.grid(row=0, column=0, sticky="nsew")
+        self_name = tk.Frame(self_tile, bg="#1a1a1d"); self_name.grid(row=1, column=0, sticky="ew")
+        tk.Label(self_name, text="  You", font=("Helvetica",9,"bold"),
+                 bg="#1a1a1d", fg=GM_TEXT).pack(side="left", padx=8, pady=4)
+        self._self_mic_icon = tk.Label(self_name, text="🎤",
+                                        font=("Segoe UI Emoji",10), bg="#1a1a1d", fg=GM_GREEN)
+        self._self_mic_icon.pack(side="right", padx=8)
+
+        # Interviewer tile
+        pro_tile = tk.Frame(self._tile_area, bg="#1a1a1d",
+                            highlightthickness=1, highlightbackground="#3c4043")
+        pro_tile.grid(row=0, column=1, sticky="nsew", padx=4, pady=4)
+        pro_tile.rowconfigure(0, weight=1); pro_tile.columnconfigure(0, weight=1)
+        self.cam_pro = tk.Label(pro_tile, bg="#1a1a1d",
+                                 text="Waiting for interviewer…", fg="#5f6368",
+                                 font=("Helvetica",10))
+        self.cam_pro.grid(row=0, column=0, sticky="nsew")
+        pro_name = tk.Frame(pro_tile, bg="#1a1a1d"); pro_name.grid(row=1, column=0, sticky="ew")
+        tk.Label(pro_name, text="  Interviewer", font=("Helvetica",9,"bold"),
+                 bg="#1a1a1d", fg="#ffd93d").pack(side="left", padx=8, pady=4)
+
+        # ── Sidebar (chat / notes) — hidden by default ────────────────────────
+        self._sidebar_frame = tk.Frame(self._body, bg=GM_SURF, width=300)
+        # not gridded yet — shown on demand
+
+        # Sidebar notebook-style (tab strip at top)
+        self._sidebar_tab = tk.StringVar(value="chat")
+        tab_bar = tk.Frame(self._sidebar_frame, bg=GM_SURF2)
+        tab_bar.pack(fill="x")
+        def _sw_tab(t):
+            self._sidebar_tab.set(t)
+            for k, (btn, frm) in self._sidebar_panels.items():
+                active = (k == t)
+                btn.configure(bg=GM_SURF if active else GM_SURF2,
+                               fg=GM_TEXT if active else GM_MUTED)
+                frm.pack_forget()
+            self._sidebar_panels[t][1].pack(fill="both", expand=True)
+
+        self._sidebar_panels = {}
+        for tab_key, tab_label in [("chat","Chat"), ("notes","Notes")]:
+            btn = tk.Button(tab_bar, text=tab_label, font=("Helvetica",9,"bold"),
+                            bg=GM_SURF2, fg=GM_MUTED, bd=0, relief="flat",
+                            cursor="hand2", padx=16, pady=8,
+                            command=lambda k=tab_key: _sw_tab(k))
+            btn.pack(side="left")
+            panel_frame = tk.Frame(self._sidebar_frame, bg=GM_SURF)
+            self._sidebar_panels[tab_key] = (btn, panel_frame)
+
+        # Chat panel
+        chat_frm = self._sidebar_panels["chat"][1]
+        tk.Label(chat_frm, text="In-call messages",
+                 font=("Helvetica",9,"bold"), bg=GM_SURF, fg=GM_TEXT
+                 ).pack(anchor="w", padx=12, pady=(10,4))
+        chat_scr = tk.Scrollbar(chat_frm); chat_scr.pack(side="right", fill="y")
+        self._chat_log = tk.Text(chat_frm, font=("Helvetica",9), bg=GM_BG, fg=GM_TEXT,
+                                  bd=0, relief="flat", wrap="word", state="disabled",
+                                  yscrollcommand=chat_scr.set)
+        self._chat_log.pack(fill="both", expand=True, padx=(8,0), pady=(0,4))
+        chat_scr.configure(command=self._chat_log.yview)
+        self._chat_log.tag_configure("me",   foreground="#8ab4f8")
+        self._chat_log.tag_configure("them", foreground="#81c995")
+        self._chat_log.tag_configure("ts",   foreground="#5f6368")
+        chat_inp = tk.Frame(chat_frm, bg=GM_SURF2); chat_inp.pack(fill="x", padx=8, pady=8)
+        self._chat_entry = tk.Entry(chat_inp, font=("Helvetica",9),
+                                     bg="#3c4043", fg=GM_TEXT,
+                                     insertbackground=GM_TEXT, bd=0, relief="flat")
+        self._chat_entry.pack(side="left", fill="x", expand=True, ipady=7, padx=(8,4))
+        tk.Button(chat_inp, text="Send", font=("Helvetica",8,"bold"),
+                  bg="#1a73e8", fg="#fff", bd=0, relief="flat", cursor="hand2",
+                  command=self._send_chat_msg).pack(side="right", padx=(0,8), ipady=6, ipadx=8)
+        self._chat_entry.bind("<Return>", lambda _: self._send_chat_msg())
+        if not self.proctor_url:
+            self._chat_entry.configure(state="disabled")
+            self._append_chat_sys("Chat available when connected to proctor")
+
+        # Notes panel
+        notes_frm = self._sidebar_panels["notes"][1]
+        tk.Label(notes_frm, text="Notes from interviewer",
+                 font=("Helvetica",9,"bold"), bg=GM_SURF, fg=GM_TEXT
+                 ).pack(anchor="w", padx=12, pady=(10,4))
+        self.notes = tk.Text(notes_frm, font=("Helvetica",9), bg=GM_BG, fg=GM_TEXT,
+                              bd=0, relief="flat", wrap="word", state="disabled")
+        self.notes.pack(fill="both", expand=True, padx=8, pady=(0,8))
+
+        # Activate chat tab by default
+        _sw_tab("chat")
+        if self.proctor_url:
+            self._poll_chat()
+
+        # ── Bottom control bar (Google Meet style) ────────────────────────────
+        ctrl_bar = tk.Frame(self.root, bg="#202124", height=80)
+        ctrl_bar.pack(fill="x", side="bottom"); ctrl_bar.pack_propagate(False)
+
+        # center button cluster
+        center = tk.Frame(ctrl_bar, bg=GM_BG); center.pack(expand=True)
+
+        # Mic toggle
+        def _toggle_mic():
+            self._mic_muted = not self._mic_muted
+            global _voice_student
+            if _voice_student:
+                _voice_student.toggle_mute()
+            icon = "🔇" if self._mic_muted else "🎤"
+            bg   = GM_RED  if self._mic_muted else GM_SURF2
+            self._update_meet_btn(self._btn_mic, icon, bg)
+            self._self_mic_icon.configure(
+                text="🔇" if self._mic_muted else "🎤",
+                fg=GM_RED if self._mic_muted else GM_GREEN)
+        self._btn_mic = self._make_meet_btn(center, "🎤", GM_SURF2, GM_TEXT, _toggle_mic)
+        self._btn_mic.pack(side="left", padx=8, pady=18)
+        tk.Label(center, text="Mic", font=("Helvetica",7), bg=GM_BG,
+                 fg=GM_MUTED).pack(side="left", padx=(0,8))
+
+        # Camera toggle
+        def _toggle_cam():
+            self._cam_off = not self._cam_off
+            icon = "🚫" if self._cam_off else "📹"
+            bg   = GM_RED if self._cam_off else GM_SURF2
+            self._update_meet_btn(self._btn_cam, icon, bg)
+            if self._cam_off:
+                self.cam_self.configure(image="", text="Camera off", fg="#5f6368")
+                self.cam_self.image = None
+        self._btn_cam = self._make_meet_btn(center, "📹", GM_SURF2, GM_TEXT, _toggle_cam)
+        self._btn_cam.pack(side="left", padx=8, pady=18)
+        tk.Label(center, text="Cam", font=("Helvetica",7), bg=GM_BG,
+                 fg=GM_MUTED).pack(side="left", padx=(0,8))
+
+        # End call
+        def _end_call():
+            if messagebox.askyesno("Leave", "Leave the interview?", parent=self.root):
+                self._sec.stop()
+                if _iv_hub: _iv_hub.stop()
                 global _voice_student
-                if _voice_student:
-                    m = _voice_student.toggle_mute()
-                else:
-                    self._student_muted = not self._student_muted
-                    m = self._student_muted
-                self._btn_student_mute.configure(
-                    text="🔊" if not m else "🔇",
-                    bg="#0be881" if not m else "#ff6b9d")
-                self._lbl_voice_badge.configure(
-                    text="🎤 Voice ON" if not m else "🔇 Muted",
-                    fg="#0be881" if not m else "#ff6b9d")
-            self._btn_student_mute = tk.Button(
-                bar, text="🔇 Mute", font=("Helvetica",8,"bold"),
-                bg="#21262d", fg="#c9d1d9", bd=0, relief="flat", cursor="hand2",
-                command=_toggle_student_mute)
-            self._btn_student_mute.pack(side="right", padx=4, ipady=2, ipadx=4)
+                if _voice_student: _voice_student.stop(); _voice_student = None
+                self.root.destroy()
+        btn_end = self._make_meet_btn(center, "✆", GM_RED, "#fff", _end_call, width=56, height=44, font_size=18)
+        btn_end.pack(side="left", padx=16, pady=18)
+        tk.Label(center, text="Leave", font=("Helvetica",7), bg=GM_BG,
+                 fg=GM_MUTED).pack(side="left", padx=(0,8))
 
-        self.warn_bar=tk.Frame(self.root,bg="#0d1117",height=24); self.warn_bar.pack(fill="x"); self.warn_bar.pack_propagate(False)
-        self.lbl_warn=tk.Label(self.warn_bar,text="● Monitoring active  |  Violations: 0/5",
-            font=("Helvetica",7),bg="#0d1117",fg="#1a3a1a")
-        self.lbl_warn.pack(side="left",padx=14)
+        # Chat toggle
+        def _toggle_chat():
+            self._chat_open = not self._chat_open
+            self._notes_open = False
+            if self._chat_open:
+                self._sidebar_frame.grid(row=0, column=1, sticky="nsew", padx=(0,8), pady=8)
+                self._body.columnconfigure(1, weight=0, minsize=300)
+                _sw_tab("chat")
+                self._update_meet_btn(self._btn_chat_ctrl, "💬", "#1a73e8")
+            else:
+                self._sidebar_frame.grid_forget()
+                self._update_meet_btn(self._btn_chat_ctrl, "💬", GM_SURF2)
+        self._btn_chat_ctrl = self._make_meet_btn(center, "💬", GM_SURF2, GM_TEXT, _toggle_chat)
+        self._btn_chat_ctrl.pack(side="left", padx=8, pady=18)
+        tk.Label(center, text="Chat", font=("Helvetica",7), bg=GM_BG,
+                 fg=GM_MUTED).pack(side="left", padx=(0,8))
 
-        main=tk.Frame(self.root,bg="#0d1117"); main.pack(fill="both",expand=True,padx=8,pady=6)
-        main.columnconfigure(0,weight=2); main.columnconfigure(1,weight=2)
-        main.columnconfigure(2,weight=1); main.columnconfigure(3,weight=1)
-        main.rowconfigure(0,weight=1)
-
-        lcol=tk.Frame(main,bg="#0d1117"); lcol.grid(row=0,column=0,sticky="nsew",padx=(0,4))
-        tk.Label(lcol,text="📹  Your Camera",font=("Helvetica",9,"bold"),
-                 bg="#0d1117",fg="#58d6d6").pack(anchor="w",pady=(0,4))
-        self.cam_self=tk.Label(lcol,bg="#0b0b13",text="Connecting camera…",
-                                fg="#3a3a5a",font=("Helvetica",9))
-        self.cam_self.pack(fill="both",expand=True)
-
-        rcol=tk.Frame(main,bg="#0d1117"); rcol.grid(row=0,column=1,sticky="nsew",padx=4)
-        tk.Label(rcol,text="📹  Interviewer Camera",font=("Helvetica",9,"bold"),
-                 bg="#0d1117",fg="#ffd93d").pack(anchor="w",pady=(0,4))
-        self.cam_pro=tk.Label(rcol,bg="#0b0b13",text="Connecting camera…",
-                               fg="#3a3a5a",font=("Helvetica",9))
-        self.cam_pro.pack(fill="both",expand=True)
-
-        ncol=tk.Frame(main,bg="#161b22"); ncol.grid(row=0,column=2,sticky="nsew",padx=(4,0))
-        tk.Label(ncol,text="📝  Notes (from interviewer)",font=("Helvetica",9,"bold"),
-                 bg="#161b22",fg="#8b949e").pack(anchor="w",padx=8,pady=(8,4))
-        self.notes=tk.Text(ncol,font=("Helvetica",9),bg="#0d1117",fg="#c9d1d9",
-                            bd=0,relief="flat",wrap="word",state="disabled")
-        self.notes.pack(fill="both",expand=True,padx=6,pady=(0,8))
-        tk.Label(ncol,text="Notes provided by interviewer",font=("Helvetica",7),
-                 bg="#161b22",fg="#3a3a5a").pack(pady=(0,6))
-
-        # ── Chat column (column 3) ──────────────────────────────────────────
-        ccol = tk.Frame(main, bg="#161b22"); ccol.grid(row=0, column=3, sticky="nsew", padx=(4,0))
-        self._build_chat_panel(ccol)
+        # Notes toggle
+        def _toggle_notes():
+            self._notes_open = not self._notes_open
+            self._chat_open  = False
+            if self._notes_open:
+                self._sidebar_frame.grid(row=0, column=1, sticky="nsew", padx=(0,8), pady=8)
+                self._body.columnconfigure(1, weight=0, minsize=300)
+                _sw_tab("notes")
+                self._update_meet_btn(self._btn_notes_ctrl, "📝", "#1a73e8")
+            else:
+                self._sidebar_frame.grid_forget()
+                self._update_meet_btn(self._btn_notes_ctrl, "📝", GM_SURF2)
+        self._btn_notes_ctrl = self._make_meet_btn(center, "📝", GM_SURF2, GM_TEXT, _toggle_notes)
+        self._btn_notes_ctrl.pack(side="left", padx=8, pady=18)
+        tk.Label(center, text="Notes", font=("Helvetica",7), bg=GM_BG,
+                 fg=GM_MUTED).pack(side="left", padx=(0,8))
 
     @staticmethod
     def _fast_frame_to_photo(frame, label):
@@ -3840,40 +4025,78 @@ class MultiStudentProctorWindow:
         rf = tk.Frame(nb, bg="#0d1117"); nb.add(rf, text="📊 Results")
         self._build_results(rf)
 
+    # ── Google-Meet-style helpers (proctor) ──────────────────────────────────
+    def _make_meet_btn_p(self, parent, text, bg, fg, cmd, width=44, height=44, font_size=16):
+        c = tk.Canvas(parent, width=width, height=height, bg="#202124",
+                      highlightthickness=0, cursor="hand2")
+        c.create_oval(2, 2, width-2, height-2, fill=bg, outline="")
+        c.create_text(width//2, height//2, text=text,
+                      font=("Segoe UI Emoji", font_size), fill=fg)
+        c.bind("<Button-1>", lambda e: cmd())
+        c.bind("<Enter>",    lambda e: c.itemconfig(1, fill=self._lighten_p(bg)))
+        c.bind("<Leave>",    lambda e: c.itemconfig(1, fill=bg))
+        c._bg = bg
+        return c
+
+    def _lighten_p(self, hex_color):
+        try:
+            h = hex_color.lstrip("#")
+            r,g,b = int(h[0:2],16), int(h[2:4],16), int(h[4:6],16)
+            return f"#{min(255,r+30):02x}{min(255,g+30):02x}{min(255,b+30):02x}"
+        except: return hex_color
+
+    def _update_meet_btn_p(self, canvas, text, bg):
+        canvas._bg = bg
+        canvas.itemconfig(1, fill=bg)
+        canvas.itemconfig(2, text=text)
+
     def _build_interview_panel(self):
-        """
-        Clean minimal interview proctor panel.
-        Layout: left = student grid with camera tiles
-                right = compact sidebar with audio toggle, camera toggle, runtime Q only
-        No violations tab, no Q bank, no results — those are exam-only concerns.
-        """
-        paned = tk.PanedWindow(self.root, orient="horizontal", bg="#0d1117",
-                               sashwidth=6, sashrelief="flat")
-        paned.pack(fill="both", expand=True, padx=4, pady=4)
+        """Google Meet-style interview panel for the proctor/interviewer."""
+        GM_BG    = "#202124"
+        GM_SURF  = "#292a2d"
+        GM_SURF2 = "#3c4043"
+        GM_TEXT  = "#e8eaed"
+        GM_MUTED = "#9aa0a6"
+        GM_RED   = "#ea4335"
+        GM_GREEN = "#34a853"
 
-        # ── Left: student camera grid (same responsive grid as exam mode) ──
-        left_outer = tk.Frame(paned, bg="#0d1117")
-        paned.add(left_outer, minsize=480)
+        self.root.configure(bg=GM_BG)
+        self._pro_mic_muted = False
+        self._pro_cam_muted = False
+        self._pro_chat_open = False
+        self._pro_ppl_open  = False
 
-        hdr_row = tk.Frame(left_outer, bg="#0d1117"); hdr_row.pack(fill="x", padx=8, pady=(4,2))
-        tk.Label(hdr_row, text="📷  Interview — Live Cameras",
-                 font=("Helvetica",10,"bold"), bg="#0d1117", fg="#ffd93d").pack(side="left")
-        self._student_count_lbl = tk.Label(hdr_row, text="(0 online)",
-                 font=("Helvetica",8), bg="#0d1117", fg="#8b949e")
-        self._student_count_lbl.pack(side="left", padx=6)
+        # ── Body: video grid + optional sidebar ──────────────────────────────
+        body = tk.Frame(self.root, bg=GM_BG)
+        body.pack(fill="both", expand=True)
+        body.columnconfigure(0, weight=1)
+        body.rowconfigure(0, weight=1)
+        self._pro_body = body
 
-        self._no_students_lbl = tk.Label(left_outer,
-            text="No candidates connected yet.\nShare the session code so candidates can join.",
-            font=("Helvetica",10), bg="#0d1117", fg="#3a3a5a", justify="center")
-        self._no_students_lbl.pack(pady=40)
+        # Scrollable candidate tile area
+        left_outer = tk.Frame(body, bg=GM_BG)
+        left_outer.grid(row=0, column=0, sticky="nsew")
+        left_outer.columnconfigure(0, weight=1); left_outer.rowconfigure(1, weight=1)
 
-        cam_wrap = tk.Frame(left_outer, bg="#0d1117"); cam_wrap.pack(fill="both", expand=True)
-        cam_canvas = tk.Canvas(cam_wrap, bg="#0d1117", highlightthickness=0)
+        # Top status strip
+        status_strip = tk.Frame(left_outer, bg="#2d2e30", height=32)
+        status_strip.grid(row=0, column=0, sticky="ew"); status_strip.pack_propagate(False)
+        self._student_count_lbl = tk.Label(status_strip, text="0 participants",
+                 font=("Helvetica",9), bg="#2d2e30", fg=GM_MUTED)
+        self._student_count_lbl.pack(side="left", padx=12, pady=6)
+        self._no_students_lbl = tk.Label(status_strip,
+                text="Waiting for candidates to join…",
+                font=("Helvetica",9), bg="#2d2e30", fg=GM_MUTED)
+        self._no_students_lbl.pack(side="left", padx=4)
+
+        cam_wrap = tk.Frame(left_outer, bg=GM_BG)
+        cam_wrap.grid(row=1, column=0, sticky="nsew")
+        cam_canvas = tk.Canvas(cam_wrap, bg=GM_BG, highlightthickness=0)
         scr_y = tk.Scrollbar(cam_wrap, orient="vertical", command=cam_canvas.yview)
         scr_y.pack(side="right", fill="y")
         cam_canvas.pack(side="left", fill="both", expand=True)
         cam_canvas.configure(yscrollcommand=scr_y.set)
-        self._cam_inner = tk.Frame(cam_canvas, bg="#0d1117")
+        self._cam_inner = tk.Frame(cam_canvas, bg=GM_BG)
         self._cam_win_id = cam_canvas.create_window((0,0), window=self._cam_inner, anchor="nw")
         self._cam_inner.bind("<Configure>",
             lambda e: cam_canvas.configure(scrollregion=cam_canvas.bbox("all")))
@@ -3881,86 +4104,296 @@ class MultiStudentProctorWindow:
         self._cam_canvas = cam_canvas
         self._grid_cols  = 2
 
-        # ── Right: clean minimal sidebar ──
-        right = tk.Frame(paned, bg="#161b22")
-        paned.add(right, minsize=260)
+        # ── Sidebar (hidden by default) ───────────────────────────────────────
+        self._pro_sidebar = tk.Frame(body, bg=GM_SURF, width=320)
+        self._pro_sidebar_panels = {}
 
-        # ── Audio / Camera toggle controls ──
-        ctrl_hdr = tk.Frame(right, bg="#161b22"); ctrl_hdr.pack(fill="x", padx=10, pady=(12,4))
-        tk.Label(ctrl_hdr, text="🎙  Interview Controls",
-                 font=("Helvetica",10,"bold"), bg="#161b22", fg="#ffd93d").pack(anchor="w")
+        tab_bar_s = tk.Frame(self._pro_sidebar, bg=GM_SURF2)
+        tab_bar_s.pack(fill="x")
 
-        ctrl_row = tk.Frame(right, bg="#161b22"); ctrl_row.pack(fill="x", padx=10, pady=(0,4))
+        def _sw_pro_tab(t):
+            for k, (btn, frm) in self._pro_sidebar_panels.items():
+                active = (k == t)
+                btn.configure(bg=GM_SURF if active else GM_SURF2,
+                               fg=GM_TEXT if active else GM_MUTED)
+                frm.pack_forget()
+            self._pro_sidebar_panels[t][1].pack(fill="both", expand=True)
 
-        self._btn_audio_toggle = tk.Button(
-            ctrl_row, text="🔊  Audio ON", font=("Helvetica",9,"bold"),
-            bg="#0be881", fg="#0d1117", bd=0, relief="flat", cursor="hand2",
-            width=14, command=self._toggle_audio)
-        self._btn_audio_toggle.grid(row=0, column=0, padx=(0,4), ipady=5)
+        for tab_key, tab_label in [("chat","Chat"), ("participants","Participants"), ("question","Ask")]:
+            btn = tk.Button(tab_bar_s, text=tab_label, font=("Helvetica",9,"bold"),
+                            bg=GM_SURF2, fg=GM_MUTED, bd=0, relief="flat",
+                            cursor="hand2", padx=10, pady=8,
+                            command=lambda k=tab_key: _sw_pro_tab(k))
+            btn.pack(side="left")
+            pf = tk.Frame(self._pro_sidebar, bg=GM_SURF)
+            self._pro_sidebar_panels[tab_key] = (btn, pf)
 
-        self._btn_cam_toggle = tk.Button(
-            ctrl_row, text="📹  Cam ON", font=("Helvetica",9,"bold"),
-            bg="#0be881", fg="#0d1117", bd=0, relief="flat", cursor="hand2",
-            width=12, command=self._toggle_pro_cam)
-        self._btn_cam_toggle.grid(row=0, column=1, padx=(4,0), ipady=5)
+        # Chat panel (proctor → student)
+        chat_frm = self._pro_sidebar_panels["chat"][1]
+        tk.Label(chat_frm, text="In-call messages",
+                 font=("Helvetica",9,"bold"), bg=GM_SURF, fg=GM_TEXT
+                 ).pack(anchor="w", padx=12, pady=(10,4))
 
-        # ── Voice status & mute button ─────────────────────────────────────
-        voice_row = tk.Frame(right, bg="#161b22"); voice_row.pack(fill="x", padx=10, pady=(4,0))
+        # Per-student selector
+        cand_row = tk.Frame(chat_frm, bg=GM_SURF); cand_row.pack(fill="x", padx=8, pady=(0,4))
+        tk.Label(cand_row, text="To:", font=("Helvetica",8),
+                 bg=GM_SURF, fg=GM_MUTED).pack(side="left")
+        self._chat_target_var = tk.StringVar(value="(select candidate)")
+        self._chat_target_menu = tk.OptionMenu(cand_row, self._chat_target_var, "(select candidate)")
+        self._chat_target_menu.configure(bg=GM_SURF2, fg=GM_TEXT, font=("Helvetica",8),
+                                          bd=0, relief="flat", highlightthickness=0,
+                                          activebackground=GM_SURF2)
+        self._chat_target_menu["menu"].configure(bg=GM_SURF2, fg=GM_TEXT)
+        self._chat_target_menu.pack(side="left", padx=(6,0), fill="x", expand=True)
 
-        if _VOICE_BRIDGE_AVAILABLE and _SOUNDDEVICE_AVAILABLE and _WEBSOCKET_CLIENT_AVAILABLE:
-            voice_status_text = "🎤 Voice: initialising…"
-            voice_status_col  = "#ffd93d"
-        else:
-            missing = []
-            if not _VOICE_BRIDGE_AVAILABLE:      missing.append("voice_bridge.py")
-            if not _SOUNDDEVICE_AVAILABLE:        missing.append("sounddevice")
-            if not _WEBSOCKET_CLIENT_AVAILABLE:   missing.append("websocket-client")
-            voice_status_text = "⚠ Voice N/A — install:\n  " + ", ".join(missing)
-            voice_status_col  = "#ff6b9d"
+        cscr = tk.Scrollbar(chat_frm); cscr.pack(side="right", fill="y")
+        self._pro_chat_log = tk.Text(chat_frm, font=("Helvetica",9), bg=GM_BG, fg=GM_TEXT,
+                                      bd=0, relief="flat", wrap="word", state="disabled",
+                                      yscrollcommand=cscr.set)
+        self._pro_chat_log.pack(fill="both", expand=True, padx=(8,0), pady=(0,4))
+        cscr.configure(command=self._pro_chat_log.yview)
+        self._pro_chat_log.tag_configure("me",   foreground="#8ab4f8")
+        self._pro_chat_log.tag_configure("them", foreground="#81c995")
+        self._pro_chat_log.tag_configure("ts",   foreground="#5f6368")
+        cinp = tk.Frame(chat_frm, bg=GM_SURF2); cinp.pack(fill="x", padx=8, pady=8)
+        self._pro_chat_entry = tk.Entry(cinp, font=("Helvetica",9),
+                                         bg="#3c4043", fg=GM_TEXT,
+                                         insertbackground=GM_TEXT, bd=0, relief="flat")
+        self._pro_chat_entry.pack(side="left", fill="x", expand=True, ipady=7, padx=(8,4))
 
-        self._lbl_voice_status = tk.Label(
-            voice_row, text=voice_status_text,
-            font=("Helvetica",8), bg="#161b22", fg=voice_status_col,
-            anchor="w", justify="left")
-        self._lbl_voice_status.pack(side="left", fill="x", expand=True)
+        def _send_pro_chat():
+            sid = self._chat_target_var.get()
+            msg = self._pro_chat_entry.get().strip()
+            if not msg or sid in ("(select candidate)", ""): return
+            self._pro_chat_entry.delete(0, "end")
+            self._append_pro_chat("You", msg, "me")
+            def _post():
+                try:
+                    _requests.post("http://127.0.0.1:6000/send_chat", json={
+                        "session_code": _PROCTOR_SESSION_CODE or "",
+                        "student_id":   sid, "sender": "proctor", "message": msg,
+                    }, timeout=2)
+                except Exception: pass
+            threading.Thread(target=_post, daemon=True).start()
+        tk.Button(cinp, text="Send", font=("Helvetica",8,"bold"),
+                  bg="#1a73e8", fg="#fff", bd=0, relief="flat", cursor="hand2",
+                  command=_send_pro_chat).pack(side="right", padx=(0,8), ipady=6, ipadx=8)
+        self._pro_chat_entry.bind("<Return>", lambda _: _send_pro_chat())
+        self._poll_pro_chat()
 
-        self._muted = False
-        self._btn_mute = tk.Button(
-            voice_row, text="🔇 Mute", font=("Helvetica",8,"bold"),
-            bg="#21262d", fg="#c9d1d9", bd=0, relief="flat", cursor="hand2",
-            command=self._toggle_mute_proctor)
-        self._btn_mute.pack(side="right", ipady=3, ipadx=6)
+        # Participants panel
+        ppl_frm = self._pro_sidebar_panels["participants"][1]
+        tk.Label(ppl_frm, text="Participants",
+                 font=("Helvetica",10,"bold"), bg=GM_SURF, fg=GM_TEXT
+                 ).pack(anchor="w", padx=12, pady=(12,6))
+        ppl_scr = tk.Scrollbar(ppl_frm); ppl_scr.pack(side="right", fill="y")
+        self._ppl_log = tk.Text(ppl_frm, font=("Helvetica",9), bg=GM_BG, fg=GM_TEXT,
+                                 bd=0, relief="flat", wrap="word", state="disabled",
+                                 yscrollcommand=ppl_scr.set)
+        self._ppl_log.pack(fill="both", expand=True, padx=(8,0), pady=(0,8))
+        ppl_scr.configure(command=self._ppl_log.yview)
 
-        # ── Volume slider ──────────────────────────────────────────────────
-        vol_row = tk.Frame(right, bg="#161b22"); vol_row.pack(fill="x", padx=10, pady=(2,4))
-        tk.Label(vol_row, text="🔈 Vol:", font=("Helvetica",8),
-                 bg="#161b22", fg="#8b949e").pack(side="left")
+        # Notes push
+        notes_frm_p = self._pro_sidebar_panels["participants"][1]  # reuse same ref kept separate
+        # Question / Ask panel
+        ask_frm = self._pro_sidebar_panels["question"][1]
+        self._build_runtime_q_panel_interview(ask_frm)
+
+        _sw_pro_tab("chat")
+
+        # ── Bottom control bar ────────────────────────────────────────────────
+        ctrl_bar = tk.Frame(self.root, bg=GM_BG, height=80)
+        ctrl_bar.pack(fill="x", side="bottom"); ctrl_bar.pack_propagate(False)
+        center_p = tk.Frame(ctrl_bar, bg=GM_BG); center_p.pack(expand=True)
+
+        # Mic
+        def _toggle_pro_mic():
+            self._pro_mic_muted = not self._pro_mic_muted
+            global _voice_proctor
+            if _voice_proctor: _voice_proctor.toggle_mute()
+            icon = "🔇" if self._pro_mic_muted else "🎤"
+            bg   = GM_RED if self._pro_mic_muted else GM_SURF2
+            self._update_meet_btn_p(self._pbtn_mic, icon, bg)
+            self._lbl_voice_status.configure(
+                text="🔇 Muted" if self._pro_mic_muted else "🎤 Live",
+                fg=GM_RED if self._pro_mic_muted else GM_GREEN)
+        self._pbtn_mic = self._make_meet_btn_p(center_p, "🎤", GM_SURF2, GM_TEXT, _toggle_pro_mic)
+        self._pbtn_mic.pack(side="left", padx=8, pady=18)
+        tk.Label(center_p, text="Mic", font=("Helvetica",7), bg=GM_BG, fg=GM_MUTED).pack(side="left", padx=(0,8))
+
+        # Camera
+        def _toggle_pro_cam_btn():
+            self._pro_cam_muted = not self._pro_cam_muted
+            if self._pro_cam_muted:
+                self._stop_pro_cam()
+                self._update_meet_btn_p(self._pbtn_cam, "🚫", GM_RED)
+                self._btn_cam_toggle = self._pbtn_cam  # keep ref in sync
+            else:
+                self._start_pro_cam()
+                self._update_meet_btn_p(self._pbtn_cam, "📹", GM_SURF2)
+        self._pbtn_cam = self._make_meet_btn_p(center_p, "📹", GM_SURF2, GM_TEXT, _toggle_pro_cam_btn)
+        self._pbtn_cam.pack(side="left", padx=8, pady=18)
+        # keep legacy refs so _toggle_audio etc. still work
+        self._btn_cam_toggle = self._pbtn_cam
+        tk.Label(center_p, text="Cam", font=("Helvetica",7), bg=GM_BG, fg=GM_MUTED).pack(side="left", padx=(0,8))
+
+        # End call
+        def _end_call_pro():
+            from tkinter import messagebox as _mb
+            if _mb.askyesno("Leave", "End this interview session?", parent=self.root):
+                self._logout()
+        btn_end_p = self._make_meet_btn_p(center_p, "✆", GM_RED, "#fff", _end_call_pro, width=56, height=44, font_size=18)
+        btn_end_p.pack(side="left", padx=16, pady=18)
+        tk.Label(center_p, text="End", font=("Helvetica",7), bg=GM_BG, fg=GM_MUTED).pack(side="left", padx=(0,8))
+
+        # Chat toggle
+        def _toggle_pro_chat():
+            self._pro_chat_open = not self._pro_chat_open
+            self._pro_ppl_open  = False
+            if self._pro_chat_open:
+                self._pro_sidebar.grid(row=0, column=1, sticky="nsew", padx=(0,8), pady=0)
+                body.columnconfigure(1, weight=0, minsize=320)
+                _sw_pro_tab("chat")
+                self._update_meet_btn_p(self._pbtn_chat, "💬", "#1a73e8")
+            else:
+                self._pro_sidebar.grid_forget()
+                self._update_meet_btn_p(self._pbtn_chat, "💬", GM_SURF2)
+        self._pbtn_chat = self._make_meet_btn_p(center_p, "💬", GM_SURF2, GM_TEXT, _toggle_pro_chat)
+        self._pbtn_chat.pack(side="left", padx=8, pady=18)
+        tk.Label(center_p, text="Chat", font=("Helvetica",7), bg=GM_BG, fg=GM_MUTED).pack(side="left", padx=(0,8))
+
+        # Participants toggle
+        def _toggle_ppl():
+            self._pro_ppl_open  = not self._pro_ppl_open
+            self._pro_chat_open = False
+            if self._pro_ppl_open:
+                self._pro_sidebar.grid(row=0, column=1, sticky="nsew", padx=(0,8), pady=0)
+                body.columnconfigure(1, weight=0, minsize=320)
+                _sw_pro_tab("participants")
+                self._update_meet_btn_p(self._pbtn_ppl, "👥", "#1a73e8")
+            else:
+                self._pro_sidebar.grid_forget()
+                self._update_meet_btn_p(self._pbtn_ppl, "👥", GM_SURF2)
+        self._pbtn_ppl = self._make_meet_btn_p(center_p, "👥", GM_SURF2, GM_TEXT, _toggle_ppl)
+        self._pbtn_ppl.pack(side="left", padx=8, pady=18)
+        tk.Label(center_p, text="People", font=("Helvetica",7), bg=GM_BG, fg=GM_MUTED).pack(side="left", padx=(0,8))
+
+        # Ask question toggle
+        def _toggle_ask():
+            # opens sidebar to "question" tab
+            self._pro_chat_open = False; self._pro_ppl_open = False
+            self._pro_sidebar.grid(row=0, column=1, sticky="nsew", padx=(0,8), pady=0)
+            body.columnconfigure(1, weight=0, minsize=320)
+            _sw_pro_tab("question")
+            self._update_meet_btn_p(self._pbtn_ask, "❓", "#1a73e8")
+        self._pbtn_ask = self._make_meet_btn_p(center_p, "❓", GM_SURF2, GM_TEXT, _toggle_ask)
+        self._pbtn_ask.pack(side="left", padx=8, pady=18)
+        tk.Label(center_p, text="Ask", font=("Helvetica",7), bg=GM_BG, fg=GM_MUTED).pack(side="left", padx=(0,8))
+
+        # Notes push
+        def _open_notes_push():
+            win = tk.Toplevel(self.root)
+            win.title("Push Notes to Candidates")
+            win.geometry("440x280"); win.configure(bg="#202124")
+            win.attributes("-topmost", True)
+            tk.Label(win, text="Notes / Feedback for candidates",
+                     font=("Helvetica",10,"bold"), bg="#202124", fg=GM_TEXT).pack(anchor="w", padx=12, pady=(12,4))
+            nb = tk.Text(win, font=("Helvetica",10), bg="#292a2d", fg=GM_TEXT,
+                         insertbackground=GM_TEXT, bd=0, relief="flat", wrap="word")
+            nb.pack(fill="both", expand=True, padx=12, pady=(0,4))
+            def _push():
+                content = nb.get("1.0","end").strip()
+                try:
+                    with open("interview_notes.txt","w",encoding="utf-8") as f: f.write(content)
+                    from tkinter import messagebox as _mb
+                    _mb.showinfo("Sent","Notes pushed to candidate(s) ✓", parent=win)
+                    win.destroy()
+                except Exception as e:
+                    from tkinter import messagebox as _mb
+                    _mb.showerror("Error", str(e), parent=win)
+            tk.Button(win, text="Push Notes to All Candidates",
+                      font=("Helvetica",10,"bold"), bg="#1a73e8", fg="#fff",
+                      bd=0, relief="flat", cursor="hand2",
+                      command=_push).pack(fill="x", padx=12, pady=(0,12), ipady=8)
+        btn_notes_p = self._make_meet_btn_p(center_p, "📝", GM_SURF2, GM_TEXT, _open_notes_push)
+        btn_notes_p.pack(side="left", padx=8, pady=18)
+        tk.Label(center_p, text="Notes", font=("Helvetica",7), bg=GM_BG, fg=GM_MUTED).pack(side="left", padx=(0,8))
+
+        # Volume
+        vol_frame = tk.Frame(ctrl_bar, bg=GM_BG); vol_frame.pack(side="right", padx=16)
+        tk.Label(vol_frame, text="Vol", font=("Helvetica",7), bg=GM_BG, fg=GM_MUTED).pack()
         self._vol_var = tk.DoubleVar(value=1.0)
-        vol_slider = tk.Scale(
-            vol_row, from_=0.0, to=3.0, resolution=0.1,
-            orient="horizontal", variable=self._vol_var,
-            bg="#161b22", fg="#c9d1d9", troughcolor="#21262d",
-            highlightthickness=0, bd=0, length=140,
-            command=self._on_vol_change)
-        vol_slider.pack(side="left", padx=(4,0))
+        tk.Scale(vol_frame, from_=0.0, to=3.0, resolution=0.1, orient="vertical",
+                 variable=self._vol_var, bg=GM_BG, fg=GM_MUTED, troughcolor=GM_SURF2,
+                 highlightthickness=0, bd=0, length=60, showvalue=False,
+                 command=self._on_vol_change).pack()
 
-        # Audio status indicator (legacy sounddevice warning)
-        audio_status_text = (
-            "🎤 Mic ready" if _SOUNDDEVICE_AVAILABLE
-            else "⚠ sounddevice not installed\n   pip install sounddevice"
-        )
-        audio_status_col = "#0be881" if _SOUNDDEVICE_AVAILABLE else "#ff6b9d"
-        self._lbl_audio_status = tk.Label(
-            right, text=audio_status_text,
-            font=("Helvetica",8), bg="#161b22", fg=audio_status_col)
-        self._lbl_audio_status.pack(anchor="w", padx=12, pady=(0,6))
+        # Voice status label (bottom-left)
+        vs_text = "🎤 Live" if (_VOICE_BRIDGE_AVAILABLE and _SOUNDDEVICE_AVAILABLE) else "⚠ Voice N/A"
+        vs_col  = GM_GREEN if (_VOICE_BRIDGE_AVAILABLE and _SOUNDDEVICE_AVAILABLE) else "#ff6b9d"
+        self._lbl_voice_status = tk.Label(ctrl_bar, text=vs_text,
+                                           font=("Helvetica",8), bg=GM_BG, fg=vs_col)
+        self._lbl_voice_status.pack(side="left", padx=14)
+        # keep legacy refs alive
+        self._btn_audio_toggle = self._pbtn_mic
+        self._btn_mute         = self._pbtn_mic
+        self._muted            = False
+        self._lbl_audio_status = self._lbl_voice_status
 
-        sep = tk.Frame(right, bg="#30363d", height=1); sep.pack(fill="x", padx=10, pady=4)
+    def _append_pro_chat(self, sender, text, cls):
+        try:
+            self._pro_chat_log.configure(state="normal")
+            ts = time.strftime("%H:%M")
+            self._pro_chat_log.insert("end", f"[{ts}] ", "ts")
+            self._pro_chat_log.insert("end", f"{sender}: {text}\n", cls)
+            self._pro_chat_log.configure(state="disabled")
+            self._pro_chat_log.see("end")
+        except Exception: pass
 
-        # ── Runtime Question push ──
-        self._build_runtime_q_panel_interview(right)
+    def _poll_pro_chat(self):
+        try:
+            if not self.root.winfo_exists(): return
+        except Exception: return
+        if not _REQUESTS_AVAILABLE: return
+        sid = self._chat_target_var.get() if hasattr(self, "_chat_target_var") else ""
+        if sid in ("(select candidate)", ""):
+            self.root.after(3000, self._poll_pro_chat); return
+        def _fetch():
+            try:
+                r = _requests.get("http://127.0.0.1:6000/get_chat", params={
+                    "session_code": _PROCTOR_SESSION_CODE or "",
+                    "student_id":   sid,
+                    "since_id":     getattr(self, "_pro_chat_last_id", 0),
+                }, timeout=2)
+                for m in r.json().get("messages", []):
+                    self._pro_chat_last_id = max(getattr(self,"_pro_chat_last_id",0), m["id"])
+                    if m["sender"] == "student":
+                        self.root.after(0, lambda d=m:
+                            self._append_pro_chat(sid, d["message"], "them"))
+            except Exception: pass
+        self._pro_chat_last_id = getattr(self, "_pro_chat_last_id", 0)
+        threading.Thread(target=_fetch, daemon=True).start()
+        self.root.after(2000, self._poll_pro_chat)
 
-    def _build_runtime_q_panel_interview(self, parent):
+    def _update_chat_candidate_menu(self):
+        """Refresh the chat-to dropdown with current student list."""
+        try:
+            menu = self._chat_target_menu["menu"]
+            menu.delete(0, "end")
+            for sid in self._student_tiles.keys():
+                menu.add_command(label=sid,
+                    command=lambda s=sid: self._chat_target_var.set(s))
+        except Exception: pass
+
+    def _update_participants_panel(self):
+        """Refresh the participants text log."""
+        try:
+            self._ppl_log.configure(state="normal")
+            self._ppl_log.delete("1.0","end")
+            for sid in self._student_tiles.keys():
+                self._ppl_log.insert("end", f"  👤  {sid}\n")
+            self._ppl_log.configure(state="disabled")
+        except Exception: pass
         """Compact runtime-question section for the interview sidebar."""
         tk.Label(parent, text="📌  Send Question to Candidate",
                  font=("Helvetica",10,"bold"), bg="#161b22", fg="#ffd93d"
@@ -4050,26 +4483,34 @@ class MultiStudentProctorWindow:
         idx = len(self._student_tiles)
         r, c = divmod(idx, self._grid_cols)
 
-        card = tk.Frame(self._cam_inner, bg="#161b22", bd=0,
-                        highlightthickness=2, highlightbackground="#30363d")
+        # Detect if we're in interview mode (Meet style) or exam mode
+        _is_meet = self.mode == "interview"
+        _card_bg   = "#1a1a1d" if _is_meet else "#161b22"
+        _border_c  = "#3c4043" if _is_meet else "#30363d"
+        _hdr_bg    = "#1a1a1d" if _is_meet else "#161b22"
+        _name_col  = "#e8eaed" if _is_meet else "#58d6d6"
+        _stats_bg  = "#202124" if _is_meet else "#0f1520"
+
+        card = tk.Frame(self._cam_inner, bg=_card_bg, bd=0,
+                        highlightthickness=2, highlightbackground=_border_c)
         card.grid(row=r, column=c, padx=4, pady=4, sticky="nsew")
         for col in range(self._grid_cols):
             self._cam_inner.columnconfigure(col, weight=1)
 
         # ── Header row ──
-        hdr = tk.Frame(card, bg="#161b22"); hdr.pack(fill="x", padx=4, pady=(4,0))
+        hdr = tk.Frame(card, bg=_hdr_bg); hdr.pack(fill="x", padx=4, pady=(4,0))
         name_lbl = tk.Label(hdr, text=f"👤 {sid}", font=("Helvetica",9,"bold"),
-                            bg="#161b22", fg="#58d6d6")
+                            bg=_hdr_bg, fg=_name_col)
         name_lbl.pack(side="left")
         # Expand button — opens full modal for this student
-        tk.Button(hdr, text="⛶", font=("Helvetica",10), bg="#21262d", fg="#58d6d6",
+        tk.Button(hdr, text="⛶", font=("Helvetica",10), bg=_hdr_bg, fg=_name_col,
                   bd=0, relief="flat", cursor="hand2", padx=2,
                   command=lambda s=sid: self._open_student_modal(s)).pack(side="right")
-        tk.Button(hdr, text="💬", font=("Helvetica",9), bg="#21262d", fg="#ff6b9d",
+        tk.Button(hdr, text="💬", font=("Helvetica",9), bg=_hdr_bg, fg="#ff6b9d",
                   bd=0, relief="flat", cursor="hand2", padx=2,
                   command=lambda s=sid: self._open_student_modal(s)).pack(side="right")
         tk.Button(hdr, text="Select", font=("Helvetica",8),
-                  bg="#21262d", fg="#c9d1d9", bd=0, relief="flat", cursor="hand2",
+                  bg=_hdr_bg, fg="#c9d1d9", bd=0, relief="flat", cursor="hand2",
                   command=lambda s=sid: self._select_student(s)).pack(side="right", padx=2)
         kick_btn = tk.Button(hdr, text="✕", font=("Helvetica",8),
                              bg="#3a0000", fg="#ff6b6b", bd=0, relief="flat", cursor="hand2",
@@ -4077,24 +4518,24 @@ class MultiStudentProctorWindow:
         kick_btn.pack(side="right", padx=2)
 
         # ── Camera feed — fills the upper half of the tile ──
-        cam_frame = tk.Frame(card, bg="#0b0b13", height=200)
+        cam_frame = tk.Frame(card, bg=_card_bg, height=200)
         cam_frame.pack(fill="x", padx=4, pady=(2,0))
         cam_frame.pack_propagate(False)   # enforce the 200px height
-        cam_lbl = tk.Label(cam_frame, bg="#0b0b13",
-                           text="Waiting for camera…", fg="#3a3a5a",
+        cam_lbl = tk.Label(cam_frame, bg=_card_bg,
+                           text="Waiting for camera…", fg="#5f6368" if _is_meet else "#3a3a5a",
                            font=("Helvetica",8))
         cam_lbl.pack(fill="both", expand=True)
 
         # ── Stats row ──
-        stats_row = tk.Frame(card, bg="#0f1520"); stats_row.pack(fill="x")
+        stats_row = tk.Frame(card, bg=_stats_bg); stats_row.pack(fill="x")
         faces_lbl   = tk.Label(stats_row, text="Faces:—", font=("Helvetica",7,"bold"),
-                               bg="#0f1520", fg="#0be881")
+                               bg=_stats_bg, fg="#0be881")
         faces_lbl.pack(side="left", padx=4)
         gaze_lbl    = tk.Label(stats_row, text="Gaze:—", font=("Helvetica",7,"bold"),
-                               bg="#0f1520", fg="#0be881")
+                               bg=_stats_bg, fg="#0be881")
         gaze_lbl.pack(side="left", padx=4)
         strikes_lbl = tk.Label(stats_row, text="Strikes:0", font=("Helvetica",7,"bold"),
-                               bg="#0f1520", fg="#0be881")
+                               bg=_stats_bg, fg="#0be881")
         strikes_lbl.pack(side="left", padx=4)
 
         self._student_tiles[sid] = {
@@ -4103,7 +4544,15 @@ class MultiStudentProctorWindow:
             "name_lbl": name_lbl
         }
         try:
-            self._student_count_lbl.configure(text=f"({len(self._student_tiles)} online)")
+            n = len(self._student_tiles)
+            self._student_count_lbl.configure(text=f"{n} participant{'s' if n!=1 else ''}")
+        except Exception: pass
+        # Update chat candidate menu and participants panel
+        try: self._update_rq_student_menu()
+        except Exception: pass
+        try: self._update_chat_candidate_menu()
+        except Exception: pass
+        try: self._update_participants_panel()
         except Exception: pass
 
     def _open_student_modal(self, sid):
