@@ -1069,22 +1069,59 @@ class BaseWindow:
 # ══════════════════════════════════════════════════════════════════════════════
 def _ask_session_code(parent_root, student_id):
     """
-    Show a modal dialog asking student for the proctor's server URL + session code.
+    Show a modal dialog asking student for the proctor's session code.
+    Defaults to localhost:6000 (same-machine mode).
     Returns (proctor_url, session_code) or None if cancelled.
-    Sends a join request and waits for proctor approval.
     """
+    # ── Same-machine fast-path: if a proctor session is already active locally ──
+    if _PROCTOR_SESSION_CODE:
+        # Proctor is on THIS machine — no dialog needed, just approve directly
+        db_add_join_request(_PROCTOR_SESSION_CODE, student_id)
+        return ("http://127.0.0.1:6000", _PROCTOR_SESSION_CODE)
+
     if not _REQUESTS_AVAILABLE:
-        messagebox.showerror(
-            "Missing Dependency",
-            "Remote proctor mode requires the 'requests' library.\n\n"
-            "Fix: pip install requests",
-            parent=parent_root
-        )
-        return None
+        # Fallback: let student join locally with no URL (same DB, no HTTP)
+        code = simpledialog.askstring(
+            "Session Code",
+            "Enter the Session Code from your proctor:",
+            parent=parent_root)
+        if not code:
+            return None
+        code = code.strip().upper()
+        sess = db_get_session(code)
+        if not sess:
+            messagebox.showerror("Invalid", f"Session code '{code}' not found or inactive.",
+                                 parent=parent_root)
+            return None
+        db_add_join_request(code, student_id)
+        # Wait for approval by polling local DB
+        win2 = tk.Toplevel(parent_root)
+        win2.title("Waiting for approval…")
+        win2.geometry("340x120"); win2.configure(bg="#0d1117")
+        win2.grab_set(); win2.transient(parent_root)
+        win2.attributes("-topmost", True)
+        tk.Label(win2, text="⏳ Waiting for proctor to accept…",
+                 font=("Helvetica",10,"bold"), bg="#0d1117", fg="#ffd93d").pack(pady=(24,6))
+        status_lbl2 = tk.Label(win2, text="", font=("Helvetica",9), bg="#0d1117", fg="#8b949e")
+        status_lbl2.pack()
+        result2 = [None]
+        def _poll_local():
+            s = db_get_join_request(code, student_id)
+            if s == "accepted":
+                result2[0] = ("http://127.0.0.1:6000", code)
+                win2.destroy()
+            elif s == "rejected":
+                status_lbl2.configure(text="❌ Rejected by proctor.", fg="#ff4444")
+                win2.after(1500, win2.destroy)
+            else:
+                win2.after(1500, _poll_local)
+        win2.after(1000, _poll_local)
+        parent_root.wait_window(win2)
+        return result2[0]
 
     win = tk.Toplevel(parent_root)
     win.title("Join Proctor Session")
-    win.geometry("480x320")
+    win.geometry("480x340")
     win.configure(bg="#0d1117")
     win.resizable(False, False)
     win.grab_set()
@@ -1096,7 +1133,20 @@ def _ask_session_code(parent_root, student_id):
              font=("Helvetica", 14, "bold"), bg="#0d1117", fg="#58d6d6").pack(pady=(20, 4))
     tk.Label(win,
              text="Enter the proctor's URL/IP and Session Code.",
-             font=("Helvetica", 9), bg="#0d1117", fg="#8b949e", justify="center").pack(pady=(0, 12))
+             font=("Helvetica", 9), bg="#0d1117", fg="#8b949e", justify="center").pack(pady=(0, 8))
+
+    # ── Same-machine shortcut ─────────────────────────────────────────────────
+    same_row = tk.Frame(win, bg="#0d1117"); same_row.pack(fill="x", padx=30, pady=(0,6))
+    tk.Label(same_row, text="💡 Same computer as proctor?",
+             font=("Helvetica",9), bg="#0d1117", fg="#8b949e").pack(side="left")
+
+    def _use_localhost():
+        url_var.set("127.0.0.1")
+        port_var.set("6000")
+
+    tk.Button(same_row, text="Use localhost", font=("Helvetica",8,"bold"),
+              bg="#575fcf", fg="#fff", bd=0, relief="flat", cursor="hand2",
+              command=_use_localhost).pack(side="right", ipady=3, ipadx=6)
 
     row1 = tk.Frame(win, bg="#0d1117"); row1.pack(fill="x", padx=30, pady=2)
     tk.Label(row1, text="Proctor URL/IP:", font=("Helvetica", 10, "bold"),
@@ -1157,6 +1207,7 @@ def _ask_session_code(parent_root, student_id):
             r = _requests.get(f"{base_url}/ping", timeout=6)
             pdata = r.json()
             srv_code = pdata.get("session_code", "")
+            # Only reject if server reports a *different* active code
             if srv_code and srv_code != code:
                 status_lbl.configure(text=f"❌  Wrong session code. Server has: {srv_code}", fg="#ff4444")
                 return
@@ -3358,11 +3409,12 @@ def start_network_server(port=6000):
     # ── /ping ────────────────────────────────────────────────────────────────
     @app.route("/ping")
     def ping():
+        code = _PROCTOR_SESSION_CODE or ""
         return jsonify(
             status       = "ok",
-            proctor      = "active" if _PROCTOR_SESSION_CODE else "none",
+            proctor      = "active" if code else "none",
             mode         = "interview" if _iv_hub else "exam",
-            session_code = _PROCTOR_SESSION_CODE or ""
+            session_code = code
         )
 
     # ── /join_request (POST) — student sends join request ───────────────────
@@ -3373,7 +3425,9 @@ def start_network_server(port=6000):
         session_code = data.get("session_code", "").strip()
         if not student_id or not session_code:
             return jsonify(ok=False, reason="missing fields"), 400
-        if not _session_ok(session_code):
+        # Accept if session code matches active proctor global OR exists in DB
+        sess = db_get_session(session_code)
+        if not sess:
             return jsonify(ok=False, reason="invalid session code"), 403
         # Check if already accepted/pending
         existing = db_get_join_request(session_code, student_id)
@@ -3390,7 +3444,7 @@ def start_network_server(port=6000):
     def join_status():
         student_id   = request.args.get("student_id", "")
         session_code = request.args.get("session_code", "")
-        if not _session_ok(session_code):
+        if not session_code or not db_get_session(session_code):
             return jsonify(status="invalid")
         status = db_get_join_request(session_code, student_id) or "pending"
         return jsonify(status=status)
