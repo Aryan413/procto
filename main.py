@@ -2304,17 +2304,16 @@ class InterviewStudentWindow:
         self._tile_area.columnconfigure(1, weight=1)
         self._tile_area.rowconfigure(0, weight=1)
 
-        # Self tile (bottom-left in Meet style — appears as a labelled video box)
+        # Self tile
         self_tile = tk.Frame(self._tile_area, bg="#1a1a1d",
                              highlightthickness=1, highlightbackground="#3c4043")
         self_tile.grid(row=0, column=0, sticky="nsew", padx=4, pady=4)
         self_tile.rowconfigure(0, weight=1); self_tile.columnconfigure(0, weight=1)
+        self_tile.grid_propagate(False)
         self.cam_self = tk.Label(self_tile, bg="#1a1a1d",
                                   text="Starting camera…", fg="#5f6368",
                                   font=("Helvetica",10))
         self.cam_self.grid(row=0, column=0, sticky="nsew")
-        # Prevent label from resizing to image content — tile controls the size
-        self_tile.grid_propagate(False)
         self_name = tk.Frame(self_tile, bg="#1a1a1d"); self_name.grid(row=1, column=0, sticky="ew")
         tk.Label(self_name, text="  You", font=("Helvetica",9,"bold"),
                  bg="#1a1a1d", fg=GM_TEXT).pack(side="left", padx=8, pady=4)
@@ -2327,14 +2326,27 @@ class InterviewStudentWindow:
                             highlightthickness=1, highlightbackground="#3c4043")
         pro_tile.grid(row=0, column=1, sticky="nsew", padx=4, pady=4)
         pro_tile.rowconfigure(0, weight=1); pro_tile.columnconfigure(0, weight=1)
+        pro_tile.grid_propagate(False)
         self.cam_pro = tk.Label(pro_tile, bg="#1a1a1d",
                                  text="Waiting for interviewer…", fg="#5f6368",
                                  font=("Helvetica",10))
         self.cam_pro.grid(row=0, column=0, sticky="nsew")
-        pro_tile.grid_propagate(False)
         pro_name = tk.Frame(pro_tile, bg="#1a1a1d"); pro_name.grid(row=1, column=0, sticky="ew")
         tk.Label(pro_name, text="  Interviewer", font=("Helvetica",9,"bold"),
                  bg="#1a1a1d", fg="#ffd93d").pack(side="left", padx=8, pady=4)
+
+        # Resize handler — explicitly size each tile to exactly half width, full height
+        self._s_self_tile = self_tile
+        self._s_pro_tile  = pro_tile
+        def _on_tile_area_resize(event):
+            try:
+                tw = max(100, (event.width  - 16) // 2)  # half width minus padx
+                th = max(100,  event.height - 8)          # full height minus pady
+                self._s_self_tile.configure(width=tw, height=th)
+                self._s_pro_tile.configure(width=tw,  height=th)
+            except Exception:
+                pass
+        self._tile_area.bind("<Configure>", _on_tile_area_resize)
 
         # ── Sidebar (chat / notes) — hidden by default ────────────────────────
         self._sidebar_frame = tk.Frame(self._body, bg=GM_SURF, width=300)
@@ -2490,14 +2502,20 @@ class InterviewStudentWindow:
 
     @staticmethod
     def _fast_frame_to_photo(frame, label):
-        """Convert BGR numpy frame to ImageTk, skipping resize if already fits."""
+        """Letterbox-fit BGR frame to label size. Always resizes to fit label."""
         h, w = frame.shape[:2]
         lw = label.winfo_width(); lh = label.winfo_height()
-        if lw > 10 and lh > 10 and (abs(lw - w) > 4 or abs(lh - h) > 4):
-            scale = min(lw / w, lh / h)
-            nw = max(1, int(w * scale)); nh = max(1, int(h * scale))
-            frame = cv2.resize(frame, (nw, nh), interpolation=cv2.INTER_LINEAR)
-        return ImageTk.PhotoImage(Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)))
+        # Use label size if available, otherwise use frame size
+        if lw < 10: lw = w
+        if lh < 10: lh = h
+        scale = min(lw / w, lh / h)
+        nw = max(1, int(w * scale)); nh = max(1, int(h * scale))
+        resized = cv2.resize(frame, (nw, nh), interpolation=cv2.INTER_LINEAR)
+        # Letterbox onto exact label size
+        canvas = np.zeros((lh, lw, 3), dtype=np.uint8)
+        y0 = (lh - nh) // 2; x0 = (lw - nw) // 2
+        canvas[y0:y0+nh, x0:x0+nw] = resized
+        return ImageTk.PhotoImage(Image.fromarray(cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB)))
 
     def _poll_cam(self):
         try:
@@ -4177,6 +4195,20 @@ class MultiStudentProctorWindow:
         pro_tile.grid(row=0, column=0, sticky="nsew", padx=(8,4), pady=8)
         pro_tile.columnconfigure(0, weight=1); pro_tile.rowconfigure(0, weight=1)
         pro_tile.grid_propagate(False)   # tile size set by grid, not image content
+        self._pro_tile_ref = pro_tile
+
+        # Resize handler — keep pro_tile explicitly sized to match right side
+        def _on_pro_body_resize(event):
+            try:
+                tw = max(100, (event.width  - 24) // 2)
+                th = max(100,  event.height - 16)
+                self._pro_tile_ref.configure(width=tw, height=th)
+                # Also resize student tiles in right column
+                for tile in self._student_tiles.values():
+                    tile["card"].configure(width=tw, height=th)
+            except Exception:
+                pass
+        body.bind("<Configure>", _on_pro_body_resize)
 
         self._pro_self_lbl = tk.Label(pro_tile, bg="#1a1a1d",
                                        text="Starting your camera…", fg="#5f6368",
@@ -4574,19 +4606,11 @@ class MultiStudentProctorWindow:
         """Re-flow grid columns when canvas width changes."""
         try:
             self._cam_canvas.itemconfig(self._cam_win_id, width=event.width)
-            # Determine how many columns fit
             tile_min_w = 260
             cols = max(1, event.width // tile_min_w)
             if cols != self._grid_cols:
                 self._grid_cols = cols
                 self._reflow_grid()
-            # In interview mode: size each card to fill canvas height
-            if self.mode == "interview":
-                ch = event.height if event.height > 50 else self._cam_canvas.winfo_height()
-                tile_h = max(200, ch - 8)
-                tile_w = max(200, event.width // self._grid_cols - 8)
-                for tile in self._student_tiles.values():
-                    tile["card"].configure(width=tile_w, height=tile_h)
         except Exception: pass
 
     def _reflow_grid(self):
