@@ -40,6 +40,7 @@ Remote proctoring requires:
 # ─────────────────────────────────────────────────────────────────────────────
 #  STDLIB
 # ─────────────────────────────────────────────────────────────────────────────
+import threading, time
 import tkinter as tk
 from tkinter import messagebox, ttk, simpledialog
 import sqlite3, math, random, time, threading, csv, os, sys, subprocess
@@ -72,7 +73,7 @@ except ImportError:
     pass
 
 # Public URL assigned by ngrok (set by start_network_server if ngrok is available)
-_public_url: str = None
+_public_url = None
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  WINDOWS-ONLY keyboard hook (graceful fallback on other OS)
@@ -698,10 +699,14 @@ class CameraHub:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  INTERVIEW AUDIO HUB  — crystal-clear two-way audio for interview mode
-#  Uses sounddevice for low-latency capture + playback.
-#  Both student mic (local) and proctor mic (received via Flask /audio_chunk)
-#  play simultaneously with echo cancellation via band-pass filter.
+#  VOICE AUDIO  — real-time two-way audio via WebSocket (voice_bridge.py)
+#
+#  The old HTTP-poll InterviewAudio is replaced by VoiceClient which keeps a
+#  persistent WebSocket to the bridge server (port 6001).  Latency drops from
+#  ~300-800 ms (HTTP poll) to ~30-80 ms (WebSocket push).
+#
+#  Both exam mode and interview mode get voice — the bridge runs on the
+#  PROCTOR machine alongside the Flask HTTP server.
 # ══════════════════════════════════════════════════════════════════════════════
 _SOUNDDEVICE_AVAILABLE = False
 try:
@@ -710,167 +715,69 @@ try:
 except ImportError:
     pass
 
-_WEBSOCKETS_AVAILABLE = False
+_WEBSOCKET_CLIENT_AVAILABLE = False
 try:
-    import websockets
-    import websockets.asyncio.server as _ws_server_lib
-    import websockets.asyncio.client as _ws_client_lib
-    import asyncio
-    _WEBSOCKETS_AVAILABLE = True
+    import websocket as _websocket_lib  # websocket-client package
+    _WEBSOCKET_CLIENT_AVAILABLE = True
 except ImportError:
     pass
 
+_FLASK_SOCK_AVAILABLE = False
+try:
+    from flask_sock import Sock as _FlaskSock
+    _FLASK_SOCK_AVAILABLE = True
+except ImportError:
+    pass
+
+# Import the voice bridge module (sits next to main.py)
+try:
+    from voice_bridge import (
+        VoiceClient,
+        start_voice_bridge,
+        make_ws_url,
+        SAMPLE_RATE  as _VOICE_SR,
+        CHUNK_FRAMES as _VOICE_CF,
+        CHANNELS     as _VOICE_CH,
+    )
+    _VOICE_BRIDGE_AVAILABLE = True
+except ImportError:
+    _VOICE_BRIDGE_AVAILABLE = False
+    print("[⚠] voice_bridge.py not found — place it next to main.py")
+
+# Global voice clients — one per role per session
+_voice_student: "VoiceClient | None" = None
+_voice_proctor: "VoiceClient | None" = None
+
+# Keep InterviewAudio as a thin shim so any remaining references don't break
 class InterviewAudio:
-    """
-    Two-way audio bridge for interview mode via WebSocket.
-    """
-
-    SAMPLE_RATE   = 16000
-    CHANNELS      = 1
-    DTYPE         = "int16"
-    CHUNK_MS      = 40
-    CHUNK_FRAMES  = int(SAMPLE_RATE * CHUNK_MS / 1000)
-    GAIN          = 2.0
-    JITTER_CHUNKS = 3
-
+    """Legacy shim — delegates to VoiceClient."""
     def __init__(self, role: str, remote_url: str | None = None):
-        self.role        = role
-        self.remote_url  = remote_url
-        self._running    = False
-        self._thread     = None
-
-        if self.remote_url:
-            base = self.remote_url.replace("http://", "ws://").replace("https://", "wss://")
-            # Replace port 6000 with 6001
-            if ":6000" in base:
-                self.ws_url = base.replace(":6000", ":6001")
-            else:
-                self.ws_url = base + ":6001"
-            self.ws_url += "/audio_stream"
-        else:
-            self.ws_url = None
+        self.role = role
+        self.remote_url = remote_url
+        self._client: "VoiceClient | None" = None
 
     def start(self):
-        if not _SOUNDDEVICE_AVAILABLE or not _WEBSOCKETS_AVAILABLE:
-            print("[Audio] sounddevice or websockets not installed — audio disabled")
+        if not _VOICE_BRIDGE_AVAILABLE or not self.remote_url:
+            print(f"[Audio] VoiceBridge unavailable — audio disabled for {self.role}")
             return
-        if not self.ws_url:
-            return
-        self._running = True
-        self._thread = threading.Thread(target=self._run_async, daemon=True)
-        self._thread.start()
-        print(f"[Audio] Started role={self.role} url={self.ws_url}")
+        ws_url = make_ws_url(self.remote_url, ws_port=6001)
+        self._client = VoiceClient(role=self.role, bridge_url=ws_url)
+        self._client.start()
 
     def stop(self):
-        self._running = False
+        if self._client:
+            self._client.stop()
+            self._client = None
 
-    def _run_async(self):
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(self._async_loop())
+    def toggle_mute(self):
+        if self._client:
+            return self._client.toggle_mute()
+        return False
 
-    async def _async_loop(self):
-        import queue
-        import threading
-        import numpy as np
-        audio_out_q = queue.Queue(maxsize=30)
-        
-        async def rx_loop(ws):
-            def play_audio():
-                try:
-                    with sd.OutputStream(samplerate=self.SAMPLE_RATE,
-                                          channels=self.CHANNELS,
-                                          dtype=self.DTYPE,
-                                          blocksize=self.CHUNK_FRAMES) as stream:
-                        print(f"[Audio RX] Speaker open role={self.role}")
-                        buffered = 0
-                        while self._running and buffered < self.JITTER_CHUNKS:
-                            try:
-                                audio_out_q.get(timeout=0.2)
-                                buffered += 1
-                            except queue.Empty:
-                                pass
-                        while self._running:
-                            try:
-                                chunk = audio_out_q.get(timeout=0.3)
-                                stream.write(chunk)
-                            except queue.Empty:
-                                silence = np.zeros((self.CHUNK_FRAMES, self.CHANNELS), dtype=np.int16)
-                                stream.write(silence)
-                except Exception as e:
-                    print(f"[Audio RX] Error: {e}")
+    def set_volume(self, v: float):
+        if self._client:
+            self._client.set_volume(v)
 
-            play_thread = threading.Thread(target=play_audio, daemon=True)
-            play_thread.start()
-
-            try:
-                async for message in ws:
-                    if not self._running:
-                        break
-                    if isinstance(message, bytes):
-                        arr = np.frombuffer(message, dtype=np.int16)
-                        expected = self.CHUNK_FRAMES * self.CHANNELS
-                        if len(arr) == expected:
-                            try:
-                                audio_out_q.put_nowait(arr.reshape(-1, self.CHANNELS))
-                            except queue.Full:
-                                pass
-                        elif len(arr) > 0:
-                            if len(arr) < expected:
-                                arr = np.pad(arr, (0, expected - len(arr)))
-                            else:
-                                arr = arr[:expected]
-                            try:
-                                audio_out_q.put_nowait(arr.reshape(-1, self.CHANNELS))
-                            except queue.Full:
-                                pass
-            except Exception as e:
-                pass
-
-        async def tx_loop(ws):
-            mic_q = queue.Queue(maxsize=10)
-            def capture_audio():
-                try:
-                    with sd.InputStream(samplerate=self.SAMPLE_RATE,
-                                        channels=self.CHANNELS,
-                                        dtype=self.DTYPE,
-                                        blocksize=self.CHUNK_FRAMES) as stream:
-                        print(f"[Audio TX] Mic open role={self.role}")
-                        while self._running:
-                            data, overflowed = stream.read(self.CHUNK_FRAMES)
-                            amplified = np.clip(
-                                (data.astype(np.float32) * self.GAIN),
-                                -32768, 32767).astype(np.int16)
-                            try:
-                                mic_q.put_nowait(amplified.tobytes())
-                            except queue.Full:
-                                pass
-                except Exception as e:
-                    print(f"[Audio TX] Error: {e}")
-            
-            cap_thread = threading.Thread(target=capture_audio, daemon=True)
-            cap_thread.start()
-
-            while self._running:
-                try:
-                    raw = mic_q.get_nowait()
-                    await ws.send(raw)
-                except queue.Empty:
-                    await asyncio.sleep(0.01)
-                except Exception as e:
-                    break
-
-        reconnect_delay = 2
-        while self._running:
-            try:
-                print(f"[Audio] Connecting to {self.ws_url}...")
-                async with _ws_client_lib.connect(self.ws_url) as ws:
-                    print(f"[Audio] Connected WS role={self.role}")
-                    await asyncio.gather(rx_loop(ws), tx_loop(ws))
-            except Exception:
-                pass
-            if self._running:
-                await asyncio.sleep(reconnect_delay)
 
 # Global audio hubs — one per session
 _audio_student: InterviewAudio = None
@@ -1492,6 +1399,63 @@ class MainLogin(BaseWindow):
     def _close(self): self.animating=False; self.root.destroy()
     def run(self): self.root.mainloop()
 
+# --- WebRTC & Signaling Engine (optional) ---
+_WEBRTC_AVAILABLE = False
+try:
+    import socketio as _sio_lib
+    from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack
+    from av import VideoFrame
+    _WEBRTC_AVAILABLE = True
+except ImportError:
+    pass
+
+if _WEBRTC_AVAILABLE:
+    class CameraHubTrack(VideoStreamTrack):
+        """Bridge between your OpenCV CameraHub and WebRTC."""
+        kind = "video"
+        def __init__(self, hub):
+            super().__init__()
+            self.hub = hub
+
+        async def recv(self):
+            pts, time_base = await self.next_timestamp()
+            frame_bgr = self.hub.get_frame() if self.hub else None
+            if frame_bgr is None:
+                frame_bgr = np.zeros((360, 480, 3), dtype=np.uint8)
+            
+            # Convert BGR to RGB for WebRTC
+            frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+            video_frame = VideoFrame.from_ndarray(frame_rgb, format="rgb24")
+            video_frame.pts, video_frame.time_base = pts, time_base
+            return video_frame
+
+if _WEBRTC_AVAILABLE:
+  class StudentWebRTCPeer:
+    """The background engine that streams to the proctor."""
+    def __init__(self, server_url, student_id, hub):
+        self.server_url = server_url
+        self.student_id = student_id
+        self.hub = hub
+        self._sio = _sio_lib.AsyncClient(ssl_verify=False)
+        self._pc = None
+
+    def start(self):
+        import asyncio
+        threading.Thread(target=lambda: asyncio.run(self._main()), daemon=True).start()
+
+    async def _main(self):
+        @self._sio.on("offer")
+        async def on_offer(data):
+            self._pc = RTCPeerConnection()
+            self._pc.addTrack(CameraHubTrack(self.hub))
+            await self._pc.setRemoteDescription(RTCSessionDescription(sdp=data["sdp"], type=data["type"]))
+            answer = await self._pc.createAnswer()
+            await self._pc.setLocalDescription(answer)
+            await self._sio.emit("answer", {"student_id": self.student_id, "sdp": self._pc.localDescription.sdp, "type": self._pc.localDescription.type})
+
+        await self._sio.connect(self.server_url, transports=["websocket"])
+        await self._sio.emit("student-join", {"student_id": self.student_id})
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  EXAM WINDOW  (student — unchanged)
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1508,6 +1472,10 @@ class ExamWindow:
         # Each ExamWindow owns its own CameraHub — supports multiple concurrent students
         self._my_hub = CameraHub(student_id)
         self._my_hub.start()
+        # Start WebRTC streaming for this student
+        global _webrtc_peer
+        _webrtc_peer = StudentWebRTCPeer(f"http://localhost:{PORT}", self.sid, self._my_hub)
+        _webrtc_peer.start()
         self.root=tk.Tk()
         self.root.title("ExamShield — Exam in Progress 🔒")
         self.root.geometry("860x680"); self.root.resizable(True,True)
@@ -2007,11 +1975,13 @@ class InterviewStudentWindow:
         self._tick()
         self._check_terminate()
         self._poll_notes()   # poll for notes pushed by remote proctor
-        # ── Two-way audio (crystal-clear) ──────────────────────────────
-        global _audio_student
-        if proctor_url and _SOUNDDEVICE_AVAILABLE:
-            _audio_student = InterviewAudio(role="student", remote_url=proctor_url)
-            _audio_student.start()
+        # ── Two-way voice (WebSocket, low-latency) ─────────────────────────
+        global _voice_student
+        if proctor_url and _VOICE_BRIDGE_AVAILABLE and _SOUNDDEVICE_AVAILABLE:
+            ws_url = make_ws_url(proctor_url, ws_port=6001)
+            _voice_student = VoiceClient(role="student", bridge_url=ws_url)
+            _voice_student.start()
+            print(f"[Voice] Student voice client started  ws_url={ws_url}")
         if proctor_url:
             self._push_frame_loop()
             self._poll_runtime_questions()
@@ -2184,8 +2154,9 @@ class InterviewStudentWindow:
 
     def _force_end(self):
         self._sec.stop()
-        global _audio_student
+        global _audio_student, _voice_student
         if _audio_student: _audio_student.stop(); _audio_student = None
+        if _voice_student: _voice_student.stop(); _voice_student = None
         for w in self.root.winfo_children(): w.destroy()
         self.root.configure(bg="#1a0000")
         tk.Label(self.root,text="🚫",font=("Segoe UI Emoji",60),bg="#1a0000").pack(pady=(80,0))
@@ -2204,11 +2175,34 @@ class InterviewStudentWindow:
         self.lbl_status=tk.Label(bar,text="● Connected",font=("Helvetica",9),
                                   bg="#161b22",fg="#0be881")
         self.lbl_status.pack(side="right",padx=16)
-        # Audio status badge
-        mic_text = "🎤 Audio ON" if (_SOUNDDEVICE_AVAILABLE and self.proctor_url) else "🔇 Audio OFF"
-        mic_col  = "#0be881" if (_SOUNDDEVICE_AVAILABLE and self.proctor_url) else "#8b949e"
-        tk.Label(bar, text=mic_text, font=("Helvetica",9,"bold"),
-                 bg="#161b22", fg=mic_col).pack(side="right", padx=10)
+        # Voice status badge + mute toggle
+        voice_ready = _VOICE_BRIDGE_AVAILABLE and _SOUNDDEVICE_AVAILABLE and self.proctor_url
+        mic_text = "🎤 Voice ON" if voice_ready else "🔇 Voice OFF"
+        mic_col  = "#0be881"   if voice_ready else "#8b949e"
+        self._lbl_voice_badge = tk.Label(bar, text=mic_text,
+                 font=("Helvetica",9,"bold"), bg="#161b22", fg=mic_col)
+        self._lbl_voice_badge.pack(side="right", padx=4)
+
+        if voice_ready:
+            self._student_muted = False
+            def _toggle_student_mute():
+                global _voice_student
+                if _voice_student:
+                    m = _voice_student.toggle_mute()
+                else:
+                    self._student_muted = not self._student_muted
+                    m = self._student_muted
+                self._btn_student_mute.configure(
+                    text="🔊" if not m else "🔇",
+                    bg="#0be881" if not m else "#ff6b9d")
+                self._lbl_voice_badge.configure(
+                    text="🎤 Voice ON" if not m else "🔇 Muted",
+                    fg="#0be881" if not m else "#ff6b9d")
+            self._btn_student_mute = tk.Button(
+                bar, text="🔇 Mute", font=("Helvetica",8,"bold"),
+                bg="#21262d", fg="#c9d1d9", bd=0, relief="flat", cursor="hand2",
+                command=_toggle_student_mute)
+            self._btn_student_mute.pack(side="right", padx=4, ipady=2, ipadx=4)
 
         self.warn_bar=tk.Frame(self.root,bg="#0d1117",height=24); self.warn_bar.pack(fill="x"); self.warn_bar.pack_propagate(False)
         self.lbl_warn=tk.Label(self.warn_bar,text="● Monitoring active  |  Violations: 0/5",
@@ -3290,59 +3284,31 @@ def start_network_server(port=6000):
         slot = _get_or_create_student_slot(sid)
         with slot["lock"]:
             slot["violations"].append(msg)
-
             if len(slot["violations"]) > 400:
-
                 slot["violations"] = slot["violations"][-400:]
-
         return jsonify(ok=True)
 
-
-
-    # ── /frame/<student_id> (GET) ───────────────────────────────────────────────
-
+    # ── /frame/<student_id> (GET) ─────────────────────────────────────────────
     @app.route("/frame/<student_id>")
-
     def frame(student_id):
-
         # Local same-machine mode
-
         hub = _hub or _iv_hub
-
         if hub and getattr(hub, 'student_id', None) == student_id:
-
             f = (hub.get_frame() if hasattr(hub,'get_frame')
-
                  else hub.get_student_frame())
-
         else:
-
             with _student_data_lock:
-
                 slot = _student_data.get(student_id)
-
             if slot is None:
-
                 return Response("no session", status=204)
-
             with slot["lock"]:
-
                 f = slot["frame"].copy() if slot["frame"] is not None else None
-
         if f is None:
-
             return Response("no frame", status=204)
-
         ok, buf = cv2.imencode(".jpg", f, [cv2.IMWRITE_JPEG_QUALITY, 55])
-
         if not ok:
-
             return Response("encode error", status=500)
-
         return Response(buf.tobytes(), mimetype="image/jpeg")
-
-
-
 
     # ── /stats/<student_id> (GET) ──────────────────────────────────────────────
     @app.route("/stats/<student_id>")
@@ -3563,36 +3529,6 @@ def start_network_server(port=6000):
 
     threading.Thread(target=_run, daemon=True).start()
 
-    if _WEBSOCKETS_AVAILABLE:
-        ws_port = port + 1
-        _ws_clients = set()
-
-        async def ws_audio_handler(websocket):
-            _ws_clients.add(websocket)
-            try:
-                async for message in websocket:
-                    for client in list(_ws_clients):
-                        if client != websocket:
-                            try:
-                                await client.send(message)
-                            except Exception:
-                                pass
-            except Exception:
-                pass
-            finally:
-                _ws_clients.discard(websocket)
-
-        def _run_ws():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            async def _ws_main():
-                async with _ws_server_lib.serve(ws_audio_handler, "0.0.0.0", ws_port):
-                    await asyncio.get_running_loop().create_future()  # run forever
-            loop.run_until_complete(_ws_main())
-
-        threading.Thread(target=_run_ws, daemon=True).start()
-        print(f"  🎙  WebSocket Audio server started on port {ws_port}")
-
     import socket
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -3613,8 +3549,19 @@ def start_network_server(port=6000):
         except Exception as e:
             print(f"[ngrok] Could not open tunnel: {e}")
 
+    # ── Start the WebSocket voice bridge on port 6001 ────────────────────────
+    _voice_bridge_port = port + 1   # 6001 by default
+    if _VOICE_BRIDGE_AVAILABLE:
+        start_voice_bridge(port=_voice_bridge_port)
+        # Expose the voice bridge port as a module-level for UI use
+        global _VOICE_BRIDGE_PORT
+        _VOICE_BRIDGE_PORT = _voice_bridge_port
+    else:
+        print("[⚠] voice_bridge.py missing — voice chat disabled")
+
     print(f"\n{'═'*60}")
     print(f"  🌐  ExamShield v3 Network Server started on port {port}")
+    print(f"  🎙  Voice Bridge (WebSocket) on port {_voice_bridge_port}")
     print(f"  📡  Local IP  →  {local_ip}:{port}  (LAN only)")
     if _public_url:
         print(f"  🌍  Public URL  →  {_public_url}")
@@ -3667,13 +3614,27 @@ class MultiStudentProctorWindow:
         self._poll_join_requests()
         self._show_session_info()
 
-        # ── Start proctor audio for interview mode ──────────────────────
-        global _audio_proctor
-        if mode == "interview" and _SOUNDDEVICE_AVAILABLE:
-            _audio_proctor = InterviewAudio(role="proctor",
-                                             remote_url="http://127.0.0.1:6000")
-            _audio_proctor.start()
-            print("[Audio] Proctor audio started (interview mode)")
+        # ── Start proctor voice (WebSocket bridge) for interview mode ──────
+        global _voice_proctor
+        if mode == "interview" and _VOICE_BRIDGE_AVAILABLE and _SOUNDDEVICE_AVAILABLE:
+            # Proctor connects to their OWN bridge server (ws://localhost:6001)
+            _voice_proctor = VoiceClient(
+                role="proctor",
+                bridge_url=f"ws://127.0.0.1:{getattr(self, '_voice_port', 6001)}"
+            )
+            def _on_proctor_voice_status(connected, info):
+                try:
+                    color = "#0be881" if connected else "#ff4444"
+                    self._lbl_voice_status.configure(
+                        text=f"🎙 {'Connected' if connected else info}",
+                        fg=color)
+                except Exception:
+                    pass
+            _voice_proctor.on_status_change = _on_proctor_voice_status
+            _voice_proctor.start()
+            print("[Voice] Proctor voice client started (ws://localhost:6001)")
+        elif mode == "interview":
+            print("[Voice] ⚠ voice_bridge or sounddevice not available — audio disabled")
 
         # ── Start proctor camera push for interview mode ──────────────
         if mode == "interview":
@@ -3700,27 +3661,51 @@ class MultiStudentProctorWindow:
 
     # ── Interview audio / camera toggle helpers ──────────────────────────────
     def _toggle_audio(self):
-        global _audio_proctor
+        global _audio_proctor, _voice_proctor
         self._audio_on = not self._audio_on
         if self._audio_on:
-            # Re-start audio
-            if _SOUNDDEVICE_AVAILABLE:
-                if _audio_proctor:
-                    _audio_proctor.stop()
-                _audio_proctor = InterviewAudio(role="proctor",
-                                                 remote_url="http://127.0.0.1:6000")
-                _audio_proctor.start()
+            # Re-start voice
+            if _VOICE_BRIDGE_AVAILABLE and _SOUNDDEVICE_AVAILABLE:
+                if _voice_proctor:
+                    _voice_proctor.stop()
+                _voice_proctor = VoiceClient(
+                    role="proctor",
+                    bridge_url=f"ws://127.0.0.1:{getattr(self, '_voice_port', 6001)}")
+                _voice_proctor.start()
             self._btn_audio_toggle.configure(text="🔊  Audio ON",  bg="#0be881", fg="#0d1117")
-            self._lbl_audio_status.configure(
-                text="🎤 Mic active", fg="#0be881")
+            self._lbl_audio_status.configure(text="🎤 Mic active", fg="#0be881")
         else:
-            # Stop audio
-            if _audio_proctor:
-                _audio_proctor.stop()
-                _audio_proctor = None
+            # Stop voice
+            if _voice_proctor:
+                _voice_proctor.stop()
+            _voice_proctor = None
             self._btn_audio_toggle.configure(text="🔇  Audio OFF", bg="#3a3a3a", fg="#c9d1d9")
-            self._lbl_audio_status.configure(
-                text="🔇 Mic muted", fg="#8b949e")
+            self._lbl_audio_status.configure(text="🔇 Mic muted", fg="#8b949e")
+
+    def _toggle_mute_proctor(self):
+        """Mute/unmute proctor mic without stopping the WS connection."""
+        global _voice_proctor
+        if _voice_proctor:
+            muted = _voice_proctor.toggle_mute()
+        else:
+            self._muted = not self._muted
+            muted = self._muted
+        if muted:
+            self._btn_mute.configure(text="🔊 Unmute", bg="#ff6b9d", fg="#fff")
+            self._lbl_voice_status.configure(text="🔇 Mic muted", fg="#ff6b9d")
+        else:
+            self._btn_mute.configure(text="🔇 Mute", bg="#21262d", fg="#c9d1d9")
+            self._lbl_voice_status.configure(text="🎤 Voice: connected", fg="#0be881")
+
+    def _on_vol_change(self, val):
+        """Adjust playback volume on the proctor voice client."""
+        global _voice_proctor
+        try:
+            v = float(val)
+            if _voice_proctor:
+                _voice_proctor.set_volume(v)
+        except Exception:
+            pass
 
     def _toggle_pro_cam(self):
         self._cam_on = not self._cam_on
@@ -3905,7 +3890,7 @@ class MultiStudentProctorWindow:
         tk.Label(ctrl_hdr, text="🎙  Interview Controls",
                  font=("Helvetica",10,"bold"), bg="#161b22", fg="#ffd93d").pack(anchor="w")
 
-        ctrl_row = tk.Frame(right, bg="#161b22"); ctrl_row.pack(fill="x", padx=10, pady=(0,8))
+        ctrl_row = tk.Frame(right, bg="#161b22"); ctrl_row.pack(fill="x", padx=10, pady=(0,4))
 
         self._btn_audio_toggle = tk.Button(
             ctrl_row, text="🔊  Audio ON", font=("Helvetica",9,"bold"),
@@ -3919,7 +3904,47 @@ class MultiStudentProctorWindow:
             width=12, command=self._toggle_pro_cam)
         self._btn_cam_toggle.grid(row=0, column=1, padx=(4,0), ipady=5)
 
-        # Audio status indicator
+        # ── Voice status & mute button ─────────────────────────────────────
+        voice_row = tk.Frame(right, bg="#161b22"); voice_row.pack(fill="x", padx=10, pady=(4,0))
+
+        if _VOICE_BRIDGE_AVAILABLE and _SOUNDDEVICE_AVAILABLE and _WEBSOCKET_CLIENT_AVAILABLE:
+            voice_status_text = "🎤 Voice: initialising…"
+            voice_status_col  = "#ffd93d"
+        else:
+            missing = []
+            if not _VOICE_BRIDGE_AVAILABLE:      missing.append("voice_bridge.py")
+            if not _SOUNDDEVICE_AVAILABLE:        missing.append("sounddevice")
+            if not _WEBSOCKET_CLIENT_AVAILABLE:   missing.append("websocket-client")
+            voice_status_text = "⚠ Voice N/A — install:\n  " + ", ".join(missing)
+            voice_status_col  = "#ff6b9d"
+
+        self._lbl_voice_status = tk.Label(
+            voice_row, text=voice_status_text,
+            font=("Helvetica",8), bg="#161b22", fg=voice_status_col,
+            anchor="w", justify="left")
+        self._lbl_voice_status.pack(side="left", fill="x", expand=True)
+
+        self._muted = False
+        self._btn_mute = tk.Button(
+            voice_row, text="🔇 Mute", font=("Helvetica",8,"bold"),
+            bg="#21262d", fg="#c9d1d9", bd=0, relief="flat", cursor="hand2",
+            command=self._toggle_mute_proctor)
+        self._btn_mute.pack(side="right", ipady=3, ipadx=6)
+
+        # ── Volume slider ──────────────────────────────────────────────────
+        vol_row = tk.Frame(right, bg="#161b22"); vol_row.pack(fill="x", padx=10, pady=(2,4))
+        tk.Label(vol_row, text="🔈 Vol:", font=("Helvetica",8),
+                 bg="#161b22", fg="#8b949e").pack(side="left")
+        self._vol_var = tk.DoubleVar(value=1.0)
+        vol_slider = tk.Scale(
+            vol_row, from_=0.0, to=3.0, resolution=0.1,
+            orient="horizontal", variable=self._vol_var,
+            bg="#161b22", fg="#c9d1d9", troughcolor="#21262d",
+            highlightthickness=0, bd=0, length=140,
+            command=self._on_vol_change)
+        vol_slider.pack(side="left", padx=(4,0))
+
+        # Audio status indicator (legacy sounddevice warning)
         audio_status_text = (
             "🎤 Mic ready" if _SOUNDDEVICE_AVAILABLE
             else "⚠ sounddevice not installed\n   pip install sounddevice"
@@ -4750,8 +4775,9 @@ class MultiStudentProctorWindow:
         self._stop_pro_cam()
         if _hub:    _hub.stop()
         if _iv_hub: _iv_hub.stop()
-        global _audio_proctor
-        if _audio_proctor: _audio_proctor.stop(); _audio_proctor = None
+        global _audio_proctor, _voice_proctor
+        if _audio_proctor:  _audio_proctor.stop();  _audio_proctor = None
+        if _voice_proctor:  _voice_proctor.stop();   _voice_proctor = None
         self.root.destroy()
         MainLogin().run()
 
@@ -4760,8 +4786,9 @@ class MultiStudentProctorWindow:
         self._stop_pro_cam()
         if _hub:    _hub.stop()
         if _iv_hub: _iv_hub.stop()
-        global _audio_proctor
-        if _audio_proctor: _audio_proctor.stop(); _audio_proctor = None
+        global _audio_proctor, _voice_proctor
+        if _audio_proctor:  _audio_proctor.stop();  _audio_proctor = None
+        if _voice_proctor:  _voice_proctor.stop();   _voice_proctor = None
         self.root.destroy()
 
     def run(self): self.root.mainloop()
@@ -4785,11 +4812,16 @@ if __name__ == "__main__":
         print("[⚠] 'requests' not installed — remote proctor mode disabled")
         print("    Fix: pip install requests")
     if not _SOUNDDEVICE_AVAILABLE:
-        print("[⚠] 'sounddevice' not installed — two-way audio disabled")
+        print("[⚠] 'sounddevice' not installed — two-way voice disabled")
         print("    Fix: pip install sounddevice")
-    if not _WEBSOCKETS_AVAILABLE:
-        print("[⚠] 'websockets' not installed — real-time web-socket audio disabled")
-        print("    Fix: pip install websockets")
+    if not _WEBSOCKET_CLIENT_AVAILABLE:
+        print("[⚠] 'websocket-client' not installed — WebSocket voice disabled")
+        print("    Fix: pip install websocket-client")
+    if not _FLASK_SOCK_AVAILABLE:
+        print("[⚠] 'flask-sock' not installed — WebSocket voice bridge disabled")
+        print("    Fix: pip install flask-sock")
+    if not _VOICE_BRIDGE_AVAILABLE:
+        print("[⚠] 'voice_bridge.py' not found — place it next to main.py")
     if not _NGROK_AVAILABLE:
         print("[⚠] 'pyngrok' not installed — internet (cross-network) proctoring disabled")
         print("    Fix: pip install pyngrok")
