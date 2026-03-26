@@ -1,13 +1,19 @@
-# ExamShield – requirements.txt
-# Install with:  pip install -r requirements.txt
+# ExamShield WebRTC — requirements.txt
+# ─────────────────────────────────────
+# Core (already in your main.py environment)
+flask>=2.3
+flask-cors>=4.0
+opencv-python>=4.8
+numpy>=1.24
+Pillow>=10.0
+ultralytics>=8.0        # YOLO — already installed
 
-flask>=3.0.0
-flask-socketio>=5.3.6
-python-socketio[client]>=5.11.0   # WebSocket client for audio
-eventlet>=0.35.0                   # async transport (or use gevent)
+# NEW: WebRTC additions
+flask-socketio>=5.3     # SocketIO for signaling
+python-socketio[client]>=5.10  # Student-side SocketIO client
+aiohttp>=3.9           # Async HTTP for socketio client
+aiortc>=1.9.0          # WebRTC implementation for Python
+av>=11.0               # PyAV — video frame encoding for aiortc
 
-opencv-python>=4.9.0
-Pillow>=10.3.0
-numpy>=1.26.0
-sounddevice>=0.4.6
-requests>=2.31.0
+# Optional: tunnel
+pyngrok>=7.0           # Already optional in your project
