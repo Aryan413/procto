@@ -4989,6 +4989,10 @@ class MultiStudentProctorWindow:
         except Exception: pass
         self.root.after(5000, self._poll_runtime_answers)
 
+    def _build_runtime_q_panel_interview(self, p):
+        """Interview mode version — same widget as exam, reuses _build_runtime_q_panel."""
+        self._build_runtime_q_panel(p)
+
     # ── Camera polling ────────────────────────────────────────────────────────
     def _poll_cameras(self):
         try:
@@ -5072,19 +5076,40 @@ class MultiStudentProctorWindow:
         try:
             if not self.root.winfo_exists(): return
         except Exception: return
+        if not hasattr(self, '_join_request_windows'):
+            self._join_request_windows = {}
         pending = db_get_pending_requests(_PROCTOR_SESSION_CODE or "")
         for sid in pending:
             if sid not in self._pending_notified:
                 self._pending_notified.add(sid)
                 self.root.after(0, lambda s=sid: self._show_join_request(s))
+            else:
+                # Re-show if popup was closed via X button (no Accept/Reject clicked)
+                win_ref = self._join_request_windows.get(sid)
+                try:
+                    alive = win_ref is not None and win_ref.winfo_exists()
+                except Exception:
+                    alive = False
+                if not alive:
+                    self._pending_notified.discard(sid)
         self.root.after(2000, self._poll_join_requests)
 
     def _show_join_request(self, student_id):
+        if not hasattr(self, '_join_request_windows'):
+            self._join_request_windows = {}
         win = tk.Toplevel(self.root)
         win.title("👋 Join Request")
         win.geometry("360x180")
         win.configure(bg="#0d1117")
         win.attributes("-topmost", True)
+        # Track this window so _poll_join_requests can detect if it was X-closed
+        self._join_request_windows[student_id] = win
+        def _on_close():
+            # X button = no decision → remove from windows dict so poll re-opens it
+            self._join_request_windows.pop(student_id, None)
+            self._pending_notified.discard(student_id)
+            win.destroy()
+        win.protocol("WM_DELETE_WINDOW", _on_close)
         # NOTE: NO grab_set() here — allows multiple join-request popups to coexist
         tk.Label(win, text="👋 Student Wants to Join",
                  font=("Helvetica",13,"bold"), bg="#0d1117", fg="#ffd93d").pack(pady=(20,6))
@@ -5098,12 +5123,13 @@ class MultiStudentProctorWindow:
             _get_or_create_student_slot(student_id)
             self._add_student_tile(student_id)
             self._update_rq_student_menu()
+            self._join_request_windows.pop(student_id, None)
             win.destroy()
         def _reject():
             db_set_join_status(_PROCTOR_SESSION_CODE, student_id, "rejected")
-            # Allow the student to re-request — remove from seen set so the
-            # next pending row for this student triggers a fresh popup.
+            # Allow re-request — discard from seen set so next pending row shows a fresh popup
             self._pending_notified.discard(student_id)
+            self._join_request_windows.pop(student_id, None)
             win.destroy()
         tk.Button(btn_row, text="✅ Accept", font=("Helvetica",10,"bold"),
                   bg="#0be881", fg="#0d1117", bd=0, relief="flat", cursor="hand2",
