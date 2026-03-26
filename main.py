@@ -208,9 +208,13 @@ def init_db():
         session_code TEXT,
         student_id   TEXT,
         question     TEXT,
+        options      TEXT DEFAULT '',
         sent_at      TEXT,
         answered     INTEGER DEFAULT 0,
         answer       TEXT DEFAULT '')""")
+    # Migrate older DBs that lack the options column
+    try: c.execute("ALTER TABLE runtime_questions ADD COLUMN options TEXT DEFAULT ''")
+    except Exception: pass
     try: c.execute("INSERT INTO proctors VALUES('admin','admin123')")
     except: pass
     if c.execute("SELECT COUNT(*) FROM questions").fetchone()[0] == 0:
@@ -326,15 +330,16 @@ def db_get_accepted_students(session_code):
     conn.close(); return [r[0] for r in rows]
 
 # ─────────────────── Runtime question helpers ─────────────────────────────────
-def db_push_runtime_question(session_code, student_id, question):
+def db_push_runtime_question(session_code, student_id, question, options=""):
+    """options: pipe-separated choices e.g. 'Paris|London|Berlin|Rome'  (empty = open text)"""
     conn = sqlite3.connect(DB)
-    conn.execute("INSERT INTO runtime_questions(session_code,student_id,question,sent_at) VALUES(?,?,?,?)",
-                 (session_code, student_id, question, time.strftime("%H:%M:%S")))
+    conn.execute("INSERT INTO runtime_questions(session_code,student_id,question,options,sent_at) VALUES(?,?,?,?,?)",
+                 (session_code, student_id, question, options, time.strftime("%H:%M:%S")))
     conn.commit(); conn.close()
 
 def db_get_runtime_questions(session_code, student_id):
     conn = sqlite3.connect(DB)
-    rows = conn.execute("SELECT id,question,sent_at,answered,answer FROM runtime_questions "
+    rows = conn.execute("SELECT id,question,options,sent_at,answered,answer FROM runtime_questions "
                         "WHERE session_code=? AND student_id=? ORDER BY id",
                         (session_code, student_id)).fetchall()
     conn.close(); return rows
@@ -1378,7 +1383,6 @@ class MainLogin(BaseWindow):
             proctor_url, session_code = session_info
 
             if mode=="exam":
-                _hub=CameraHub(uid); _hub.start()
                 self.animating=False; self.root.destroy()
                 ExamWindow(uid, proctor_url=proctor_url, session_code=session_code).run()
             else:
@@ -1411,6 +1415,9 @@ class ExamWindow:
         self.qs=qs
         self.qi=0; self.answers={}; self.start=time.time()
         self._runtime_qs_seen=set()
+        # Each ExamWindow owns its own CameraHub — supports multiple concurrent students
+        self._my_hub = CameraHub(student_id)
+        self._my_hub.start()
         self.root=tk.Tk()
         self.root.title("ExamShield — Exam in Progress 🔒")
         self.root.geometry("860x680"); self.root.resizable(True,True)
@@ -1437,14 +1444,15 @@ class ExamWindow:
         if not self.proctor_url or not _REQUESTS_AVAILABLE: return
 
         def _push():
-            if _hub:
+            hub = self._my_hub
+            if hub:
                 # Only push if frame has changed since last push
-                with _hub._lock:
-                    ver = _hub.frame_version
+                with hub._lock:
+                    ver = hub.frame_version
                 if getattr(self, "_last_pushed_ver", -1) == ver:
                     return   # nothing new
                 self._last_pushed_ver = ver
-                frame = _hub.get_frame()
+                frame = hub.get_frame()
                 if frame is not None:
                     try:
                         ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 30])
@@ -1459,11 +1467,11 @@ class ExamWindow:
                         f"{self.proctor_url}/push_student_stats",
                         json={
                             "student_id":   self.sid,
-                            "face_count":   _hub.face_count,
-                            "gaze_dir":     _hub.gaze_dir,
-                            "strike_count": _hub.strike_count,
-                            "phone":        _hub.phone_detected,
-                            "terminated":   _hub.terminated,
+                            "face_count":   hub.face_count,
+                            "gaze_dir":     hub.gaze_dir,
+                            "strike_count": hub.strike_count,
+                            "phone":        hub.phone_detected,
+                            "terminated":   hub.terminated,
                             "max_strikes":  CameraHub.MAX_STRIKES,
                             "mode":         "exam",
                         }, timeout=1)
@@ -1504,50 +1512,82 @@ class ExamWindow:
 
     # ── Show runtime question popup ───────────────────────────────────────────
     def _show_runtime_question(self, qdata):
-        qid  = qdata["id"]
-        text = qdata["question"]
+        qid     = qdata["id"]
+        text    = qdata["question"]
+        options = [o for o in (qdata.get("options") or "").split("|") if o]
         win = tk.Toplevel(self.root)
         win.title("📌 Proctor Question")
-        win.geometry("460x260")
         win.configure(bg="#0d1117")
         win.grab_set()
         win.attributes("-topmost", True)
+
         tk.Label(win, text="📌 Proctor has sent you a question",
                  font=("Helvetica",10,"bold"), bg="#0d1117", fg="#ffd93d").pack(pady=(16,4))
         tk.Label(win, text=text, font=("Helvetica",12), bg="#0d1117", fg="#f0f6fc",
                  wraplength=420, justify="center").pack(pady=(0,12), padx=20)
-        tk.Label(win, text="Your Answer:", font=("Helvetica",9,"bold"),
-                 bg="#0d1117", fg="#c9d1d9").pack()
-        ans_entry = tk.Entry(win, font=("Helvetica",11), bg="#21262d", fg="#f0f6fc",
-                             insertbackground="#f0f6fc", bd=0, relief="flat")
-        ans_entry.pack(fill="x", padx=30, pady=(4,0), ipady=7)
-        ans_entry.focus_set()
-        def _submit():
-            ans = ans_entry.get().strip()
-            if not ans: return
-            def _do():
-                try:
-                    _requests.post(f"{self.proctor_url}/answer_runtime_question",
-                                   json={"qid": qid, "answer": ans}, timeout=3)
-                except Exception: pass
-            threading.Thread(target=_do, daemon=True).start()
-            win.destroy()
+
+        if options:
+            # MCQ mode — radio buttons
+            win.geometry("480x320")
+            tk.Label(win, text="Select your answer:", font=("Helvetica",9,"bold"),
+                     bg="#0d1117", fg="#c9d1d9").pack()
+            ans_var = tk.StringVar(value="")
+            btn_frame = tk.Frame(win, bg="#0d1117"); btn_frame.pack(fill="x", padx=30, pady=(4,0))
+            labels = ["A","B","C","D"]
+            for i, opt in enumerate(options[:4]):
+                rb = tk.Radiobutton(btn_frame, text=f"  {labels[i]})  {opt}",
+                                    variable=ans_var, value=labels[i],
+                                    font=("Helvetica",10), bg="#0d1117", fg="#f0f6fc",
+                                    selectcolor="#161b22", activebackground="#0d1117",
+                                    activeforeground="#ffd93d", anchor="w")
+                rb.pack(fill="x", pady=3)
+            def _submit():
+                ans = ans_var.get()
+                if not ans:
+                    messagebox.showwarning("Select", "Please choose an option.", parent=win); return
+                def _do():
+                    try:
+                        _requests.post(f"{self.proctor_url}/answer_runtime_question",
+                                       json={"qid": qid, "answer": ans}, timeout=3)
+                    except Exception: pass
+                threading.Thread(target=_do, daemon=True).start()
+                win.destroy()
+        else:
+            # Open-ended mode — text entry
+            win.geometry("460x260")
+            tk.Label(win, text="Your Answer:", font=("Helvetica",9,"bold"),
+                     bg="#0d1117", fg="#c9d1d9").pack()
+            ans_entry = tk.Entry(win, font=("Helvetica",11), bg="#21262d", fg="#f0f6fc",
+                                 insertbackground="#f0f6fc", bd=0, relief="flat")
+            ans_entry.pack(fill="x", padx=30, pady=(4,0), ipady=7)
+            ans_entry.focus_set()
+            ans_entry.bind("<Return>", lambda _: _submit())
+            def _submit():
+                ans = ans_entry.get().strip()
+                if not ans: return
+                def _do():
+                    try:
+                        _requests.post(f"{self.proctor_url}/answer_runtime_question",
+                                       json={"qid": qid, "answer": ans}, timeout=3)
+                    except Exception: pass
+                threading.Thread(target=_do, daemon=True).start()
+                win.destroy()
+
         tk.Button(win, text="Submit Answer ✓", font=("Helvetica",10,"bold"),
                   bg="#0be881", fg="#0d1117", bd=0, relief="flat", cursor="hand2",
                   command=_submit).pack(fill="x", padx=30, pady=12, ipady=7)
-        ans_entry.bind("<Return>", lambda _: _submit())
 
     def _on_security_event(self, event, detail):
         if event == "APP_WARNING":
-            if _hub: _hub._log("APP_WARNING", detail)
+            if self._my_hub: self._my_hub._log("APP_WARNING", detail)
             self._flash_warning(f"🔔 {detail}", color="#4a3800", duration=2000)
             return
         if event == "KEYSTROKE":
-            if _hub: _hub._log("KEYSTROKE_BLOCKED", detail)
+            if self._my_hub: self._my_hub._log("KEYSTROKE_BLOCKED", detail)
             self._flash_warning(f"🚫 {detail}", color="#1a1a4a", duration=1500)
             return
-        if _hub:
-            _hub.add_strike(event, detail)
+        if self._my_hub:
+            self._my_hub.add_strike(event, detail)
         self._push_violation_remote(event, detail)
         self._flash_warning(f"⚠ STRIKE: {detail}")
 
@@ -1575,7 +1615,7 @@ class ExamWindow:
         try:
             if not self.root.winfo_exists(): return
         except Exception: return
-        if _hub and _hub.terminated:
+        if self._my_hub and self._my_hub.terminated:
             self._force_terminate()
             return
         self.root.after(500, self._check_termination)
@@ -1710,11 +1750,11 @@ class ExamWindow:
         total=len(self.qs); elapsed=int(time.time()-self.start)
         pct=int(score/total*100) if total else 0
         grade="A" if pct>=90 else "B" if pct>=75 else "C" if pct>=60 else "D" if pct>=40 else "F"
-        strikes = _hub.strike_count if _hub else 0
+        strikes = self._my_hub.strike_count if self._my_hub else 0
         try: self._sec.stop()
         except Exception: pass
         try:
-            if _hub: _hub.stop()
+            if self._my_hub: self._my_hub.stop()
         except Exception: pass
         log = f"{self.sid}_result.csv"
         try:
@@ -1742,8 +1782,8 @@ class ExamWindow:
         try:
             e=int(time.time()-self.start); m,s=e//60,e%60
             self.lbl_timer.configure(text=f"⏱ {m:02d}:{s:02d}")
-            if _hub:
-                sc=_hub.strike_count
+            if self._my_hub:
+                sc=self._my_hub.strike_count
                 col="#2a2a3a" if sc==0 else "#6a3800" if sc<3 else "#6a0000"
                 self.lbl_strikes_disp.configure(
                     text=f"● Secure  |  Warnings: {sc}/{CameraHub.MAX_STRIKES}",fg=col)
@@ -1754,7 +1794,7 @@ class ExamWindow:
     def _close(self):
         if messagebox.askyesno("Quit","Exit exam? All progress lost."):
             self._sec.stop()
-            if _hub: _hub.stop()
+            if self._my_hub: self._my_hub.stop()
             self.root.destroy()
 
     def run(self): self.root.mainloop()
@@ -1858,38 +1898,68 @@ class InterviewStudentWindow:
         self.root.after(5000, self._poll_runtime_questions)
 
     def _show_runtime_question(self, qdata):
-        qid  = qdata["id"]
-        text = qdata["question"]
+        qid     = qdata["id"]
+        text    = qdata["question"]
+        options = [o for o in (qdata.get("options") or "").split("|") if o]
         win = tk.Toplevel(self.root)
         win.title("📌 Interviewer Question")
-        win.geometry("460x260")
         win.configure(bg="#0d1117")
         win.grab_set()
         win.attributes("-topmost", True)
+
         tk.Label(win, text="📌 Interviewer sent you a question",
                  font=("Helvetica",10,"bold"), bg="#0d1117", fg="#ffd93d").pack(pady=(16,4))
         tk.Label(win, text=text, font=("Helvetica",12), bg="#0d1117", fg="#f0f6fc",
                  wraplength=420, justify="center").pack(pady=(0,12), padx=20)
-        tk.Label(win, text="Your Answer:", font=("Helvetica",9,"bold"),
-                 bg="#0d1117", fg="#c9d1d9").pack()
-        ans_entry = tk.Entry(win, font=("Helvetica",11), bg="#21262d", fg="#f0f6fc",
-                             insertbackground="#f0f6fc", bd=0, relief="flat")
-        ans_entry.pack(fill="x", padx=30, pady=(4,0), ipady=7)
-        ans_entry.focus_set()
-        def _submit():
-            ans = ans_entry.get().strip()
-            if not ans: return
-            def _do():
-                try:
-                    _requests.post(f"{self.proctor_url}/answer_runtime_question",
-                                   json={"qid": qid, "answer": ans}, timeout=3)
-                except Exception: pass
-            threading.Thread(target=_do, daemon=True).start()
-            win.destroy()
+
+        if options:
+            win.geometry("480x320")
+            tk.Label(win, text="Select your answer:", font=("Helvetica",9,"bold"),
+                     bg="#0d1117", fg="#c9d1d9").pack()
+            ans_var = tk.StringVar(value="")
+            btn_frame = tk.Frame(win, bg="#0d1117"); btn_frame.pack(fill="x", padx=30, pady=(4,0))
+            labels = ["A","B","C","D"]
+            for i, opt in enumerate(options[:4]):
+                rb = tk.Radiobutton(btn_frame, text=f"  {labels[i]})  {opt}",
+                                    variable=ans_var, value=labels[i],
+                                    font=("Helvetica",10), bg="#0d1117", fg="#f0f6fc",
+                                    selectcolor="#161b22", activebackground="#0d1117",
+                                    activeforeground="#ffd93d", anchor="w")
+                rb.pack(fill="x", pady=3)
+            def _submit():
+                ans = ans_var.get()
+                if not ans:
+                    messagebox.showwarning("Select", "Please choose an option.", parent=win); return
+                def _do():
+                    try:
+                        _requests.post(f"{self.proctor_url}/answer_runtime_question",
+                                       json={"qid": qid, "answer": ans}, timeout=3)
+                    except Exception: pass
+                threading.Thread(target=_do, daemon=True).start()
+                win.destroy()
+        else:
+            win.geometry("460x260")
+            tk.Label(win, text="Your Answer:", font=("Helvetica",9,"bold"),
+                     bg="#0d1117", fg="#c9d1d9").pack()
+            ans_entry = tk.Entry(win, font=("Helvetica",11), bg="#21262d", fg="#f0f6fc",
+                                 insertbackground="#f0f6fc", bd=0, relief="flat")
+            ans_entry.pack(fill="x", padx=30, pady=(4,0), ipady=7)
+            ans_entry.focus_set()
+            ans_entry.bind("<Return>", lambda _: _submit())
+            def _submit():
+                ans = ans_entry.get().strip()
+                if not ans: return
+                def _do():
+                    try:
+                        _requests.post(f"{self.proctor_url}/answer_runtime_question",
+                                       json={"qid": qid, "answer": ans}, timeout=3)
+                    except Exception: pass
+                threading.Thread(target=_do, daemon=True).start()
+                win.destroy()
+
         tk.Button(win, text="Submit Answer ✓", font=("Helvetica",10,"bold"),
                   bg="#0be881", fg="#0d1117", bd=0, relief="flat", cursor="hand2",
                   command=_submit).pack(fill="x", padx=30, pady=12, ipady=7)
-        ans_entry.bind("<Return>", lambda _: _submit())
 
     def _on_sec(self, event, detail):
         if event == "APP_WARNING":
@@ -3093,8 +3163,8 @@ def start_network_server(port=6000):
         if not sid or not code:
             return jsonify(questions=[])
         rows = db_get_runtime_questions(code, sid)
-        qs = [{"id": r[0], "question": r[1], "sent_at": r[2],
-               "answered": bool(r[3]), "answer": r[4]} for r in rows]
+        qs = [{"id": r[0], "question": r[1], "options": r[2], "sent_at": r[3],
+               "answered": bool(r[4]), "answer": r[5]} for r in rows]
         return jsonify(questions=qs)
 
     # ── /push_runtime_question (POST) — proctor pushes question ──────────────
@@ -3103,10 +3173,11 @@ def start_network_server(port=6000):
         data = request.get_json(force=True, silent=True) or {}
         sid      = data.get("student_id", "")
         question = data.get("question", "")
+        options  = data.get("options", "")
         code     = _PROCTOR_SESSION_CODE or ""
         if not sid or not question or not code:
             return jsonify(ok=False), 400
-        db_push_runtime_question(code, sid, question)
+        db_push_runtime_question(code, sid, question, options)
         return jsonify(ok=True)
 
     # ── /answer_runtime_question (POST) — student answers ────────────────────
@@ -3228,6 +3299,13 @@ class MultiStudentProctorWindow:
         self._pending_notified = set()
         self._stats_counter  = 0   # used to throttle stats refresh
 
+        # Interview-mode toggle state
+        self._audio_on = True
+        self._cam_on   = True
+        # Proctor-cam capture thread state (interview)
+        self._pro_cam_running = False
+        self._pro_cap         = None
+
         self._build()
         self._poll_cameras()
         self._poll_join_requests()
@@ -3240,6 +3318,10 @@ class MultiStudentProctorWindow:
                                              remote_url="http://127.0.0.1:6000")
             _audio_proctor.start()
             print("[Audio] Proctor audio started (interview mode)")
+
+        # ── Start proctor camera push for interview mode ──────────────
+        if mode == "interview":
+            self._start_pro_cam()
 
     # ── Session info banner ──────────────────────────────────────────────────
     def _show_session_info(self):
@@ -3260,6 +3342,72 @@ class MultiStudentProctorWindow:
         msg = "\n".join(lines)
         messagebox.showinfo("📋 Share With Students", msg, parent=self.root)
 
+    # ── Interview audio / camera toggle helpers ──────────────────────────────
+    def _toggle_audio(self):
+        global _audio_proctor
+        self._audio_on = not self._audio_on
+        if self._audio_on:
+            # Re-start audio
+            if _SOUNDDEVICE_AVAILABLE:
+                if _audio_proctor:
+                    _audio_proctor.stop()
+                _audio_proctor = InterviewAudio(role="proctor",
+                                                 remote_url="http://127.0.0.1:6000")
+                _audio_proctor.start()
+            self._btn_audio_toggle.configure(text="🔊  Audio ON",  bg="#0be881", fg="#0d1117")
+            self._lbl_audio_status.configure(
+                text="🎤 Mic active", fg="#0be881")
+        else:
+            # Stop audio
+            if _audio_proctor:
+                _audio_proctor.stop()
+                _audio_proctor = None
+            self._btn_audio_toggle.configure(text="🔇  Audio OFF", bg="#3a3a3a", fg="#c9d1d9")
+            self._lbl_audio_status.configure(
+                text="🔇 Mic muted", fg="#8b949e")
+
+    def _toggle_pro_cam(self):
+        self._cam_on = not self._cam_on
+        if self._cam_on:
+            self._start_pro_cam()
+            self._btn_cam_toggle.configure(text="📹  Cam ON",  bg="#0be881", fg="#0d1117")
+        else:
+            self._stop_pro_cam()
+            self._btn_cam_toggle.configure(text="📹  Cam OFF", bg="#3a3a3a", fg="#c9d1d9")
+
+    def _start_pro_cam(self):
+        """Capture proctor webcam and push frames to the student server."""
+        if self._pro_cam_running:
+            return
+        self._pro_cam_running = True
+        def _run():
+            cap = cv2.VideoCapture(1)    # prefer external cam
+            if not cap.isOpened():
+                cap = cv2.VideoCapture(0)
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH,  640)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            cap.set(cv2.CAP_PROP_FPS, 30)
+            self._pro_cap = cap
+            while self._pro_cam_running:
+                ret, frame = cap.read()
+                if ret and self._cam_on:
+                    ok, buf = cv2.imencode(
+                        ".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
+                    if ok and _REQUESTS_AVAILABLE:
+                        try:
+                            _requests.post(
+                                "http://127.0.0.1:6000/push_proctor_frame",
+                                data=buf.tobytes(), timeout=0.5)
+                        except Exception:
+                            pass
+                time.sleep(0.033)   # ~30 fps
+            cap.release()
+            self._pro_cap = None
+        threading.Thread(target=_run, daemon=True).start()
+
+    def _stop_pro_cam(self):
+        self._pro_cam_running = False
+
     # ── Build UI ──────────────────────────────────────────────────────────────
     def _build(self):
         t = self.theme
@@ -3279,6 +3427,13 @@ class MultiStudentProctorWindow:
                   cursor="hand2", bg="#575fcf", fg="#fff",
                   command=self._show_session_info).pack(side="right", padx=4, pady=10, ipady=4)
 
+        if self.mode == "interview":
+            self._build_interview_panel()
+        else:
+            self._build_exam_panel()
+
+    def _build_exam_panel(self):
+        """Full exam proctor panel — student grid + violations/Q bank/results tabs."""
         # ── Main paned layout ──
         paned = tk.PanedWindow(self.root, orient="horizontal", bg="#0d1117",
                                sashwidth=6, sashrelief="flat")
@@ -3344,9 +3499,140 @@ class MultiStudentProctorWindow:
         rf = tk.Frame(nb, bg="#0d1117"); nb.add(rf, text="📊 Results")
         self._build_results(rf)
 
-        if self.mode == "interview":
-            nf = tk.Frame(nb, bg="#0d1117"); nb.add(nf, text="📝 Notes")
-            self._build_notes(nf)
+    def _build_interview_panel(self):
+        """
+        Clean minimal interview proctor panel.
+        Layout: left = student grid with camera tiles
+                right = compact sidebar with audio toggle, camera toggle, runtime Q only
+        No violations tab, no Q bank, no results — those are exam-only concerns.
+        """
+        paned = tk.PanedWindow(self.root, orient="horizontal", bg="#0d1117",
+                               sashwidth=6, sashrelief="flat")
+        paned.pack(fill="both", expand=True, padx=4, pady=4)
+
+        # ── Left: student camera grid (same responsive grid as exam mode) ──
+        left_outer = tk.Frame(paned, bg="#0d1117")
+        paned.add(left_outer, minsize=480)
+
+        hdr_row = tk.Frame(left_outer, bg="#0d1117"); hdr_row.pack(fill="x", padx=8, pady=(4,2))
+        tk.Label(hdr_row, text="📷  Interview — Live Cameras",
+                 font=("Helvetica",10,"bold"), bg="#0d1117", fg="#ffd93d").pack(side="left")
+        self._student_count_lbl = tk.Label(hdr_row, text="(0 online)",
+                 font=("Helvetica",8), bg="#0d1117", fg="#8b949e")
+        self._student_count_lbl.pack(side="left", padx=6)
+
+        self._no_students_lbl = tk.Label(left_outer,
+            text="No candidates connected yet.\nShare the session code so candidates can join.",
+            font=("Helvetica",10), bg="#0d1117", fg="#3a3a5a", justify="center")
+        self._no_students_lbl.pack(pady=40)
+
+        cam_wrap = tk.Frame(left_outer, bg="#0d1117"); cam_wrap.pack(fill="both", expand=True)
+        cam_canvas = tk.Canvas(cam_wrap, bg="#0d1117", highlightthickness=0)
+        scr_y = tk.Scrollbar(cam_wrap, orient="vertical", command=cam_canvas.yview)
+        scr_y.pack(side="right", fill="y")
+        cam_canvas.pack(side="left", fill="both", expand=True)
+        cam_canvas.configure(yscrollcommand=scr_y.set)
+        self._cam_inner = tk.Frame(cam_canvas, bg="#0d1117")
+        self._cam_win_id = cam_canvas.create_window((0,0), window=self._cam_inner, anchor="nw")
+        self._cam_inner.bind("<Configure>",
+            lambda e: cam_canvas.configure(scrollregion=cam_canvas.bbox("all")))
+        cam_canvas.bind("<Configure>", self._on_grid_resize)
+        self._cam_canvas = cam_canvas
+        self._grid_cols  = 2
+
+        # ── Right: clean minimal sidebar ──
+        right = tk.Frame(paned, bg="#161b22")
+        paned.add(right, minsize=260)
+
+        # ── Audio / Camera toggle controls ──
+        ctrl_hdr = tk.Frame(right, bg="#161b22"); ctrl_hdr.pack(fill="x", padx=10, pady=(12,4))
+        tk.Label(ctrl_hdr, text="🎙  Interview Controls",
+                 font=("Helvetica",10,"bold"), bg="#161b22", fg="#ffd93d").pack(anchor="w")
+
+        ctrl_row = tk.Frame(right, bg="#161b22"); ctrl_row.pack(fill="x", padx=10, pady=(0,8))
+
+        self._btn_audio_toggle = tk.Button(
+            ctrl_row, text="🔊  Audio ON", font=("Helvetica",9,"bold"),
+            bg="#0be881", fg="#0d1117", bd=0, relief="flat", cursor="hand2",
+            width=14, command=self._toggle_audio)
+        self._btn_audio_toggle.grid(row=0, column=0, padx=(0,4), ipady=5)
+
+        self._btn_cam_toggle = tk.Button(
+            ctrl_row, text="📹  Cam ON", font=("Helvetica",9,"bold"),
+            bg="#0be881", fg="#0d1117", bd=0, relief="flat", cursor="hand2",
+            width=12, command=self._toggle_pro_cam)
+        self._btn_cam_toggle.grid(row=0, column=1, padx=(4,0), ipady=5)
+
+        # Audio status indicator
+        audio_status_text = (
+            "🎤 Mic ready" if _SOUNDDEVICE_AVAILABLE
+            else "⚠ sounddevice not installed\n   pip install sounddevice"
+        )
+        audio_status_col = "#0be881" if _SOUNDDEVICE_AVAILABLE else "#ff6b9d"
+        self._lbl_audio_status = tk.Label(
+            right, text=audio_status_text,
+            font=("Helvetica",8), bg="#161b22", fg=audio_status_col)
+        self._lbl_audio_status.pack(anchor="w", padx=12, pady=(0,6))
+
+        sep = tk.Frame(right, bg="#30363d", height=1); sep.pack(fill="x", padx=10, pady=4)
+
+        # ── Runtime Question push ──
+        self._build_runtime_q_panel_interview(right)
+
+    def _build_runtime_q_panel_interview(self, parent):
+        """Compact runtime-question section for the interview sidebar."""
+        tk.Label(parent, text="📌  Send Question to Candidate",
+                 font=("Helvetica",10,"bold"), bg="#161b22", fg="#ffd93d"
+                 ).pack(anchor="w", padx=10, pady=(8,2))
+
+        sel_frame = tk.Frame(parent, bg="#161b22"); sel_frame.pack(fill="x", padx=10, pady=(0,4))
+        tk.Label(sel_frame, text="To:", font=("Helvetica",9,"bold"),
+                 bg="#161b22", fg="#c9d1d9").pack(side="left")
+        self._rq_target_var = tk.StringVar(value="(select candidate)")
+        self._rq_target_menu = tk.OptionMenu(sel_frame, self._rq_target_var, "(select candidate)")
+        self._rq_target_menu.configure(bg="#21262d", fg="#f0f6fc", font=("Helvetica",9),
+                                        bd=0, relief="flat", activebackground="#30363d",
+                                        highlightthickness=0)
+        self._rq_target_menu["menu"].configure(bg="#21262d", fg="#f0f6fc")
+        self._rq_target_menu.pack(side="left", padx=(6,0), fill="x", expand=True)
+        tk.Button(sel_frame, text="All", font=("Helvetica",8,"bold"),
+                  bg="#575fcf", fg="#fff", bd=0, relief="flat", cursor="hand2",
+                  command=lambda: self._rq_target_var.set("ALL")).pack(side="right", ipady=2, padx=2)
+
+        tk.Label(parent, text="Question:", font=("Helvetica",9,"bold"),
+                 bg="#161b22", fg="#c9d1d9").pack(anchor="w", padx=10, pady=(4,0))
+        self._rq_text = tk.Text(parent, font=("Helvetica",10), bg="#21262d", fg="#f0f6fc",
+                                 insertbackground="#f0f6fc", bd=0, relief="flat", height=3)
+        self._rq_text.pack(fill="x", padx=10, pady=(2,4), ipady=4)
+
+        tk.Label(parent, text="Options A–D (leave blank = open-ended):",
+                 font=("Helvetica",8), bg="#161b22", fg="#8b949e").pack(anchor="w", padx=10)
+        self._rq_opts = {}
+        for letter in ("A","B","C","D"):
+            row = tk.Frame(parent, bg="#161b22"); row.pack(fill="x", padx=10, pady=1)
+            tk.Label(row, text=f"{letter}:", width=2, font=("Helvetica",9,"bold"),
+                     bg="#161b22", fg="#ffd93d").pack(side="left")
+            ent = tk.Entry(row, font=("Helvetica",9), bg="#21262d", fg="#f0f6fc",
+                           insertbackground="#f0f6fc", bd=0, relief="flat")
+            ent.pack(side="left", fill="x", expand=True, ipady=3, padx=(4,0))
+            self._rq_opts[letter] = ent
+
+        tk.Button(parent, text="📤  Send Question",
+                  font=("Helvetica",10,"bold"), bg="#ffd93d", fg="#0d1117",
+                  bd=0, relief="flat", cursor="hand2",
+                  command=self._push_runtime_question).pack(fill="x", padx=10, pady=(8,4), ipady=6)
+
+        sep2 = tk.Frame(parent, bg="#30363d", height=1); sep2.pack(fill="x", padx=10, pady=4)
+
+        tk.Label(parent, text="Candidate Answers:",
+                 font=("Helvetica",9,"bold"), bg="#161b22", fg="#0be881").pack(anchor="w", padx=10, pady=(2,0))
+        scr = tk.Scrollbar(parent); scr.pack(side="right", fill="y")
+        self._rq_ans_log = tk.Text(parent, font=("Courier",8), bg="#0d1117", fg="#c9d1d9",
+                                    bd=0, relief="flat", wrap="word",
+                                    yscrollcommand=scr.set, state="disabled")
+        self._rq_ans_log.pack(fill="both", expand=True, padx=(10,0), pady=(0,8))
+        scr.configure(command=self._rq_ans_log.yview)
+        self._poll_runtime_answers()
 
     # ── Grid layout helpers ───────────────────────────────────────────────────
     def _on_grid_resize(self, event):
@@ -3564,6 +3850,7 @@ class MultiStudentProctorWindow:
                                    self.vlog.configure(state="disabled"))).pack(pady=(0,6))
 
     def _refresh_violations(self):
+        if not hasattr(self, 'vlog'): return   # interview mode has no violations panel
         sid = self._selected_sid
         if sid:
             self._sel_lbl.configure(text=f"Showing violations for: {sid}")
@@ -3607,7 +3894,7 @@ class MultiStudentProctorWindow:
     def _build_runtime_q_panel(self, p):
         tk.Label(p, text="📌 Push Runtime Question to Student",
                  font=("Helvetica",10,"bold"), bg="#0d1117", fg="#ffd93d").pack(anchor="w", padx=10, pady=(10,4))
-        tk.Label(p, text="Select a student tile first, then type a question below.",
+        tk.Label(p, text="Select a student tile first, then compose an MCQ question below.",
                  font=("Helvetica",8), bg="#0d1117", fg="#8b949e").pack(anchor="w", padx=10)
 
         # Student selector
@@ -3629,10 +3916,24 @@ class MultiStudentProctorWindow:
         tk.Label(p, text="Question:", font=("Helvetica",9,"bold"),
                  bg="#0d1117", fg="#c9d1d9").pack(anchor="w", padx=10, pady=(8,0))
         self._rq_text = tk.Text(p, font=("Helvetica",10), bg="#161b22", fg="#f0f6fc",
-                                 insertbackground="#f0f6fc", bd=0, relief="flat", height=4)
+                                 insertbackground="#f0f6fc", bd=0, relief="flat", height=3)
         self._rq_text.pack(fill="x", padx=10, pady=(2,0), ipady=4)
 
-        tk.Button(p, text="📤 Push Question to Student(s)",
+        # MCQ options — A B C D
+        tk.Label(p, text="MCQ Options (leave blank to send as open-ended question):",
+                 font=("Helvetica",8,"bold"), bg="#0d1117", fg="#58d6d6").pack(anchor="w", padx=10, pady=(8,0))
+        self._rq_opts = {}
+        opts_frame = tk.Frame(p, bg="#0d1117"); opts_frame.pack(fill="x", padx=10, pady=(2,4))
+        for letter in ("A","B","C","D"):
+            row = tk.Frame(opts_frame, bg="#0d1117"); row.pack(fill="x", pady=2)
+            tk.Label(row, text=f"{letter}:", width=2, font=("Helvetica",9,"bold"),
+                     bg="#0d1117", fg="#ffd93d").pack(side="left")
+            ent = tk.Entry(row, font=("Helvetica",9), bg="#21262d", fg="#f0f6fc",
+                           insertbackground="#f0f6fc", bd=0, relief="flat")
+            ent.pack(side="left", fill="x", expand=True, ipady=4, padx=(4,0))
+            self._rq_opts[letter] = ent
+
+        tk.Button(p, text="📤 Push MCQ to Student(s)",
                   font=("Helvetica",10,"bold"), bg="#ffd93d", fg="#0d1117",
                   bd=0, relief="flat", cursor="hand2",
                   command=self._push_runtime_question).pack(fill="x", padx=10, pady=8, ipady=7)
@@ -3663,15 +3964,20 @@ class MultiStudentProctorWindow:
             messagebox.showerror("Error", "Enter a question first", parent=self.root); return
         if target in ("(select student)", ""):
             messagebox.showerror("Error", "Select a target student or 'All Students'", parent=self.root); return
+        # Collect MCQ options — pack non-empty ones as pipe-separated string
+        raw_opts = [self._rq_opts[l].get().strip() for l in ("A","B","C","D")]
+        filled   = [o for o in raw_opts if o]
+        options  = "|".join(raw_opts) if len(filled) >= 2 else ""
         code = _PROCTOR_SESSION_CODE or ""
         if target == "ALL":
             sids = list(self._student_tiles.keys())
         else:
             sids = [target]
         for sid in sids:
-            db_push_runtime_question(code, sid, question)
+            db_push_runtime_question(code, sid, question, options)
         self._rq_text.delete("1.0","end")
-        messagebox.showinfo("Sent", f"Question pushed to {len(sids)} student(s) ✓", parent=self.root)
+        for ent in self._rq_opts.values(): ent.delete(0,"end")
+        messagebox.showinfo("Sent", f"MCQ pushed to {len(sids)} student(s) ✓", parent=self.root)
 
     def _poll_runtime_answers(self):
         try:
@@ -3685,10 +3991,17 @@ class MultiStudentProctorWindow:
             for sid in all_sids:
                 rows = db_get_runtime_questions(code, sid)
                 for r in rows:
-                    qid, q, sent_at, answered, ans = r
+                    qid, q, opts, sent_at, answered, ans = r
                     if answered:
+                        # Resolve MCQ answer letter → full option text if possible
+                        opt_list = [o for o in (opts or "").split("|") if o]
+                        if opt_list and ans in ("A","B","C","D"):
+                            idx = ord(ans)-ord("A")
+                            ans_disp = f"{ans}) {opt_list[idx]}" if idx < len(opt_list) else ans
+                        else:
+                            ans_disp = ans
                         self._rq_ans_log.insert("end",
-                            f"[{sent_at}] {sid}:\n  Q: {q[:60]}…\n  A: {ans}\n\n")
+                            f"[{sent_at}] {sid}:\n  Q: {q[:60]}…\n  A: {ans_disp}\n\n")
             self._rq_ans_log.configure(state="disabled")
         except Exception: pass
         self.root.after(5000, self._poll_runtime_answers)
@@ -3727,18 +4040,23 @@ class MultiStudentProctorWindow:
                 else:
                     frame = None; fc = 0; gd = "—"; sc = 0
 
-            # Update camera thumbnail — frame is already downscaled by CameraHub/InterviewHub
+            # Update camera thumbnail — letterbox-fit to exact tile dimensions
             if frame is not None:
                 try:
                     lbl = tile["cam_lbl"]
                     h, w = frame.shape[:2]
                     if h > 0 and w > 0:
-                        # Only resize if label is significantly different from frame size
                         lw = lbl.winfo_width(); lh = lbl.winfo_height()
-                        if lw > 10 and lh > 10 and (abs(lw - w) > 8 or abs(lh - h) > 8):
-                            scale = min(lw/w, lh/h)
-                            nw = max(1, int(w*scale)); nh = max(1, int(h*scale))
-                            disp = cv2.resize(frame, (nw, nh), interpolation=cv2.INTER_LINEAR)
+                        if lw > 10 and lh > 10:
+                            # Scale to fill the label exactly, preserving aspect ratio (letterbox)
+                            scale = min(lw / w, lh / h)
+                            nw = max(1, int(w * scale)); nh = max(1, int(h * scale))
+                            resized = cv2.resize(frame, (nw, nh), interpolation=cv2.INTER_LINEAR)
+                            # Pad to exact label size with black bars
+                            canvas = np.zeros((lh, lw, 3), dtype=np.uint8)
+                            y0 = (lh - nh) // 2; x0 = (lw - nw) // 2
+                            canvas[y0:y0+nh, x0:x0+nw] = resized
+                            disp = canvas
                         else:
                             disp = frame
                         rgb = cv2.cvtColor(disp, cv2.COLOR_BGR2RGB)
@@ -3993,6 +4311,7 @@ class MultiStudentProctorWindow:
     # ── Logout / close ─────────────────────────────────────────────────────────
     def _logout(self):
         db_close_session(_PROCTOR_SESSION_CODE or "")
+        self._stop_pro_cam()
         if _hub:    _hub.stop()
         if _iv_hub: _iv_hub.stop()
         global _audio_proctor
@@ -4002,6 +4321,7 @@ class MultiStudentProctorWindow:
 
     def _close(self):
         db_close_session(_PROCTOR_SESSION_CODE or "")
+        self._stop_pro_cam()
         if _hub:    _hub.stop()
         if _iv_hub: _iv_hub.stop()
         global _audio_proctor
