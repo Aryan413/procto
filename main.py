@@ -3973,33 +3973,40 @@ class MultiStudentProctorWindow:
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
             cap.set(cv2.CAP_PROP_FPS, 30)
             self._pro_cap = cap
+            self._pro_latest_frame = None
+            self._pro_frame_lock   = threading.Lock()
             while self._pro_cam_running:
                 ret, frame = cap.read()
-                if ret and self._cam_on:
-                    ok, buf = cv2.imencode(
-                        ".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
-                    if ok and _REQUESTS_AVAILABLE:
-                        # Collect student URLs: same-machine → 127.0.0.1,
-                        # remote students → their stored IP from push_student_frame.
-                        # Always include localhost so same-machine mode works.
-                        with _student_data_lock:
-                            urls = list({
-                                s.get("url", "http://127.0.0.1:6000")
-                                for s in _student_data.values()
-                            })
-                        if not urls:
-                            urls = ["http://127.0.0.1:6000"]
-                        raw = buf.tobytes()
-                        for url in urls:
-                            try:
-                                _requests.post(
-                                    f"{url}/push_proctor_frame",
-                                    data=raw, timeout=0.5)
-                            except Exception:
-                                pass
+                if ret:
+                    # Always store latest frame for self-view display
+                    with self._pro_frame_lock:
+                        self._pro_latest_frame = frame.copy()
+                    if self._cam_on:
+                        ok, buf = cv2.imencode(
+                            ".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
+                        if ok and _REQUESTS_AVAILABLE:
+                            # Collect student URLs: same-machine → 127.0.0.1,
+                            # remote students → their stored IP from push_student_frame.
+                            # Always include localhost so same-machine mode works.
+                            with _student_data_lock:
+                                urls = list({
+                                    s.get("url", "http://127.0.0.1:6000")
+                                    for s in _student_data.values()
+                                })
+                            if not urls:
+                                urls = ["http://127.0.0.1:6000"]
+                            raw = buf.tobytes()
+                            for url in urls:
+                                try:
+                                    _requests.post(
+                                        f"{url}/push_proctor_frame",
+                                        data=raw, timeout=0.5)
+                                except Exception:
+                                    pass
                 time.sleep(0.033)   # ~30 fps
             cap.release()
             self._pro_cap = None
+            self._pro_latest_frame = None
         threading.Thread(target=_run, daemon=True).start()
 
     def _stop_pro_cam(self):
@@ -4122,7 +4129,9 @@ class MultiStudentProctorWindow:
         canvas.itemconfig(2, text=text)
 
     def _build_interview_panel(self):
-        """Google Meet-style interview panel for the proctor/interviewer."""
+        """Google Meet-style interview panel for the proctor/interviewer.
+        Layout: LEFT half = proctor self-view, RIGHT half = student tile(s).
+        """
         GM_BG    = "#202124"
         GM_SURF  = "#292a2d"
         GM_SURF2 = "#3c4043"
@@ -4137,20 +4146,39 @@ class MultiStudentProctorWindow:
         self._pro_chat_open = False
         self._pro_ppl_open  = False
 
-        # ── Body: video grid + optional sidebar ──────────────────────────────
+        # ── Body: LEFT proctor cam | RIGHT student grid | optional sidebar ───
         body = tk.Frame(self.root, bg=GM_BG)
         body.pack(fill="both", expand=True)
-        body.columnconfigure(0, weight=1)
+        body.columnconfigure(0, weight=1)   # proctor half
+        body.columnconfigure(1, weight=1)   # student half
         body.rowconfigure(0, weight=1)
         self._pro_body = body
 
-        # Scrollable candidate tile area
-        left_outer = tk.Frame(body, bg=GM_BG)
-        left_outer.grid(row=0, column=0, sticky="nsew")
-        left_outer.columnconfigure(0, weight=1); left_outer.rowconfigure(1, weight=1)
+        # ── LEFT: proctor self-view ───────────────────────────────────────────
+        pro_tile = tk.Frame(body, bg="#1a1a1d",
+                            highlightthickness=2, highlightbackground="#3c4043")
+        pro_tile.grid(row=0, column=0, sticky="nsew", padx=(8,4), pady=8)
+        pro_tile.columnconfigure(0, weight=1); pro_tile.rowconfigure(0, weight=1)
+
+        self._pro_self_lbl = tk.Label(pro_tile, bg="#1a1a1d",
+                                       text="Starting your camera…", fg="#5f6368",
+                                       font=("Helvetica",11))
+        self._pro_self_lbl.grid(row=0, column=0, sticky="nsew")
+
+        pro_name_bar = tk.Frame(pro_tile, bg="#1a1a1d"); pro_name_bar.grid(row=1, column=0, sticky="ew")
+        tk.Label(pro_name_bar, text="  You (Interviewer)", font=("Helvetica",9,"bold"),
+                 bg="#1a1a1d", fg="#ffd93d").pack(side="left", padx=8, pady=4)
+        self._pro_mic_icon_lbl = tk.Label(pro_name_bar, text="🎤",
+                                           font=("Segoe UI Emoji",10), bg="#1a1a1d", fg=GM_GREEN)
+        self._pro_mic_icon_lbl.pack(side="right", padx=8)
+
+        # ── RIGHT: scrollable student tile area ───────────────────────────────
+        right_outer = tk.Frame(body, bg=GM_BG)
+        right_outer.grid(row=0, column=1, sticky="nsew", padx=(4,8), pady=8)
+        right_outer.columnconfigure(0, weight=1); right_outer.rowconfigure(1, weight=1)
 
         # Top status strip
-        status_strip = tk.Frame(left_outer, bg="#2d2e30", height=32)
+        status_strip = tk.Frame(right_outer, bg="#2d2e30", height=32)
         status_strip.grid(row=0, column=0, sticky="ew"); status_strip.pack_propagate(False)
         self._student_count_lbl = tk.Label(status_strip, text="0 participants",
                  font=("Helvetica",9), bg="#2d2e30", fg=GM_MUTED)
@@ -4160,7 +4188,7 @@ class MultiStudentProctorWindow:
                 font=("Helvetica",9), bg="#2d2e30", fg=GM_MUTED)
         self._no_students_lbl.pack(side="left", padx=4)
 
-        cam_wrap = tk.Frame(left_outer, bg=GM_BG)
+        cam_wrap = tk.Frame(right_outer, bg=GM_BG)
         cam_wrap.grid(row=1, column=0, sticky="nsew")
         cam_canvas = tk.Canvas(cam_wrap, bg=GM_BG, highlightthickness=0)
         scr_y = tk.Scrollbar(cam_wrap, orient="vertical", command=cam_canvas.yview)
@@ -4173,7 +4201,7 @@ class MultiStudentProctorWindow:
             lambda e: cam_canvas.configure(scrollregion=cam_canvas.bbox("all")))
         cam_canvas.bind("<Configure>", self._on_grid_resize)
         self._cam_canvas = cam_canvas
-        self._grid_cols  = 2
+        self._grid_cols  = 1   # one column — full width of right half
 
         # ── Sidebar (hidden by default) ───────────────────────────────────────
         self._pro_sidebar = tk.Frame(body, bg=GM_SURF, width=320)
@@ -4288,6 +4316,13 @@ class MultiStudentProctorWindow:
             self._lbl_voice_status.configure(
                 text="🔇 Muted" if self._pro_mic_muted else "🎤 Live",
                 fg=GM_RED if self._pro_mic_muted else GM_GREEN)
+            # Update mic icon on self-view tile
+            try:
+                self._pro_mic_icon_lbl.configure(
+                    text="🔇" if self._pro_mic_muted else "🎤",
+                    fg=GM_RED if self._pro_mic_muted else GM_GREEN)
+            except Exception:
+                pass
         self._pbtn_mic = self._make_meet_btn_p(center_p, "🎤", GM_SURF2, GM_TEXT, _toggle_pro_mic)
         self._pbtn_mic.pack(side="left", padx=8, pady=18)
         tk.Label(center_p, text="Mic", font=("Helvetica",7), bg=GM_BG, fg=GM_MUTED).pack(side="left", padx=(0,8))
@@ -4998,6 +5033,34 @@ class MultiStudentProctorWindow:
         try:
             if not self.root.winfo_exists(): return
         except Exception: return
+
+        # 0. Update proctor self-view (interview mode only)
+        if self.mode == "interview" and hasattr(self, "_pro_self_lbl"):
+            try:
+                lock = getattr(self, "_pro_frame_lock", None)
+                latest = None
+                if lock:
+                    with lock:
+                        lf = getattr(self, "_pro_latest_frame", None)
+                        if lf is not None:
+                            latest = lf.copy()
+                if latest is not None:
+                    lbl = self._pro_self_lbl
+                    lw = lbl.winfo_width(); lh = lbl.winfo_height()
+                    if lw > 10 and lh > 10:
+                        scale = min(lw / latest.shape[1], lh / latest.shape[0])
+                        nw = max(1, int(latest.shape[1] * scale))
+                        nh = max(1, int(latest.shape[0] * scale))
+                        resized = cv2.resize(latest, (nw, nh), interpolation=cv2.INTER_LINEAR)
+                        canvas = np.zeros((lh, lw, 3), dtype=np.uint8)
+                        y0 = (lh - nh) // 2; x0 = (lw - nw) // 2
+                        canvas[y0:y0+nh, x0:x0+nw] = resized
+                        rgb = cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB)
+                        img = ImageTk.PhotoImage(Image.fromarray(rgb))
+                        lbl.configure(image=img, text="")
+                        lbl.image = img
+            except Exception:
+                pass
 
         # 1. Check for new accepted students — throttled (DB read every ~500 ms)
         self._stats_counter += self.POLL_MS
