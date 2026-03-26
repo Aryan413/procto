@@ -3381,6 +3381,7 @@ def _get_or_create_student_slot(student_id):
                 "frame": None,
                 "stats": {},
                 "violations": [],
+                "url": None,       # set to "http://<student_ip>:6000" on first frame push
                 "lock": threading.Lock()
             }
         return _student_data[student_id]
@@ -3496,6 +3497,10 @@ def start_network_server(port=6000):
         slot = _get_or_create_student_slot(student_id)
         with slot["lock"]:
             slot["frame"] = frame
+            # Remember the student's server URL the first time we see a frame,
+            # so the proctor can push camera frames back in interview mode.
+            if not slot.get("url"):
+                slot["url"] = f"http://{request.remote_addr}:6000"
         return jsonify(ok=True)
 
     # ── /push_student_stats (POST) — student pushes stats JSON ───────────────
@@ -3974,12 +3979,24 @@ class MultiStudentProctorWindow:
                     ok, buf = cv2.imencode(
                         ".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
                     if ok and _REQUESTS_AVAILABLE:
-                        try:
-                            _requests.post(
-                                "http://127.0.0.1:6000/push_proctor_frame",
-                                data=buf.tobytes(), timeout=0.5)
-                        except Exception:
-                            pass
+                        # Collect student URLs: same-machine → 127.0.0.1,
+                        # remote students → their stored IP from push_student_frame.
+                        # Always include localhost so same-machine mode works.
+                        with _student_data_lock:
+                            urls = list({
+                                s.get("url", "http://127.0.0.1:6000")
+                                for s in _student_data.values()
+                            })
+                        if not urls:
+                            urls = ["http://127.0.0.1:6000"]
+                        raw = buf.tobytes()
+                        for url in urls:
+                            try:
+                                _requests.post(
+                                    f"{url}/push_proctor_frame",
+                                    data=raw, timeout=0.5)
+                            except Exception:
+                                pass
                 time.sleep(0.033)   # ~30 fps
             cap.release()
             self._pro_cap = None
@@ -5084,6 +5101,9 @@ class MultiStudentProctorWindow:
             win.destroy()
         def _reject():
             db_set_join_status(_PROCTOR_SESSION_CODE, student_id, "rejected")
+            # Allow the student to re-request — remove from seen set so the
+            # next pending row for this student triggers a fresh popup.
+            self._pending_notified.discard(student_id)
             win.destroy()
         tk.Button(btn_row, text="✅ Accept", font=("Helvetica",10,"bold"),
                   bg="#0be881", fg="#0d1117", bd=0, relief="flat", cursor="hand2",
