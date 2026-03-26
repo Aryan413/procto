@@ -1,0 +1,7 @@
+Timestamp,Event,Detail
+15:26:15,EXAM_START,akcr2
+15:26:16,GAZE_WARNING,Looking right persistently
+15:26:17,GAZE_RETURNED,Student looked back at camera
+15:26:18,GAZE_WARNING,Looking left persistently
+15:26:19,GAZE_RETURNED,Student looked back at camera
+15:26:20,EXAM_EXITED,ESC pressed

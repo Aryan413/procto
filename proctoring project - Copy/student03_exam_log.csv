@@ -1,0 +1,7 @@
+Time,Event
+00:22:21,STRIKE 1: Phone detected for over 4s
+00:22:30,STRIKE 2: Phone detected for over 4s
+00:22:53,STRIKE 3: Multiple people detected for over 4s
+00:23:14,STRIKE 4: Multiple people detected for over 4s
+00:23:21,STRIKE 5: Multiple people detected for over 4s
+00:23:21,EXAM TERMINATED: Max warnings reached.
