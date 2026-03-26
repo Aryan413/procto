@@ -1523,10 +1523,14 @@ class ExamWindow:
         # Each ExamWindow owns its own CameraHub — supports multiple concurrent students
         self._my_hub = CameraHub(student_id)
         self._my_hub.start()
-        # Start WebRTC streaming for this student
+        # Start WebRTC streaming for this student (only if aiortc/socketio installed)
         global _webrtc_peer
-        _webrtc_peer = StudentWebRTCPeer(f"http://localhost:{PORT}", self.sid, self._my_hub)
-        _webrtc_peer.start()
+        if _WEBRTC_AVAILABLE:
+            try:
+                _webrtc_peer = StudentWebRTCPeer("http://localhost:6000", self.sid, self._my_hub)
+                _webrtc_peer.start()
+            except Exception as e:
+                print(f"[WebRTC] Could not start peer: {e}")
         self.root=tk.Tk()
         self.root.title("ExamShield — Exam in Progress 🔒")
         self.root.geometry("860x680"); self.root.resizable(True,True)
@@ -2294,6 +2298,15 @@ class InterviewStudentWindow:
         self._tile_area.columnconfigure(0, weight=1)
         self._tile_area.columnconfigure(1, weight=1)
         self._tile_area.rowconfigure(0, weight=1)
+
+        # Lock tile area height to 16:9 based on its width (each tile gets half)
+        def _lock_tile_ratio(event, ta=self._tile_area):
+            try:
+                desired_h = max(200, int(event.width / 2 * 9 / 16))
+                ta.configure(height=desired_h)
+            except Exception:
+                pass
+        self._tile_area.bind("<Configure>", _lock_tile_ratio)
 
         # Self tile (bottom-left in Meet style — appears as a labelled video box)
         self_tile = tk.Frame(self._tile_area, bg="#1a1a1d",
@@ -4161,6 +4174,15 @@ class MultiStudentProctorWindow:
         pro_tile.grid(row=0, column=0, sticky="nsew", padx=(8,4), pady=8)
         pro_tile.columnconfigure(0, weight=1); pro_tile.rowconfigure(0, weight=1)
 
+        # Lock self-view to 16:9 based on tile width
+        def _lock_pro_tile_ratio(event, t=pro_tile):
+            try:
+                desired_h = max(200, int(event.width * 9 / 16)) + 28  # +28 for name bar
+                t.configure(height=desired_h)
+            except Exception:
+                pass
+        pro_tile.bind("<Configure>", _lock_pro_tile_ratio)
+
         self._pro_self_lbl = tk.Label(pro_tile, bg="#1a1a1d",
                                        text="Starting your camera…", fg="#5f6368",
                                        font=("Helvetica",11))
@@ -4631,14 +4653,30 @@ class MultiStudentProctorWindow:
                              command=lambda s=sid: self._kick_student(s))
         kick_btn.pack(side="right", padx=2)
 
-        # ── Camera feed — fills the upper half of the tile ──
-        cam_frame = tk.Frame(card, bg=_card_bg, height=200)
-        cam_frame.pack(fill="x", padx=4, pady=(2,0))
-        cam_frame.pack_propagate(False)   # enforce the 200px height
+        # ── Camera feed ─────────────────────────────────────────────────────────
+        # Interview mode: fill available height, maintain 16:9.
+        # Exam mode: fixed 200px height (many tiles on screen).
+        if _is_meet:
+            cam_frame = tk.Frame(card, bg=_card_bg)
+            cam_frame.pack(fill="both", expand=True, padx=4, pady=(2,0))
+        else:
+            cam_frame = tk.Frame(card, bg=_card_bg, height=200)
+            cam_frame.pack(fill="x", padx=4, pady=(2,0))
+            cam_frame.pack_propagate(False)   # enforce the 200px height
         cam_lbl = tk.Label(cam_frame, bg=_card_bg,
                            text="Waiting for camera…", fg="#5f6368" if _is_meet else "#3a3a5a",
                            font=("Helvetica",8))
         cam_lbl.pack(fill="both", expand=True)
+
+        if _is_meet:
+            # Keep cam_frame at 16:9 relative to its width
+            def _fix_ratio(event, f=cam_frame):
+                try:
+                    desired_h = max(120, int(event.width * 9 / 16))
+                    f.configure(height=desired_h)
+                except Exception:
+                    pass
+            cam_frame.bind("<Configure>", _fix_ratio)
 
         # ── Stats row ──
         stats_row = tk.Frame(card, bg=_stats_bg); stats_row.pack(fill="x")
