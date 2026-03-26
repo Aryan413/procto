@@ -710,155 +710,167 @@ try:
 except ImportError:
     pass
 
+_WEBSOCKETS_AVAILABLE = False
+try:
+    import websockets
+    import websockets.asyncio.server as _ws_server_lib
+    import websockets.asyncio.client as _ws_client_lib
+    import asyncio
+    _WEBSOCKETS_AVAILABLE = True
+except ImportError:
+    pass
+
 class InterviewAudio:
     """
-    Two-way audio bridge for interview mode.
-
-    Student side  : captures mic → pushes PCM chunks to proctor server
-                    also plays chunks received from proctor
-    Proctor side  : captures mic → pushes PCM chunks to student server
-                    also plays chunks received from student
-    Both sides run this same class (role='student' or role='proctor').
+    Two-way audio bridge for interview mode via WebSocket.
     """
 
-    SAMPLE_RATE   = 16000   # Hz  — 16 kHz is plenty for voice, lower latency
-    CHANNELS      = 1       # mono (works on all webcams)
+    SAMPLE_RATE   = 16000
+    CHANNELS      = 1
     DTYPE         = "int16"
-    CHUNK_MS      = 40      # milliseconds per chunk — less network thrash
+    CHUNK_MS      = 40
     CHUNK_FRAMES  = int(SAMPLE_RATE * CHUNK_MS / 1000)
-    GAIN          = 2.0     # volume boost
-    JITTER_CHUNKS = 3       # pre-buffer before playback begins
+    GAIN          = 2.0
+    JITTER_CHUNKS = 3
 
     def __init__(self, role: str, remote_url: str | None = None):
-        """
-        role        : 'student' or 'proctor'
-        remote_url  : HTTP base URL of the OTHER party's server
-                      e.g. 'http://192.168.1.5:6000'
-                      None = local mode (no network, audio disabled)
-        """
         self.role        = role
         self.remote_url  = remote_url
         self._running    = False
-        self._tx_thread  = None   # capture + push
-        self._rx_thread  = None   # poll + play
-        # Ring buffer for received audio (up to 1 s)
-        self._rx_buf     = b""
-        self._rx_lock    = threading.Lock()
+        self._thread     = None
+
+        if self.remote_url:
+            base = self.remote_url.replace("http://", "ws://").replace("https://", "wss://")
+            # Replace port 6000 with 6001
+            if ":6000" in base:
+                self.ws_url = base.replace(":6000", ":6001")
+            else:
+                self.ws_url = base + ":6001"
+            self.ws_url += "/audio_stream"
+        else:
+            self.ws_url = None
 
     def start(self):
-        if not _SOUNDDEVICE_AVAILABLE:
-            print("[Audio] sounddevice not installed — audio disabled")
-            print("        Fix: pip install sounddevice")
+        if not _SOUNDDEVICE_AVAILABLE or not _WEBSOCKETS_AVAILABLE:
+            print("[Audio] sounddevice or websockets not installed — audio disabled")
             return
-        if not self.remote_url or not _REQUESTS_AVAILABLE:
-            print("[Audio] No remote URL or requests missing — audio disabled")
+        if not self.ws_url:
             return
         self._running = True
-        self._tx_thread = threading.Thread(target=self._tx_loop, daemon=True)
-        self._rx_thread = threading.Thread(target=self._rx_loop, daemon=True)
-        self._tx_thread.start()
-        self._rx_thread.start()
-        print(f"[Audio] Started  role={self.role}  url={self.remote_url}")
+        self._thread = threading.Thread(target=self._run_async, daemon=True)
+        self._thread.start()
+        print(f"[Audio] Started role={self.role} url={self.ws_url}")
 
     def stop(self):
         self._running = False
 
-    # ── Transmit: capture mic → push raw PCM to other party ──────────────────
-    def _tx_loop(self):
-        endpoint = "/push_audio_student" if self.role == "student" else "/push_audio_proctor"
-        url      = f"{self.remote_url}{endpoint}"
-        while self._running:
-            try:
-                with sd.InputStream(samplerate=self.SAMPLE_RATE,
-                                    channels=self.CHANNELS,
-                                    dtype=self.DTYPE,
-                                    blocksize=self.CHUNK_FRAMES) as stream:
-                    print(f"[Audio TX] Mic open  role={self.role}")
-                    while self._running:
-                        data, overflowed = stream.read(self.CHUNK_FRAMES)
-                        # Apply gain clamp
-                        amplified = np.clip(
-                            (data.astype(np.float32) * self.GAIN),
-                            -32768, 32767).astype(np.int16)
-                        raw = amplified.tobytes()
-                        try:
-                            _requests.post(url, data=raw, timeout=0.3,
-                                           headers={"Content-Type": "application/octet-stream"})
-                        except Exception:
-                            pass  # network hiccup — keep going
-            except Exception as e:
-                print(f"[Audio TX] Error: {e}  — retrying in 2s")
-                time.sleep(2)
+    def _run_async(self):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(self._async_loop())
 
-    # ── Receive: poll PCM from server → play ─────────────────────────────────
-    # Uses a simple queue-based jitter buffer so we never write silence mid-stream
-    def _rx_loop(self):
+    async def _async_loop(self):
         import queue
-        endpoint = "/pull_audio_proctor" if self.role == "student" else "/pull_audio_student"
-        url      = f"{self.remote_url}{endpoint}"
-
-        audio_q: "queue.Queue[np.ndarray]" = queue.Queue(maxsize=30)
-
-        # ── Fetcher sub-thread: HTTP poll → queue ──────────────────────────
-        def _fetch():
-            while self._running:
+        import threading
+        import numpy as np
+        audio_out_q = queue.Queue(maxsize=30)
+        
+        async def rx_loop(ws):
+            def play_audio():
                 try:
-                    r = _requests.get(url, timeout=0.4)
-                    if r.status_code == 200 and r.content:
-                        arr = np.frombuffer(r.content, dtype=np.int16)
+                    with sd.OutputStream(samplerate=self.SAMPLE_RATE,
+                                          channels=self.CHANNELS,
+                                          dtype=self.DTYPE,
+                                          blocksize=self.CHUNK_FRAMES) as stream:
+                        print(f"[Audio RX] Speaker open role={self.role}")
+                        buffered = 0
+                        while self._running and buffered < self.JITTER_CHUNKS:
+                            try:
+                                audio_out_q.get(timeout=0.2)
+                                buffered += 1
+                            except queue.Empty:
+                                pass
+                        while self._running:
+                            try:
+                                chunk = audio_out_q.get(timeout=0.3)
+                                stream.write(chunk)
+                            except queue.Empty:
+                                silence = np.zeros((self.CHUNK_FRAMES, self.CHANNELS), dtype=np.int16)
+                                stream.write(silence)
+                except Exception as e:
+                    print(f"[Audio RX] Error: {e}")
+
+            play_thread = threading.Thread(target=play_audio, daemon=True)
+            play_thread.start()
+
+            try:
+                async for message in ws:
+                    if not self._running:
+                        break
+                    if isinstance(message, bytes):
+                        arr = np.frombuffer(message, dtype=np.int16)
                         expected = self.CHUNK_FRAMES * self.CHANNELS
                         if len(arr) == expected:
                             try:
-                                audio_q.put_nowait(arr.reshape(-1, self.CHANNELS))
+                                audio_out_q.put_nowait(arr.reshape(-1, self.CHANNELS))
                             except queue.Full:
-                                pass  # drop oldest is handled below
+                                pass
                         elif len(arr) > 0:
-                            # Pad/trim to expected size
                             if len(arr) < expected:
                                 arr = np.pad(arr, (0, expected - len(arr)))
                             else:
                                 arr = arr[:expected]
                             try:
-                                audio_q.put_nowait(arr.reshape(-1, self.CHANNELS))
+                                audio_out_q.put_nowait(arr.reshape(-1, self.CHANNELS))
                             except queue.Full:
                                 pass
-                    else:
-                        time.sleep(self.CHUNK_MS / 1000.0)   # back-off when empty
-                except Exception:
-                    time.sleep(0.05)
+            except Exception as e:
+                pass
 
-        fetch_thread = threading.Thread(target=_fetch, daemon=True)
-        fetch_thread.start()
+        async def tx_loop(ws):
+            mic_q = queue.Queue(maxsize=10)
+            def capture_audio():
+                try:
+                    with sd.InputStream(samplerate=self.SAMPLE_RATE,
+                                        channels=self.CHANNELS,
+                                        dtype=self.DTYPE,
+                                        blocksize=self.CHUNK_FRAMES) as stream:
+                        print(f"[Audio TX] Mic open role={self.role}")
+                        while self._running:
+                            data, overflowed = stream.read(self.CHUNK_FRAMES)
+                            amplified = np.clip(
+                                (data.astype(np.float32) * self.GAIN),
+                                -32768, 32767).astype(np.int16)
+                            try:
+                                mic_q.put_nowait(amplified.tobytes())
+                            except queue.Full:
+                                pass
+                except Exception as e:
+                    print(f"[Audio TX] Error: {e}")
+            
+            cap_thread = threading.Thread(target=capture_audio, daemon=True)
+            cap_thread.start()
 
+            while self._running:
+                try:
+                    raw = mic_q.get_nowait()
+                    await ws.send(raw)
+                except queue.Empty:
+                    await asyncio.sleep(0.01)
+                except Exception as e:
+                    break
+
+        reconnect_delay = 2
         while self._running:
             try:
-                with sd.OutputStream(samplerate=self.SAMPLE_RATE,
-                                      channels=self.CHANNELS,
-                                      dtype=self.DTYPE,
-                                      blocksize=self.CHUNK_FRAMES) as stream:
-                    print(f"[Audio RX] Speaker open  role={self.role}")
-                    # Pre-buffer a few chunks before we start playing
-                    buffered = 0
-                    while self._running and buffered < self.JITTER_CHUNKS:
-                        try:
-                            audio_q.get(timeout=0.2)
-                            buffered += 1
-                        except Exception:
-                            pass
-
-                    while self._running:
-                        try:
-                            chunk = audio_q.get(timeout=0.3)
-                            stream.write(chunk)
-                        except Exception:
-                            # Nothing in queue — write a tiny silence to avoid underrun
-                            silence = np.zeros((self.CHUNK_FRAMES, self.CHANNELS),
-                                               dtype=np.int16)
-                            stream.write(silence)
-            except Exception as e:
-                print(f"[Audio RX] Error: {e}  — retrying in 2s")
-                time.sleep(2)
-
+                print(f"[Audio] Connecting to {self.ws_url}...")
+                async with _ws_client_lib.connect(self.ws_url) as ws:
+                    print(f"[Audio] Connected WS role={self.role}")
+                    await asyncio.gather(rx_loop(ws), tx_loop(ws))
+            except Exception:
+                pass
+            if self._running:
+                await asyncio.sleep(reconnect_delay)
 
 # Global audio hubs — one per session
 _audio_student: InterviewAudio = None
@@ -3278,31 +3290,59 @@ def start_network_server(port=6000):
         slot = _get_or_create_student_slot(sid)
         with slot["lock"]:
             slot["violations"].append(msg)
+
             if len(slot["violations"]) > 400:
+
                 slot["violations"] = slot["violations"][-400:]
+
         return jsonify(ok=True)
 
-    # ── /frame/<student_id> (GET) ─────────────────────────────────────────────
+
+
+    # ── /frame/<student_id> (GET) ───────────────────────────────────────────────
+
     @app.route("/frame/<student_id>")
+
     def frame(student_id):
+
         # Local same-machine mode
+
         hub = _hub or _iv_hub
+
         if hub and getattr(hub, 'student_id', None) == student_id:
+
             f = (hub.get_frame() if hasattr(hub,'get_frame')
+
                  else hub.get_student_frame())
+
         else:
+
             with _student_data_lock:
+
                 slot = _student_data.get(student_id)
+
             if slot is None:
+
                 return Response("no session", status=204)
+
             with slot["lock"]:
+
                 f = slot["frame"].copy() if slot["frame"] is not None else None
+
         if f is None:
+
             return Response("no frame", status=204)
+
         ok, buf = cv2.imencode(".jpg", f, [cv2.IMWRITE_JPEG_QUALITY, 55])
+
         if not ok:
+
             return Response("encode error", status=500)
+
         return Response(buf.tobytes(), mimetype="image/jpeg")
+
+
+
 
     # ── /stats/<student_id> (GET) ──────────────────────────────────────────────
     @app.route("/stats/<student_id>")
@@ -3522,6 +3562,36 @@ def start_network_server(port=6000):
         app.run(host="0.0.0.0", port=port, threaded=True)
 
     threading.Thread(target=_run, daemon=True).start()
+
+    if _WEBSOCKETS_AVAILABLE:
+        ws_port = port + 1
+        _ws_clients = set()
+
+        async def ws_audio_handler(websocket):
+            _ws_clients.add(websocket)
+            try:
+                async for message in websocket:
+                    for client in list(_ws_clients):
+                        if client != websocket:
+                            try:
+                                await client.send(message)
+                            except Exception:
+                                pass
+            except Exception:
+                pass
+            finally:
+                _ws_clients.discard(websocket)
+
+        def _run_ws():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            async def _ws_main():
+                async with _ws_server_lib.serve(ws_audio_handler, "0.0.0.0", ws_port):
+                    await asyncio.get_running_loop().create_future()  # run forever
+            loop.run_until_complete(_ws_main())
+
+        threading.Thread(target=_run_ws, daemon=True).start()
+        print(f"  🎙  WebSocket Audio server started on port {ws_port}")
 
     import socket
     try:
@@ -4717,6 +4787,9 @@ if __name__ == "__main__":
     if not _SOUNDDEVICE_AVAILABLE:
         print("[⚠] 'sounddevice' not installed — two-way audio disabled")
         print("    Fix: pip install sounddevice")
+    if not _WEBSOCKETS_AVAILABLE:
+        print("[⚠] 'websockets' not installed — real-time web-socket audio disabled")
+        print("    Fix: pip install websockets")
     if not _NGROK_AVAILABLE:
         print("[⚠] 'pyngrok' not installed — internet (cross-network) proctoring disabled")
         print("    Fix: pip install pyngrok")
