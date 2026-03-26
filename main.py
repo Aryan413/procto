@@ -212,6 +212,14 @@ def init_db():
         sent_at      TEXT,
         answered     INTEGER DEFAULT 0,
         answer       TEXT DEFAULT '')""")
+    # ── Two-way chat messages ─────────────────────────────────────────────────
+    c.execute("""CREATE TABLE IF NOT EXISTS chat_messages(
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_code TEXT,
+        student_id   TEXT,
+        sender       TEXT,
+        message      TEXT,
+        sent_at      TEXT)""")
     # Migrate older DBs that lack the options column
     try: c.execute("ALTER TABLE runtime_questions ADD COLUMN options TEXT DEFAULT ''")
     except Exception: pass
@@ -354,6 +362,26 @@ def db_answer_runtime_question(qid, answer):
     conn = sqlite3.connect(DB)
     conn.execute("UPDATE runtime_questions SET answered=1, answer=? WHERE id=?",(answer, qid))
     conn.commit(); conn.close()
+
+# ─────────────────── Chat helpers ────────────────────────────────────────────
+def db_send_chat(session_code, student_id, sender, message):
+    """Insert a chat message.  sender = 'student' or 'proctor'."""
+    conn = sqlite3.connect(DB)
+    conn.execute(
+        "INSERT INTO chat_messages(session_code,student_id,sender,message,sent_at)"
+        " VALUES(?,?,?,?,?)",
+        (session_code, student_id, sender, message, time.strftime("%H:%M:%S")))
+    conn.commit(); conn.close()
+
+def db_get_chat(session_code, student_id, since_id=0):
+    """Return messages newer than since_id for this student+session."""
+    conn = sqlite3.connect(DB)
+    rows = conn.execute(
+        "SELECT id,sender,message,sent_at FROM chat_messages"
+        " WHERE session_code=? AND student_id=? AND id>? ORDER BY id",
+        (session_code, student_id, since_id)).fetchall()
+    conn.close()
+    return [{"id": r[0], "sender": r[1], "message": r[2], "sent_at": r[3]} for r in rows]
 
 # Global session state — set when proctor creates / student joins a session
 _PROCTOR_SESSION_CODE: str = None   # set on proctor machine
@@ -1705,7 +1733,7 @@ class ExamWindow:
         self.pbar.pack(fill="x")
 
         main=tk.Frame(self.root,bg="#0d1117"); main.pack(fill="both",expand=True)
-        main.columnconfigure(1,weight=1); main.rowconfigure(0,weight=1)
+        main.columnconfigure(1,weight=1); main.columnconfigure(2,weight=0); main.rowconfigure(0,weight=1)
 
         ns=tk.Frame(main,bg="#161b22",width=100); ns.grid(row=0,column=0,sticky="nsew"); ns.pack_propagate(False)
         tk.Label(ns,text="Qs",font=("Helvetica",8,"bold"),bg="#161b22",fg="#8b949e").pack(pady=(10,4))
@@ -1739,6 +1767,11 @@ class ExamWindow:
         self.lbl_marks=tk.Label(inner,font=("Helvetica",8),bg="#0d1117",fg="#ffd93d",anchor="e")
         self.lbl_marks.pack(fill="x",pady=(4,0))
 
+        # ── Chat panel (column 2) — only visible when connected to proctor ──
+        chat_col = tk.Frame(main, bg="#161b22", width=220)
+        chat_col.grid(row=0, column=2, sticky="nsew"); chat_col.pack_propagate(False)
+        self._build_chat_panel(chat_col)
+
         nf=tk.Frame(self.root,bg="#0d1117"); nf.pack(pady=10)
         self.btn_prev=tk.Button(nf,text="◀ Prev",font=("Helvetica",11,"bold"),
             bg="#21262d",fg="#c9d1d9",bd=0,relief="flat",cursor="hand2",width=9,command=self._prev)
@@ -1753,6 +1786,94 @@ class ExamWindow:
             bg="#0be881",fg="#0d1117",bd=0,relief="flat",cursor="hand2",width=12,command=self._submit)
         self.btn_sub.grid(row=0,column=3,padx=5,ipady=6)
         self._load_q()
+
+    # ── Chat panel (student side — exam mode) ────────────────────────────────
+    def _build_chat_panel(self, parent):
+        self._chat_last_id = 0
+        tk.Label(parent, text="💬 Proctor Chat",
+                 font=("Helvetica",9,"bold"), bg="#161b22", fg="#58d6d6"
+                 ).pack(anchor="w", padx=8, pady=(8,2))
+        scr = tk.Scrollbar(parent); scr.pack(side="right", fill="y")
+        self._chat_log = tk.Text(
+            parent, font=("Helvetica",8), bg="#0d1117", fg="#c9d1d9",
+            bd=0, relief="flat", wrap="word", state="disabled",
+            yscrollcommand=scr.set)
+        self._chat_log.pack(fill="both", expand=True, padx=(6,0), pady=(0,4))
+        scr.configure(command=self._chat_log.yview)
+        self._chat_log.tag_configure("me",   foreground="#0be881")
+        self._chat_log.tag_configure("them", foreground="#58d6d6")
+        self._chat_log.tag_configure("ts",   foreground="#555566")
+        # Input row
+        inp = tk.Frame(parent, bg="#161b22"); inp.pack(fill="x", padx=6, pady=(0,6))
+        self._chat_entry = tk.Entry(
+            inp, font=("Helvetica",9), bg="#21262d", fg="#f0f6fc",
+            insertbackground="#f0f6fc", bd=0, relief="flat")
+        self._chat_entry.pack(side="left", fill="x", expand=True, ipady=5, padx=(0,4))
+        tk.Button(inp, text="▶", font=("Helvetica",9,"bold"),
+                  bg="#575fcf", fg="#fff", bd=0, relief="flat", cursor="hand2",
+                  command=self._send_chat_msg
+                  ).pack(side="right", ipady=5, ipadx=6)
+        self._chat_entry.bind("<Return>", lambda _: self._send_chat_msg())
+        if self.proctor_url:
+            self._poll_chat()
+        else:
+            self._chat_entry.configure(state="disabled")
+            self._append_chat_sys("Connect to proctor to enable chat")
+
+    def _send_chat_msg(self):
+        if not self.proctor_url or not _REQUESTS_AVAILABLE: return
+        msg = self._chat_entry.get().strip()
+        if not msg: return
+        self._chat_entry.delete(0, "end")
+        self._append_chat("You", msg, "me")
+        def _post():
+            try:
+                _requests.post(f"{self.proctor_url}/send_chat", json={
+                    "session_code": self.session_code,
+                    "student_id":   self.sid,
+                    "sender":       "student",
+                    "message":      msg,
+                }, timeout=2)
+            except Exception: pass
+        threading.Thread(target=_post, daemon=True).start()
+
+    def _poll_chat(self):
+        try:
+            if not self.root.winfo_exists(): return
+        except Exception: return
+        if not self.proctor_url or not _REQUESTS_AVAILABLE: return
+        def _fetch():
+            try:
+                r = _requests.get(f"{self.proctor_url}/get_chat", params={
+                    "session_code": self.session_code,
+                    "student_id":   self.sid,
+                    "since_id":     self._chat_last_id,
+                }, timeout=2)
+                for m in r.json().get("messages", []):
+                    self._chat_last_id = max(self._chat_last_id, m["id"])
+                    if m["sender"] == "proctor":
+                        self.root.after(0, lambda d=m:
+                            self._append_chat("Proctor", d["message"], "them"))
+            except Exception: pass
+        threading.Thread(target=_fetch, daemon=True).start()
+        self.root.after(2000, self._poll_chat)
+
+    def _append_chat(self, sender, text, cls):
+        try:
+            self._chat_log.configure(state="normal")
+            ts = time.strftime("%H:%M")
+            self._chat_log.insert("end", f"[{ts}] ", "ts")
+            self._chat_log.insert("end", f"{sender}: {text}\n", cls)
+            self._chat_log.configure(state="disabled")
+            self._chat_log.see("end")
+        except Exception: pass
+
+    def _append_chat_sys(self, text):
+        try:
+            self._chat_log.configure(state="normal")
+            self._chat_log.insert("end", f"— {text} —\n", "ts")
+            self._chat_log.configure(state="disabled")
+        except Exception: pass
 
     def _load_q(self):
         if not self.qs: return
@@ -2083,7 +2204,8 @@ class InterviewStudentWindow:
         self.lbl_warn.pack(side="left",padx=14)
 
         main=tk.Frame(self.root,bg="#0d1117"); main.pack(fill="both",expand=True,padx=8,pady=6)
-        main.columnconfigure(0,weight=2); main.columnconfigure(1,weight=2); main.columnconfigure(2,weight=1)
+        main.columnconfigure(0,weight=2); main.columnconfigure(1,weight=2)
+        main.columnconfigure(2,weight=1); main.columnconfigure(3,weight=1)
         main.rowconfigure(0,weight=1)
 
         lcol=tk.Frame(main,bg="#0d1117"); lcol.grid(row=0,column=0,sticky="nsew",padx=(0,4))
@@ -2108,6 +2230,10 @@ class InterviewStudentWindow:
         self.notes.pack(fill="both",expand=True,padx=6,pady=(0,8))
         tk.Label(ncol,text="Notes provided by interviewer",font=("Helvetica",7),
                  bg="#161b22",fg="#3a3a5a").pack(pady=(0,6))
+
+        # ── Chat column (column 3) ──────────────────────────────────────────
+        ccol = tk.Frame(main, bg="#161b22"); ccol.grid(row=0, column=3, sticky="nsew", padx=(4,0))
+        self._build_chat_panel(ccol)
 
     @staticmethod
     def _fast_frame_to_photo(frame, label):
@@ -2151,6 +2277,93 @@ class InterviewStudentWindow:
                 except Exception: pass
 
         self.root.after(16, self._poll_cam)   # ~60 fps display
+
+    # ── Chat panel (student side — interview mode) ───────────────────────────
+    def _build_chat_panel(self, parent):
+        self._chat_last_id = 0
+        tk.Label(parent, text="💬 Chat with Proctor",
+                 font=("Helvetica",9,"bold"), bg="#161b22", fg="#58d6d6"
+                 ).pack(anchor="w", padx=8, pady=(8,2))
+        scr = tk.Scrollbar(parent); scr.pack(side="right", fill="y")
+        self._chat_log = tk.Text(
+            parent, font=("Helvetica",8), bg="#0d1117", fg="#c9d1d9",
+            bd=0, relief="flat", wrap="word", state="disabled",
+            yscrollcommand=scr.set)
+        self._chat_log.pack(fill="both", expand=True, padx=(6,0), pady=(0,4))
+        scr.configure(command=self._chat_log.yview)
+        self._chat_log.tag_configure("me",   foreground="#0be881")
+        self._chat_log.tag_configure("them", foreground="#ffd93d")
+        self._chat_log.tag_configure("ts",   foreground="#555566")
+        inp = tk.Frame(parent, bg="#161b22"); inp.pack(fill="x", padx=6, pady=(0,6))
+        self._chat_entry = tk.Entry(
+            inp, font=("Helvetica",9), bg="#21262d", fg="#f0f6fc",
+            insertbackground="#f0f6fc", bd=0, relief="flat")
+        self._chat_entry.pack(side="left", fill="x", expand=True, ipady=5, padx=(0,4))
+        tk.Button(inp, text="▶", font=("Helvetica",9,"bold"),
+                  bg="#ffd93d", fg="#0d1117", bd=0, relief="flat", cursor="hand2",
+                  command=self._send_chat_msg
+                  ).pack(side="right", ipady=5, ipadx=6)
+        self._chat_entry.bind("<Return>", lambda _: self._send_chat_msg())
+        if self.proctor_url:
+            self._poll_chat()
+        else:
+            self._chat_entry.configure(state="disabled")
+            self._append_chat_sys("Connect to proctor to enable chat")
+
+    def _send_chat_msg(self):
+        if not self.proctor_url or not _REQUESTS_AVAILABLE: return
+        msg = self._chat_entry.get().strip()
+        if not msg: return
+        self._chat_entry.delete(0, "end")
+        self._append_chat("You", msg, "me")
+        def _post():
+            try:
+                _requests.post(f"{self.proctor_url}/send_chat", json={
+                    "session_code": self.session_code,
+                    "student_id":   self.sid,
+                    "sender":       "student",
+                    "message":      msg,
+                }, timeout=2)
+            except Exception: pass
+        threading.Thread(target=_post, daemon=True).start()
+
+    def _poll_chat(self):
+        try:
+            if not self.root.winfo_exists(): return
+        except Exception: return
+        if not self.proctor_url or not _REQUESTS_AVAILABLE: return
+        def _fetch():
+            try:
+                r = _requests.get(f"{self.proctor_url}/get_chat", params={
+                    "session_code": self.session_code,
+                    "student_id":   self.sid,
+                    "since_id":     self._chat_last_id,
+                }, timeout=2)
+                for m in r.json().get("messages", []):
+                    self._chat_last_id = max(self._chat_last_id, m["id"])
+                    if m["sender"] == "proctor":
+                        self.root.after(0, lambda d=m:
+                            self._append_chat("Proctor", d["message"], "them"))
+            except Exception: pass
+        threading.Thread(target=_fetch, daemon=True).start()
+        self.root.after(2000, self._poll_chat)
+
+    def _append_chat(self, sender, text, cls):
+        try:
+            self._chat_log.configure(state="normal")
+            ts = time.strftime("%H:%M")
+            self._chat_log.insert("end", f"[{ts}] ", "ts")
+            self._chat_log.insert("end", f"{sender}: {text}\n", cls)
+            self._chat_log.configure(state="disabled")
+            self._chat_log.see("end")
+        except Exception: pass
+
+    def _append_chat_sys(self, text):
+        try:
+            self._chat_log.configure(state="normal")
+            self._chat_log.insert("end", f"— {text} —\n", "ts")
+            self._chat_log.configure(state="disabled")
+        except Exception: pass
 
     def _poll_notes(self):
         """Reload notes file every 3 seconds so proctor-pushed notes appear."""
@@ -3241,6 +3454,29 @@ def start_network_server(port=6000):
         db_answer_runtime_question(int(qid), answer)
         return jsonify(ok=True)
 
+    # ── /send_chat (POST) — either party sends a chat message ─────────────────
+    @app.route("/send_chat", methods=["POST"])
+    def send_chat():
+        data         = request.get_json(force=True, silent=True) or {}
+        session_code = data.get("session_code") or _PROCTOR_SESSION_CODE or ""
+        student_id   = data.get("student_id", "").strip()
+        sender       = data.get("sender", "").strip()   # "student" or "proctor"
+        message      = data.get("message", "").strip()
+        if not all([session_code, student_id, sender, message]):
+            return jsonify(ok=False, reason="missing fields"), 400
+        db_send_chat(session_code, student_id, sender, message)
+        return jsonify(ok=True)
+
+    # ── /get_chat (GET) — poll for new messages (both student and proctor) ────
+    @app.route("/get_chat")
+    def get_chat():
+        session_code = request.args.get("session_code") or _PROCTOR_SESSION_CODE or ""
+        student_id   = request.args.get("student_id", "")
+        since_id     = int(request.args.get("since_id", 0))
+        if not session_code or not student_id:
+            return jsonify(messages=[])
+        return jsonify(messages=db_get_chat(session_code, student_id, since_id))
+
     # ─── Legacy compatibility endpoints ────────────────────────────────────
     @app.route("/frame")
     def frame_legacy():
@@ -3734,6 +3970,9 @@ class MultiStudentProctorWindow:
         tk.Button(hdr, text="⛶", font=("Helvetica",10), bg="#21262d", fg="#58d6d6",
                   bd=0, relief="flat", cursor="hand2", padx=2,
                   command=lambda s=sid: self._open_student_modal(s)).pack(side="right")
+        tk.Button(hdr, text="💬", font=("Helvetica",9), bg="#21262d", fg="#ff6b9d",
+                  bd=0, relief="flat", cursor="hand2", padx=2,
+                  command=lambda s=sid: self._open_student_modal(s)).pack(side="right")
         tk.Button(hdr, text="Select", font=("Helvetica",8),
                   bg="#21262d", fg="#c9d1d9", bd=0, relief="flat", cursor="hand2",
                   command=lambda s=sid: self._select_student(s)).pack(side="right", padx=2)
@@ -3773,10 +4012,10 @@ class MultiStudentProctorWindow:
         except Exception: pass
 
     def _open_student_modal(self, sid):
-        """Open a full-screen modal showing this student's camera feed + violations."""
+        """Open a full-screen modal showing this student's camera feed + violations + chat."""
         win = tk.Toplevel(self.root)
         win.title(f"📷 Student: {sid}")
-        win.geometry("900x620")
+        win.geometry("1100x640")
         win.configure(bg="#0d1117")
         win.attributes("-topmost", True)
 
@@ -3789,7 +4028,7 @@ class MultiStudentProctorWindow:
                   command=win.destroy).pack(side="right", padx=10, pady=6, ipady=3)
 
         main = tk.Frame(win, bg="#0d1117"); main.pack(fill="both", expand=True, padx=8, pady=6)
-        main.columnconfigure(0, weight=3); main.columnconfigure(1, weight=2)
+        main.columnconfigure(0, weight=3); main.columnconfigure(1, weight=2); main.columnconfigure(2, weight=2)
         main.rowconfigure(0, weight=1)
 
         # Camera
@@ -3797,7 +4036,7 @@ class MultiStudentProctorWindow:
         cam.grid(row=0, column=0, sticky="nsew", padx=(0,4))
 
         # Violations log
-        vf = tk.Frame(main, bg="#0d1117"); vf.grid(row=0, column=1, sticky="nsew")
+        vf = tk.Frame(main, bg="#0d1117"); vf.grid(row=0, column=1, sticky="nsew", padx=(0,4))
         tk.Label(vf, text="⚠ Violations", font=("Helvetica",9,"bold"),
                  bg="#0d1117", fg="#ff6b9d").pack(anchor="w", padx=6, pady=(4,2))
         scr = tk.Scrollbar(vf); scr.pack(side="right", fill="y")
@@ -3812,6 +4051,82 @@ class MultiStudentProctorWindow:
         vlog.tag_configure("ok",       foreground="#0be881")
         vlog.tag_configure("info",     foreground="#8b949e")
 
+        # ── Chat panel (proctor side) ─────────────────────────────────────
+        cf = tk.Frame(main, bg="#161b22"); cf.grid(row=0, column=2, sticky="nsew")
+        tk.Label(cf, text="💬 Chat with Student",
+                 font=("Helvetica",9,"bold"), bg="#161b22", fg="#ff6b9d"
+                 ).pack(anchor="w", padx=8, pady=(8,2))
+        cscr = tk.Scrollbar(cf); cscr.pack(side="right", fill="y")
+        chat_log = tk.Text(cf, font=("Helvetica",8), bg="#0d1117", fg="#c9d1d9",
+                           bd=0, relief="flat", wrap="word", state="disabled",
+                           yscrollcommand=cscr.set)
+        chat_log.pack(fill="both", expand=True, padx=(6,0), pady=(0,4))
+        cscr.configure(command=chat_log.yview)
+        chat_log.tag_configure("me",   foreground="#ff6b9d")
+        chat_log.tag_configure("them", foreground="#58d6d6")
+        chat_log.tag_configure("ts",   foreground="#555566")
+        cinp = tk.Frame(cf, bg="#161b22"); cinp.pack(fill="x", padx=6, pady=(0,6))
+        chat_entry = tk.Entry(cinp, font=("Helvetica",9), bg="#21262d", fg="#f0f6fc",
+                              insertbackground="#f0f6fc", bd=0, relief="flat")
+        chat_entry.pack(side="left", fill="x", expand=True, ipady=5, padx=(0,4))
+
+        # Per-modal chat state
+        _modal_chat_last_id = [0]
+
+        def _append_chat_modal(sender, text, cls):
+            try:
+                chat_log.configure(state="normal")
+                ts = time.strftime("%H:%M")
+                chat_log.insert("end", f"[{ts}] ", "ts")
+                chat_log.insert("end", f"{sender}: {text}\n", cls)
+                chat_log.configure(state="disabled")
+                chat_log.see("end")
+            except Exception: pass
+
+        def _send_proctor_msg(evt=None):
+            msg = chat_entry.get().strip()
+            if not msg: return
+            chat_entry.delete(0, "end")
+            _append_chat_modal("You", msg, "me")
+            def _post():
+                try:
+                    _requests.post("http://127.0.0.1:6000/send_chat", json={
+                        "session_code": _PROCTOR_SESSION_CODE or "",
+                        "student_id":   sid,
+                        "sender":       "proctor",
+                        "message":      msg,
+                    }, timeout=2)
+                except Exception: pass
+            threading.Thread(target=_post, daemon=True).start()
+
+        tk.Button(cinp, text="▶", font=("Helvetica",9,"bold"),
+                  bg="#ff6b9d", fg="#0d1117", bd=0, relief="flat", cursor="hand2",
+                  command=_send_proctor_msg
+                  ).pack(side="right", ipady=5, ipadx=6)
+        chat_entry.bind("<Return>", _send_proctor_msg)
+
+        def _poll_chat_modal():
+            try:
+                if not win.winfo_exists(): return
+            except Exception: return
+            if not _REQUESTS_AVAILABLE: return
+            def _fetch():
+                try:
+                    r = _requests.get("http://127.0.0.1:6000/get_chat", params={
+                        "session_code": _PROCTOR_SESSION_CODE or "",
+                        "student_id":   sid,
+                        "since_id":     _modal_chat_last_id[0],
+                    }, timeout=2)
+                    for m in r.json().get("messages", []):
+                        _modal_chat_last_id[0] = max(_modal_chat_last_id[0], m["id"])
+                        if m["sender"] == "student":
+                            win.after(0, lambda d=m:
+                                _append_chat_modal(sid, d["message"], "them"))
+                except Exception: pass
+            threading.Thread(target=_fetch, daemon=True).start()
+            win.after(2000, _poll_chat_modal)
+
+        # ── Shared modal update loop (camera + violations + chat polling) ──
         def _update_modal():
             try:
                 if not win.winfo_exists(): return
@@ -3843,6 +4158,7 @@ class MultiStudentProctorWindow:
             win.after(100, _update_modal)   # 10fps for modal
 
         win.after(50, _update_modal)
+        win.after(100, _poll_chat_modal)
 
     def _select_student(self, sid):
         self._selected_sid = sid
