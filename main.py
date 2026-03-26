@@ -4151,6 +4151,7 @@ class MultiStudentProctorWindow:
         body.pack(fill="both", expand=True)
         body.columnconfigure(0, weight=1)   # proctor half
         body.columnconfigure(1, weight=1)   # student half
+        body.columnconfigure(2, weight=0)   # sidebar (hidden by default)
         body.rowconfigure(0, weight=1)
         self._pro_body = body
 
@@ -4357,8 +4358,8 @@ class MultiStudentProctorWindow:
             self._pro_chat_open = not self._pro_chat_open
             self._pro_ppl_open  = False
             if self._pro_chat_open:
-                self._pro_sidebar.grid(row=0, column=1, sticky="nsew", padx=(0,8), pady=0)
-                body.columnconfigure(1, weight=0, minsize=320)
+                self._pro_sidebar.grid(row=0, column=2, sticky="nsew", padx=(0,8), pady=0)
+                body.columnconfigure(2, weight=0, minsize=320)
                 _sw_pro_tab("chat")
                 self._update_meet_btn_p(self._pbtn_chat, "💬", "#1a73e8")
             else:
@@ -4373,8 +4374,8 @@ class MultiStudentProctorWindow:
             self._pro_ppl_open  = not self._pro_ppl_open
             self._pro_chat_open = False
             if self._pro_ppl_open:
-                self._pro_sidebar.grid(row=0, column=1, sticky="nsew", padx=(0,8), pady=0)
-                body.columnconfigure(1, weight=0, minsize=320)
+                self._pro_sidebar.grid(row=0, column=2, sticky="nsew", padx=(0,8), pady=0)
+                body.columnconfigure(2, weight=0, minsize=320)
                 _sw_pro_tab("participants")
                 self._update_meet_btn_p(self._pbtn_ppl, "👥", "#1a73e8")
             else:
@@ -4388,8 +4389,8 @@ class MultiStudentProctorWindow:
         def _toggle_ask():
             # opens sidebar to "question" tab
             self._pro_chat_open = False; self._pro_ppl_open = False
-            self._pro_sidebar.grid(row=0, column=1, sticky="nsew", padx=(0,8), pady=0)
-            body.columnconfigure(1, weight=0, minsize=320)
+            self._pro_sidebar.grid(row=0, column=2, sticky="nsew", padx=(0,8), pady=0)
+            body.columnconfigure(2, weight=0, minsize=320)
             _sw_pro_tab("question")
             self._update_meet_btn_p(self._pbtn_ask, "❓", "#1a73e8")
         self._pbtn_ask = self._make_meet_btn_p(center_p, "❓", GM_SURF2, GM_TEXT, _toggle_ask)
@@ -4584,7 +4585,14 @@ class MultiStudentProctorWindow:
     def _add_student_tile(self, sid):
         if sid in self._student_tiles:
             return
-        self._no_students_lbl.pack_forget()
+        try:
+            self._no_students_lbl.pack_forget()
+        except Exception:
+            pass
+        try:
+            self._no_students_lbl.configure(text="")
+        except Exception:
+            pass
 
         idx = len(self._student_tiles)
         r, c = divmod(idx, self._grid_cols)
