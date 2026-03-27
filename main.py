@@ -65,15 +65,17 @@ try:
 except ImportError:
     pass
 
-_NGROK_AVAILABLE = False
+_CLOUDFLARED_AVAILABLE = False
 try:
-    from pyngrok import ngrok as _ngrok
-    _NGROK_AVAILABLE = True
-except ImportError:
+    import shutil as _shutil
+    if _shutil.which("cloudflared"):
+        _CLOUDFLARED_AVAILABLE = True
+except Exception:
     pass
 
-# Public URL assigned by ngrok (set by start_network_server if ngrok is available)
+# Public URL assigned by cloudflared (set by start_network_server)
 _public_url = None
+_cloudflared_proc = None   # subprocess handle — killed on exit
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  WINDOWS-ONLY keyboard hook (graceful fallback on other OS)
@@ -1067,6 +1069,29 @@ class BaseWindow:
 # ══════════════════════════════════════════════════════════════════════════════
 #  SESSION CODE DIALOG — shown to student to enter proctor's session code
 # ══════════════════════════════════════════════════════════════════════════════
+def _get_my_client_url():
+    """
+    Return the URL that the proctor should use to push cam frames BACK to this
+    student machine.
+
+    Priority:
+      1. Our own cloudflared public URL (_public_url) — works cross-network
+      2. Our LAN IP:6000                              — works on a local network
+      3. http://127.0.0.1:6000                        — same-machine fallback
+    """
+    if _public_url:
+        return _public_url          # e.g. https://xxx.trycloudflare.com
+    import socket
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        lan_ip = s.getsockname()[0]
+        s.close()
+        return f"http://{lan_ip}:6000"
+    except Exception:
+        return "http://127.0.0.1:6000"
+
+
 def _ask_session_code(parent_root, student_id):
     """
     Show a modal dialog asking student for the proctor's session code.
@@ -1547,6 +1572,7 @@ class ExamWindow:
         self._check_termination()
         if proctor_url:
             self._push_frame_loop()
+            self._push_stats_loop()
             self._poll_runtime_questions()
 
     # ── Push camera frame + stats to proctor server ──────────────────────────
@@ -1556,26 +1582,52 @@ class ExamWindow:
         except Exception: return
         if not self.proctor_url or not _REQUESTS_AVAILABLE: return
 
+        # In-flight guard: skip if previous push hasn't finished yet
+        if getattr(self, "_push_in_flight", False):
+            self.root.after(50, self._push_frame_loop)
+            return
         def _push():
-            hub = self._my_hub
-            if hub:
-                # Only push if frame has changed since last push
-                with hub._lock:
-                    ver = hub.frame_version
-                if getattr(self, "_last_pushed_ver", -1) == ver:
-                    return   # nothing new
-                self._last_pushed_ver = ver
-                frame = hub.get_frame()
-                if frame is not None:
-                    try:
-                        ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 30])
-                        if ok:
-                            _requests.post(
-                                f"{self.proctor_url}/push_student_frame",
-                                params={"student_id": self.sid},
-                                data=buf.tobytes(), timeout=1)
-                    except Exception: pass
-                try:
+            try:
+                hub = self._my_hub
+                if hub:
+                    # Only push if frame has changed since last push
+                    with hub._lock:
+                        ver = hub.frame_version
+                    if getattr(self, "_last_pushed_ver", -1) != ver:
+                        self._last_pushed_ver = ver
+                        frame = hub.get_frame()
+                        if frame is not None:
+                            try:
+                                # Downscale before encoding to reduce wire size
+                                small = cv2.resize(frame, (480, 360),
+                                                   interpolation=cv2.INTER_LINEAR)
+                                ok, buf = cv2.imencode(".jpg", small,
+                                                       [cv2.IMWRITE_JPEG_QUALITY, 45])
+                                if ok:
+                                    _requests.post(
+                                        f"{self.proctor_url}/push_student_frame",
+                                        params={
+                                            "student_id": self.sid,
+                                            "client_url": _get_my_client_url(),
+                                        },
+                                        data=buf.tobytes(), timeout=0.8)
+                            except Exception: pass
+            finally:
+                self._push_in_flight = False
+        self._push_in_flight = True
+        threading.Thread(target=_push, daemon=True).start()
+        self.root.after(50, self._push_frame_loop)   # ~20 fps — avoids localhost queuing
+
+    def _push_stats_loop(self):
+        """Push stats at low frequency (1 s) — never blocks camera frame push."""
+        try:
+            if not self.root.winfo_exists(): return
+        except Exception: return
+        if not self.proctor_url or not _REQUESTS_AVAILABLE: return
+        def _do():
+            try:
+                hub = self._my_hub
+                if hub:
                     _requests.post(
                         f"{self.proctor_url}/push_student_stats",
                         json={
@@ -1588,9 +1640,9 @@ class ExamWindow:
                             "max_strikes":  CameraHub.MAX_STRIKES,
                             "mode":         "exam",
                         }, timeout=1)
-                except Exception: pass
-        threading.Thread(target=_push, daemon=True).start()
-        self.root.after(40, self._push_frame_loop)
+            except Exception: pass
+        threading.Thread(target=_do, daemon=True).start()
+        self.root.after(1000, self._push_stats_loop)
 
     # ── Push violation to proctor server ─────────────────────────────────────
     def _push_violation_remote(self, event, detail=""):
@@ -1627,7 +1679,11 @@ class ExamWindow:
     def _show_runtime_question(self, qdata):
         qid     = qdata["id"]
         text    = qdata["question"]
-        options = [o for o in (qdata.get("options") or "").split("|") if o]
+        # Strip proctor-only "correct:X|" prefix before showing options to student
+        raw_opts = qdata.get("options") or ""
+        if raw_opts.startswith("correct:"):
+            raw_opts = raw_opts.split("|", 1)[1] if "|" in raw_opts else ""
+        options = [o for o in raw_opts.split("|") if o]
         win = tk.Toplevel(self.root)
         win.title("📌 Proctor Question")
         win.configure(bg="#0d1117")
@@ -2039,6 +2095,7 @@ class InterviewStudentWindow:
             print(f"[Voice] Student voice client started  ws_url={ws_url}")
         if proctor_url:
             self._push_frame_loop()
+            self._push_stats_loop()
             self._poll_runtime_questions()
 
     # ── Push student cam frame to proctor server ─────────────────────────────
@@ -2047,19 +2104,45 @@ class InterviewStudentWindow:
             if not self.root.winfo_exists(): return
         except Exception: return
         if not self.proctor_url or not _REQUESTS_AVAILABLE: return
+        # In-flight guard: don't start a new push if previous is still running
+        if getattr(self, "_push_in_flight", False):
+            self.root.after(50, self._push_frame_loop)
+            return
         def _push():
-            if _iv_hub:
-                frame = _iv_hub.get_student_frame()
-                if frame is not None:
-                    try:
-                        ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 30])
-                        if ok:
-                            _requests.post(
-                                f"{self.proctor_url}/push_student_frame",
-                                params={"student_id": self.sid},
-                                data=buf.tobytes(), timeout=1)
-                    except Exception: pass
-                try:
+            try:
+                if _iv_hub:
+                    frame = _iv_hub.get_student_frame()
+                    if frame is not None:
+                        try:
+                            # Downscale to 480x360 before encoding — halves bytes on the wire
+                            small = cv2.resize(frame, (480, 360), interpolation=cv2.INTER_LINEAR)
+                            ok, buf = cv2.imencode(".jpg", small,
+                                                   [cv2.IMWRITE_JPEG_QUALITY, 45])
+                            if ok:
+                                # Pass client_url so the proctor server knows our local Flask address.
+                                _requests.post(
+                                    f"{self.proctor_url}/push_student_frame",
+                                    params={
+                                        "student_id": self.sid,
+                                        "client_url": _get_my_client_url(),
+                                    },
+                                    data=buf.tobytes(), timeout=0.8)
+                        except Exception: pass
+            finally:
+                self._push_in_flight = False
+        self._push_in_flight = True
+        threading.Thread(target=_push, daemon=True).start()
+        self.root.after(50, self._push_frame_loop)   # ~20 fps push — avoids queuing
+
+    def _push_stats_loop(self):
+        """Push stats at lower frequency (every 1 s) so it never blocks cam push."""
+        try:
+            if not self.root.winfo_exists(): return
+        except Exception: return
+        if not self.proctor_url or not _REQUESTS_AVAILABLE: return
+        def _do():
+            try:
+                if _iv_hub:
                     _requests.post(
                         f"{self.proctor_url}/push_student_stats",
                         json={
@@ -2072,9 +2155,9 @@ class InterviewStudentWindow:
                             "max_strikes":  InterviewHub.MAX_STRIKES,
                             "mode":         "interview",
                         }, timeout=1)
-                except Exception: pass
-        threading.Thread(target=_push, daemon=True).start()
-        self.root.after(40, self._push_frame_loop)
+            except Exception: pass
+        threading.Thread(target=_do, daemon=True).start()
+        self.root.after(1000, self._push_stats_loop)
 
     def _push_violation_remote(self, event, detail=""):
         if not self.proctor_url or not _REQUESTS_AVAILABLE: return
@@ -2108,7 +2191,11 @@ class InterviewStudentWindow:
     def _show_runtime_question(self, qdata):
         qid     = qdata["id"]
         text    = qdata["question"]
-        options = [o for o in (qdata.get("options") or "").split("|") if o]
+        # Strip proctor-only "correct:X|" prefix before showing options to student
+        raw_opts = qdata.get("options") or ""
+        if raw_opts.startswith("correct:"):
+            raw_opts = raw_opts.split("|", 1)[1] if "|" in raw_opts else ""
+        options = [o for o in raw_opts.split("|") if o]
         win = tk.Toplevel(self.root)
         win.title("📌 Interviewer Question")
         win.configure(bg="#0d1117")
@@ -2304,46 +2391,71 @@ class InterviewStudentWindow:
         self._tile_area.columnconfigure(1, weight=1)
         self._tile_area.rowconfigure(0, weight=1)
 
-        # Self tile
+        # Name-bar height constant (used in resize calc to give camera label correct space)
+        _NAME_BAR_H = 28
+
+        # Self tile — always shown; fills full width when no proctor is connected
         self_tile = tk.Frame(self._tile_area, bg="#1a1a1d",
                              highlightthickness=1, highlightbackground="#3c4043")
-        self_tile.grid(row=0, column=0, sticky="nsew", padx=4, pady=4)
-        self_tile.rowconfigure(0, weight=1); self_tile.columnconfigure(0, weight=1)
+        # Column span: 2 when no proctor URL (full width), else 1 (half width)
+        _self_colspan = 1 if self.proctor_url else 2
+        self_tile.grid(row=0, column=0, columnspan=_self_colspan, sticky="nsew", padx=4, pady=4)
         self_tile.grid_propagate(False)
-        self.cam_self = tk.Label(self_tile, bg="#1a1a1d",
-                                  text="Starting camera…", fg="#5f6368",
-                                  font=("Helvetica",10))
-        self.cam_self.grid(row=0, column=0, sticky="nsew")
-        self_name = tk.Frame(self_tile, bg="#1a1a1d"); self_name.grid(row=1, column=0, sticky="ew")
+
+        # Name bar — packed at BOTTOM so it never pushes the camera label down
+        self_name = tk.Frame(self_tile, bg="#1a1a1d", height=_NAME_BAR_H)
+        self_name.pack(side="bottom", fill="x")
+        self_name.pack_propagate(False)
         tk.Label(self_name, text="  You", font=("Helvetica",9,"bold"),
                  bg="#1a1a1d", fg=GM_TEXT).pack(side="left", padx=8, pady=4)
         self._self_mic_icon = tk.Label(self_name, text="🎤",
                                         font=("Segoe UI Emoji",10), bg="#1a1a1d", fg=GM_GREEN)
         self._self_mic_icon.pack(side="right", padx=8)
 
-        # Interviewer tile
-        pro_tile = tk.Frame(self._tile_area, bg="#1a1a1d",
-                            highlightthickness=1, highlightbackground="#3c4043")
-        pro_tile.grid(row=0, column=1, sticky="nsew", padx=4, pady=4)
-        pro_tile.rowconfigure(0, weight=1); pro_tile.columnconfigure(0, weight=1)
-        pro_tile.grid_propagate(False)
-        self.cam_pro = tk.Label(pro_tile, bg="#1a1a1d",
-                                 text="Waiting for interviewer…", fg="#5f6368",
-                                 font=("Helvetica",10))
-        self.cam_pro.grid(row=0, column=0, sticky="nsew")
-        pro_name = tk.Frame(pro_tile, bg="#1a1a1d"); pro_name.grid(row=1, column=0, sticky="ew")
-        tk.Label(pro_name, text="  Interviewer", font=("Helvetica",9,"bold"),
-                 bg="#1a1a1d", fg="#ffd93d").pack(side="left", padx=8, pady=4)
+        # Camera label fills the remaining space above the name bar
+        self.cam_self = tk.Label(self_tile, bg="#1a1a1d",
+                                  text="Starting camera…", fg="#5f6368",
+                                  font=("Helvetica",10))
+        self.cam_self.pack(side="top", fill="both", expand=True)
 
-        # Resize handler — explicitly size each tile to exactly half width, full height
+        # Interviewer tile — only shown when connected to a remote proctor
+        if self.proctor_url:
+            pro_tile = tk.Frame(self._tile_area, bg="#1a1a1d",
+                                highlightthickness=1, highlightbackground="#3c4043")
+            pro_tile.grid(row=0, column=1, sticky="nsew", padx=4, pady=4)
+            pro_tile.grid_propagate(False)
+
+            # Name bar at bottom
+            pro_name = tk.Frame(pro_tile, bg="#1a1a1d", height=_NAME_BAR_H)
+            pro_name.pack(side="bottom", fill="x")
+            pro_name.pack_propagate(False)
+            tk.Label(pro_name, text="  Interviewer", font=("Helvetica",9,"bold"),
+                     bg="#1a1a1d", fg="#ffd93d").pack(side="left", padx=8, pady=4)
+
+            # Camera label fills remaining space
+            self.cam_pro = tk.Label(pro_tile, bg="#1a1a1d",
+                                     text="Waiting for interviewer…", fg="#5f6368",
+                                     font=("Helvetica",10))
+            self.cam_pro.pack(side="top", fill="both", expand=True)
+        else:
+            # No proctor connected — cam_pro is a dummy label (never rendered)
+            pro_tile = None
+            self.cam_pro = tk.Label(self._tile_area, bg="#1a1a1d")
+
+        # Resize handler — set tile dimensions explicitly; camera label fills naturally
         self._s_self_tile = self_tile
         self._s_pro_tile  = pro_tile
         def _on_tile_area_resize(event):
             try:
-                tw = max(100, (event.width  - 16) // 2)  # half width minus padx
-                th = max(100,  event.height - 8)          # full height minus pady
-                self._s_self_tile.configure(width=tw, height=th)
-                self._s_pro_tile.configure(width=tw,  height=th)
+                total_h = max(100, event.height - 8)   # full height minus pady
+                if self.proctor_url and self._s_pro_tile is not None:
+                    tw = max(100, (event.width - 16) // 2)  # half width minus padx
+                    self._s_self_tile.configure(width=tw, height=total_h)
+                    self._s_pro_tile.configure(width=tw,  height=total_h)
+                else:
+                    # Student-only view: self tile takes full width
+                    tw = max(100, event.width - 8)
+                    self._s_self_tile.configure(width=tw, height=total_h)
             except Exception:
                 pass
         self._tile_area.bind("<Configure>", _on_tile_area_resize)
@@ -2532,20 +2644,22 @@ class InterviewStudentWindow:
                 except Exception as e:
                     print(f"[student cam] {e}")
 
-            pf = _iv_hub.get_proctor_frame()
-            if pf is not None:
-                try:
-                    img = self._fast_frame_to_photo(pf, self.cam_pro)
-                    self.cam_pro.configure(image=img, text="")
-                    self.cam_pro.image = img
-                except Exception as e:
-                    print(f"[proctor cam] {e}")
-            else:
-                try:
-                    self.cam_pro.configure(image="",
-                        text="Waiting for interviewer\nto connect their camera…",
-                        fg="#3a3a5a")
-                except Exception: pass
+            # Only render interviewer camera when actually connected to a remote proctor
+            if self.proctor_url:
+                pf = _iv_hub.get_proctor_frame()
+                if pf is not None:
+                    try:
+                        img = self._fast_frame_to_photo(pf, self.cam_pro)
+                        self.cam_pro.configure(image=img, text="")
+                        self.cam_pro.image = img
+                    except Exception as e:
+                        print(f"[proctor cam] {e}")
+                else:
+                    try:
+                        self.cam_pro.configure(image="",
+                            text="Waiting for interviewer\nto connect their camera…",
+                            fg="#3a3a5a")
+                    except Exception: pass
 
         self.root.after(16, self._poll_cam)   # ~60 fps display
 
@@ -2781,16 +2895,16 @@ class ProctorWindow:
                     ret, frame = cap.read()
                     if ret:
                         ok, buf = cv2.imencode(
-                            ".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
+                            ".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 62])
                         if ok:
                             try:
                                 _requests.post(
                                     f"{url}/push_proctor_frame",
                                     data=buf.tobytes(),
-                                    timeout=2)
+                                    timeout=0.5)
                             except Exception:
                                 pass
-                    time.sleep(0.10)
+                    time.sleep(0.033)  # ~30 fps
                 cap.release()
             threading.Thread(target=_pro_cam_push_thread, daemon=True).start()
 
@@ -3528,8 +3642,24 @@ def start_network_server(port=6000):
             slot["frame"] = frame
             # Remember the student's server URL the first time we see a frame,
             # so the proctor can push camera frames back in interview mode.
+            #
+            # ── Cloudflared-aware URL resolution ─────────────────────────────
+            # When both sides connect through a cloudflared tunnel, every
+            # request arrives with request.remote_addr == 127.0.0.1 (the local
+            # tunnel proxy), so we cannot use it to build the student's URL.
+            #
+            # Priority:
+            #   1. "client_url" query param  — student explicitly says where their server is
+            #   2. X-Forwarded-For header    — set by some reverse-proxies (not cloudflared)
+            #   3. remote_addr               — works only on a plain LAN (no tunnel)
             if not slot.get("url"):
-                slot["url"] = f"http://{request.remote_addr}:6000"
+                client_url = request.args.get("client_url", "").strip()
+                if client_url and client_url.startswith("http"):
+                    slot["url"] = client_url
+                else:
+                    xff = request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+                    ip  = xff if xff else request.remote_addr
+                    slot["url"] = f"http://{ip}:6000"
         return jsonify(ok=True)
 
     # ── /push_student_stats (POST) — student pushes stats JSON ───────────────
@@ -3578,7 +3708,7 @@ def start_network_server(port=6000):
                 f = slot["frame"].copy() if slot["frame"] is not None else None
         if f is None:
             return Response("no frame", status=204)
-        ok, buf = cv2.imencode(".jpg", f, [cv2.IMWRITE_JPEG_QUALITY, 55])
+        ok, buf = cv2.imencode(".jpg", f, [cv2.IMWRITE_JPEG_QUALITY, 62])
         if not ok:
             return Response("encode error", status=500)
         return Response(buf.tobytes(), mimetype="image/jpeg")
@@ -3766,7 +3896,7 @@ def start_network_server(port=6000):
              else hub.get_student_frame())
         if f is None:
             return Response("no frame", status=204)
-        ok, buf = cv2.imencode(".jpg", f, [cv2.IMWRITE_JPEG_QUALITY, 55])
+        ok, buf = cv2.imencode(".jpg", f, [cv2.IMWRITE_JPEG_QUALITY, 62])
         if not ok:
             return Response("encode error", status=500)
         return Response(buf.tobytes(), mimetype="image/jpeg")
@@ -3811,18 +3941,47 @@ def start_network_server(port=6000):
     except Exception:
         local_ip = "127.0.0.1"
 
-    global _public_url
+    global _public_url, _cloudflared_proc
     _public_url = None
-    if _NGROK_AVAILABLE:
+    if _CLOUDFLARED_AVAILABLE:
         try:
-            tunnel = _ngrok.connect(port, "http")
-            _public_url = tunnel.public_url
-            if _public_url.startswith("http://"):
-                _public_url = "https://" + _public_url[len("http://"):]
-        except Exception as e:
-            print(f"[ngrok] Could not open tunnel: {e}")
+            import re as _re
+            # Separate pipes: cloudflared logs the public URL to stderr
+            _cloudflared_proc = subprocess.Popen(
+                ["cloudflared", "tunnel", "--url", f"http://localhost:{port}"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True, bufsize=1
+            )
+            _CF_URL_RE = _re.compile(r"https://[a-zA-Z0-9\-]+\.trycloudflare\.com")
 
-    # ── Start the WebSocket voice bridge on port 6001 ────────────────────────
+            def _drain_stdout():
+                """Drain stdout silently so the pipe never blocks."""
+                try:
+                    for _ in _cloudflared_proc.stdout:
+                        pass
+                except Exception:
+                    pass
+
+            def _watch_stderr():
+                """Read stderr lines until we find the public URL, then keep draining."""
+                global _public_url
+                try:
+                    for line in _cloudflared_proc.stderr:
+                        m = _CF_URL_RE.search(line)
+                        if m and _public_url is None:
+                            _public_url = m.group(0)
+                            print(f"[cloudflared] Tunnel ready  \u2192  {_public_url}")
+                except Exception:
+                    pass
+
+            threading.Thread(target=_drain_stdout, daemon=True).start()
+            threading.Thread(target=_watch_stderr,  daemon=True).start()
+
+        except Exception as e:
+            print(f"[cloudflared] Could not open tunnel: {e}")
+
+    # ── Start the WebSocket voice bridge on port 6001 ────────────────────
     _voice_bridge_port = port + 1   # 6001 by default
     if _VOICE_BRIDGE_AVAILABLE:
         start_voice_bridge(port=_voice_bridge_port)
@@ -3837,7 +3996,7 @@ def start_network_server(port=6000):
     print(f"  🎙  Voice Bridge (WebSocket) on port {_voice_bridge_port}")
     print(f"  📡  Local IP  →  {local_ip}:{port}  (LAN only)")
     if _public_url:
-        print(f"  🌍  Public URL  →  {_public_url}")
+        print(f"  🌍  Public URL (cloudflared)  →  {_public_url}")
     print(f"{'═'*60}\n")
     return local_ip, port
 
@@ -3926,8 +4085,13 @@ class MultiStudentProctorWindow:
             f"Session Code:  {_PROCTOR_SESSION_CODE}",
             f"Your IP (LAN): {local_ip}:6000",
         ]
-        if _public_url:
-            lines.append(f"Public URL:    {_public_url}")
+        if _CLOUDFLARED_AVAILABLE:
+            if _public_url:
+                lines.append(f"Public URL (cloudflared):  {_public_url}")
+            else:
+                lines.append("Public URL: tunnel still starting — wait a few seconds and reopen this dialog")
+        elif not _CLOUDFLARED_AVAILABLE:
+            lines.append("Public URL: cloudflared not installed (LAN only)")
         lines.append("Share the above with students → they run main.py and enter code to join")
         msg = "\n".join(lines)
         messagebox.showinfo("📋 Share With Students", msg, parent=self.root)
@@ -3994,6 +4158,10 @@ class MultiStudentProctorWindow:
         if self._pro_cam_running:
             return
         self._pro_cam_running = True
+        # Initialise frame store once; preserve across restart cycles
+        if not hasattr(self, '_pro_frame_lock'):
+            self._pro_frame_lock   = threading.Lock()
+            self._pro_latest_frame = None
         def _run():
             cap = cv2.VideoCapture(1)    # prefer external cam
             if not cap.isOpened():
@@ -4002,17 +4170,18 @@ class MultiStudentProctorWindow:
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
             cap.set(cv2.CAP_PROP_FPS, 30)
             self._pro_cap = cap
-            self._pro_latest_frame = None
-            self._pro_frame_lock   = threading.Lock()
+            _pro_push_in_flight = [False]   # mutable flag for inner closure
             while self._pro_cam_running:
                 ret, frame = cap.read()
                 if ret:
+                    # Downscale proctor self-view to 480x360 before storing (faster render)
+                    display_frame = cv2.resize(frame, (480, 360), interpolation=cv2.INTER_LINEAR)
                     # Always store latest frame for self-view display
                     with self._pro_frame_lock:
-                        self._pro_latest_frame = frame.copy()
-                    if self._cam_on:
+                        self._pro_latest_frame = display_frame.copy()
+                    if self._cam_on and not _pro_push_in_flight[0]:
                         ok, buf = cv2.imencode(
-                            ".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
+                            ".jpg", display_frame, [cv2.IMWRITE_JPEG_QUALITY, 45])
                         if ok and _REQUESTS_AVAILABLE:
                             # Collect student URLs: same-machine → 127.0.0.1,
                             # remote students → their stored IP from push_student_frame.
@@ -4025,17 +4194,24 @@ class MultiStudentProctorWindow:
                             if not urls:
                                 urls = ["http://127.0.0.1:6000"]
                             raw = buf.tobytes()
-                            for url in urls:
+                            _pro_push_in_flight[0] = True
+                            def _push_pro(raw=raw, urls=urls):
                                 try:
-                                    _requests.post(
-                                        f"{url}/push_proctor_frame",
-                                        data=raw, timeout=0.5)
-                                except Exception:
-                                    pass
-                time.sleep(0.033)   # ~30 fps
+                                    for url in urls:
+                                        try:
+                                            _requests.post(
+                                                f"{url}/push_proctor_frame",
+                                                data=raw, timeout=0.4)
+                                        except Exception:
+                                            pass
+                                finally:
+                                    _pro_push_in_flight[0] = False
+                            threading.Thread(target=_push_pro, daemon=True).start()
+                time.sleep(0.040)   # ~25 fps — lower rate reduces localhost queue
             cap.release()
             self._pro_cap = None
             self._pro_latest_frame = None
+            self._pro_cam_running = False  # allow clean restart
         threading.Thread(target=_run, daemon=True).start()
 
     def _stop_pro_cam(self):
@@ -4584,6 +4760,17 @@ class MultiStudentProctorWindow:
             ent.pack(side="left", fill="x", expand=True, ipady=3, padx=(4,0))
             self._rq_opts[letter] = ent
 
+        # ── Correct Answer selector ───────────────────────────────────────────
+        ca_row = tk.Frame(parent, bg="#161b22"); ca_row.pack(fill="x", padx=10, pady=(4,2))
+        tk.Label(ca_row, text="Correct Answer:", font=("Helvetica",9,"bold"),
+                 bg="#161b22", fg="#0be881").pack(side="left")
+        self._rq_correct_var = tk.StringVar(value="A")
+        for letter in ("A","B","C","D"):
+            tk.Radiobutton(ca_row, text=letter, variable=self._rq_correct_var, value=letter,
+                           font=("Helvetica",10,"bold"), bg="#161b22", fg="#0be881",
+                           selectcolor="#0d3b2e", activebackground="#161b22",
+                           activeforeground="#ffd93d").pack(side="left", padx=5)
+
         tk.Button(parent, text="📤  Send Question",
                   font=("Helvetica",10,"bold"), bg="#ffd93d", fg="#0d1117",
                   bd=0, relief="flat", cursor="hand2",
@@ -4678,11 +4865,12 @@ class MultiStudentProctorWindow:
         kick_btn.pack(side="right", padx=2)
 
         # ── Camera feed ─────────────────────────────────────────────────────────
-        # Interview mode: fill available height, maintain 16:9.
+        # Interview mode: fill available height, matching proctor self-view tile.
         # Exam mode: fixed 200px height (many tiles on screen).
         if _is_meet:
             cam_frame = tk.Frame(card, bg=_card_bg)
             cam_frame.pack(fill="both", expand=True, padx=4, pady=(2,0))
+            cam_frame.pack_propagate(False)   # size driven by card (set by resize handler)
         else:
             cam_frame = tk.Frame(card, bg=_card_bg, height=200)
             cam_frame.pack(fill="x", padx=4, pady=(2,0))
@@ -4691,11 +4879,6 @@ class MultiStudentProctorWindow:
                            text="Waiting for camera…", fg="#5f6368" if _is_meet else "#3a3a5a",
                            font=("Helvetica",8))
         cam_lbl.pack(fill="both", expand=True)
-
-        if _is_meet:
-            # Prevent cam_frame from growing to image size
-            cam_frame.pack_propagate(False)
-            cam_lbl.config(width=1, height=1)
 
         # ── Stats row ──
         stats_row = tk.Frame(card, bg=_stats_bg); stats_row.pack(fill="x")
@@ -5016,6 +5199,19 @@ class MultiStudentProctorWindow:
             ent.pack(side="left", fill="x", expand=True, ipady=4, padx=(4,0))
             self._rq_opts[letter] = ent
 
+        # ── Correct Answer selector ───────────────────────────────────────────
+        ans_row = tk.Frame(p, bg="#0d1117"); ans_row.pack(fill="x", padx=10, pady=(4,6))
+        tk.Label(ans_row, text="Correct Answer:", font=("Helvetica",9,"bold"),
+                 bg="#0d1117", fg="#0be881").pack(side="left")
+        self._rq_correct_var = tk.StringVar(value="A")
+        for letter in ("A","B","C","D"):
+            tk.Radiobutton(ans_row, text=letter, variable=self._rq_correct_var, value=letter,
+                           font=("Helvetica",10,"bold"), bg="#0d1117", fg="#0be881",
+                           selectcolor="#0d3b2e", activebackground="#0d1117",
+                           activeforeground="#ffd93d").pack(side="left", padx=6)
+        tk.Label(ans_row, text="(mark correct option so answers are graded)",
+                 font=("Helvetica",7), bg="#0d1117", fg="#555566").pack(side="left", padx=4)
+
         tk.Button(p, text="📤 Push MCQ to Student(s)",
                   font=("Helvetica",10,"bold"), bg="#ffd93d", fg="#0d1117",
                   bd=0, relief="flat", cursor="hand2",
@@ -5045,12 +5241,17 @@ class MultiStudentProctorWindow:
         target   = self._rq_target_var.get()
         if not question:
             messagebox.showerror("Error", "Enter a question first", parent=self.root); return
-        if target in ("(select student)", ""):
+        if target in ("(select student)", "(select candidate)", ""):
             messagebox.showerror("Error", "Select a target student or 'All Students'", parent=self.root); return
         # Collect MCQ options — pack non-empty ones as pipe-separated string
         raw_opts = [self._rq_opts[l].get().strip() for l in ("A","B","C","D")]
         filled   = [o for o in raw_opts if o]
-        options  = "|".join(raw_opts) if len(filled) >= 2 else ""
+        # Embed correct answer into options string: "correct:A|opt_a|opt_b|opt_c|opt_d"
+        correct  = getattr(self, "_rq_correct_var", tk.StringVar()).get() or "A"
+        if len(filled) >= 2:
+            options = f"correct:{correct}|" + "|".join(raw_opts)
+        else:
+            options = ""   # open-ended — no correct answer stored
         code = _PROCTOR_SESSION_CODE or ""
         if target == "ALL":
             sids = list(self._student_tiles.keys())
@@ -5060,6 +5261,7 @@ class MultiStudentProctorWindow:
             db_push_runtime_question(code, sid, question, options)
         self._rq_text.delete("1.0","end")
         for ent in self._rq_opts.values(): ent.delete(0,"end")
+        if hasattr(self, "_rq_correct_var"): self._rq_correct_var.set("A")
         messagebox.showinfo("Sent", f"MCQ pushed to {len(sids)} student(s) ✓", parent=self.root)
 
     def _poll_runtime_answers(self):
@@ -5071,23 +5273,51 @@ class MultiStudentProctorWindow:
         try:
             self._rq_ans_log.configure(state="normal")
             self._rq_ans_log.delete("1.0","end")
+            # Configure color tags once
+            self._rq_ans_log.tag_configure("correct", foreground="#0be881", font=("Courier",8,"bold"))
+            self._rq_ans_log.tag_configure("wrong",   foreground="#ff4444", font=("Courier",8,"bold"))
+            self._rq_ans_log.tag_configure("neutral", foreground="#c9d1d9")
+            self._rq_ans_log.tag_configure("meta",    foreground="#8b949e", font=("Courier",7))
             for sid in all_sids:
                 rows = db_get_runtime_questions(code, sid)
                 for r in rows:
                     qid, q, opts, sent_at, answered, ans = r
                     if answered:
-                        # Resolve MCQ answer letter → full option text if possible
-                        opt_list = [o for o in (opts or "").split("|") if o]
+                        # Parse options — may start with "correct:X|"
+                        correct_ans = None
+                        opt_str = opts or ""
+                        if opt_str.startswith("correct:"):
+                            parts = opt_str.split("|", 1)
+                            correct_ans = parts[0].replace("correct:", "").strip()
+                            opt_str = parts[1] if len(parts) > 1 else ""
+                        opt_list = [o for o in opt_str.split("|") if o]
+                        # Resolve answer letter → full option text
                         if opt_list and ans in ("A","B","C","D"):
                             idx = ord(ans)-ord("A")
                             ans_disp = f"{ans}) {opt_list[idx]}" if idx < len(opt_list) else ans
                         else:
                             ans_disp = ans
+                        # Determine correct/wrong
+                        if correct_ans and ans in ("A","B","C","D"):
+                            is_correct = (ans == correct_ans)
+                            grade_icon = "✅" if is_correct else "❌"
+                            tag = "correct" if is_correct else "wrong"
+                        else:
+                            grade_icon = ""
+                            tag = "neutral"
                         self._rq_ans_log.insert("end",
-                            f"[{sent_at}] {sid}:\n  Q: {q[:60]}…\n  A: {ans_disp}\n\n")
+                            f"[{sent_at}] {sid}:\n", "meta")
+                        self._rq_ans_log.insert("end",
+                            f"  Q: {q[:55]}…\n", "neutral")
+                        self._rq_ans_log.insert("end",
+                            f"  A: {ans_disp}  {grade_icon}", tag)
+                        if correct_ans and not is_correct if correct_ans else False:
+                            self._rq_ans_log.insert("end",
+                                f"  (correct: {correct_ans})", "meta")
+                        self._rq_ans_log.insert("end", "\n\n", "neutral")
             self._rq_ans_log.configure(state="disabled")
         except Exception: pass
-        self.root.after(5000, self._poll_runtime_answers)
+        self.root.after(4000, self._poll_runtime_answers)
 
     def _build_runtime_q_panel_interview(self, p):
         """Interview mode version — same widget as exam, reuses _build_runtime_q_panel."""
@@ -5499,10 +5729,10 @@ if __name__ == "__main__":
         print("    Fix: pip install flask-sock")
     if not _VOICE_BRIDGE_AVAILABLE:
         print("[⚠] 'voice_bridge.py' not found — place it next to main.py")
-    if not _NGROK_AVAILABLE:
-        print("[⚠] 'pyngrok' not installed — internet (cross-network) proctoring disabled")
-        print("    Fix: pip install pyngrok")
-        print("    Then: ngrok config add-authtoken <YOUR_TOKEN>  (free at ngrok.com)")
+    if not _CLOUDFLARED_AVAILABLE:
+        print("[⚠] 'cloudflared' not found in PATH — internet (cross-network) proctoring disabled")
+        print("    Fix: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/")
+        print("    No account or token needed — just download and place cloudflared in PATH")
     try:
         import win32gui
     except ImportError:
@@ -5512,4 +5742,12 @@ if __name__ == "__main__":
     # Start Flask server on all machines — harmless until a student logs in
     start_network_server(port=6000)
 
-    MainLogin().run()
+    try:
+        MainLogin().run()
+    finally:
+        # Kill cloudflared tunnel process cleanly on exit
+        if _cloudflared_proc is not None:
+            try:
+                _cloudflared_proc.terminate()
+            except Exception:
+                pass
