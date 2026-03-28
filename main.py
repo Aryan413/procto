@@ -1475,7 +1475,20 @@ class MainLogin(BaseWindow):
     def _close(self): self.animating=False; self.root.destroy()
     def run(self): self.root.mainloop()
 
-# --- WebRTC & Signaling Engine (optional) ---
+# ══════════════════════════════════════════════════════════════════════════════
+#  WebRTC / PeerJS-style Signaling Engine
+#  Inspired by MockInt (manthankhawse/Interview-Platform) which uses:
+#    • PeerJS (wrapper around WebRTC) for peer-to-peer video/audio
+#    • Socket.io for signaling (room IDs, offer/answer exchange)
+#    • navigator.mediaDevices.getUserMedia() for camera/mic access
+#
+#  Architecture here mirrors that pattern:
+#    • aiortc handles WebRTC on the Python (proctor) side
+#    • A browser-based PeerJS page handles WebRTC on the student side
+#    • Flask serves a /videocall/<room> HTML page (PeerJS + Socket.io client)
+#    • Flask-SocketIO acts as the signaling server (same process, port 6000)
+# ══════════════════════════════════════════════════════════════════════════════
+
 _WEBRTC_AVAILABLE = False
 try:
     import socketio as _sio_lib
@@ -1485,52 +1498,304 @@ try:
 except ImportError:
     pass
 
+_FLASK_SOCKETIO_AVAILABLE = False
+try:
+    from flask_socketio import SocketIO as _FlaskSocketIO, emit as _sio_emit, join_room as _sio_join_room
+    _FLASK_SOCKETIO_AVAILABLE = True
+except ImportError:
+    pass
+
+# Global SocketIO instance (set by start_network_server when flask-socketio is available)
+_socketio_server = None
+
+# In-memory PeerJS-style signaling rooms: room_id → {student_peer_id, proctor_peer_id}
+_signaling_rooms: dict = {}
+_signaling_lock = threading.Lock()
+
+
 if _WEBRTC_AVAILABLE:
     class CameraHubTrack(VideoStreamTrack):
-        """Bridge between your OpenCV CameraHub and WebRTC."""
+        """
+        Bridge between OpenCV CameraHub and WebRTC.
+        Mirrors PeerJS VideoStreamTrack — sends annotated frames from CameraHub
+        over the WebRTC data channel to the proctor browser.
+        """
         kind = "video"
+
         def __init__(self, hub):
             super().__init__()
             self.hub = hub
+            self._frame_count = 0
 
         async def recv(self):
             pts, time_base = await self.next_timestamp()
             frame_bgr = self.hub.get_frame() if self.hub else None
             if frame_bgr is None:
                 frame_bgr = np.zeros((360, 480, 3), dtype=np.uint8)
-            
-            # Convert BGR to RGB for WebRTC
+                # Show a "no signal" placeholder
+                cv2.putText(frame_bgr, "No Camera Signal", (80, 180),
+                            cv2.FONT_HERSHEY_DUPLEX, 0.8, (80, 80, 180), 2)
             frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
             video_frame = VideoFrame.from_ndarray(frame_rgb, format="rgb24")
             video_frame.pts, video_frame.time_base = pts, time_base
+            self._frame_count += 1
             return video_frame
 
+
 if _WEBRTC_AVAILABLE:
-  class StudentWebRTCPeer:
-    """The background engine that streams to the proctor."""
-    def __init__(self, server_url, student_id, hub):
-        self.server_url = server_url
-        self.student_id = student_id
-        self.hub = hub
-        self._sio = _sio_lib.AsyncClient(ssl_verify=False)
-        self._pc = None
+    class StudentWebRTCPeer:
+        """
+        Python-side WebRTC peer for the student.
+        Connects to the Flask-SocketIO signaling server, waits for a proctor
+        offer, then streams CameraHub frames back as the WebRTC answer.
 
-    def start(self):
-        import asyncio
-        threading.Thread(target=lambda: asyncio.run(self._main()), daemon=True).start()
+        This mirrors the PeerJS peer.on('call', stream => ...) pattern in MockInt,
+        but implemented with aiortc so the existing Python CameraHub can be reused.
+        """
+        def __init__(self, server_url: str, student_id: str, hub, room_id: str = ""):
+            self.server_url  = server_url
+            self.student_id  = student_id
+            self.hub         = hub
+            self.room_id     = room_id or student_id
+            self._sio        = _sio_lib.AsyncClient(ssl_verify=False,
+                                                    reconnection=True,
+                                                    reconnection_attempts=5,
+                                                    reconnection_delay=2)
+            self._pc: "RTCPeerConnection | None" = None
+            self._running    = True
 
-    async def _main(self):
-        @self._sio.on("offer")
-        async def on_offer(data):
+        def start(self):
+            import asyncio
+            threading.Thread(
+                target=lambda: asyncio.run(self._main()),
+                daemon=True,
+                name=f"WebRTC-student-{self.student_id}"
+            ).start()
+
+        def stop(self):
+            self._running = False
+
+        async def _main(self):
+            import asyncio
+
+            @self._sio.on("connect")
+            async def on_connect():
+                print(f"[WebRTC] Student {self.student_id} → signaling server connected")
+                await self._sio.emit("webrtc-join-room", {
+                    "room":       self.room_id,
+                    "role":       "student",
+                    "student_id": self.student_id,
+                })
+
+            @self._sio.on("disconnect")
+            async def on_disconnect():
+                print(f"[WebRTC] Student {self.student_id} → signaling disconnected")
+
+            @self._sio.on("webrtc-offer")
+            async def on_offer(data: dict):
+                """
+                Proctor (browser/PeerJS) sent us an SDP offer.
+                We answer with our CameraHub stream — mirrors:
+                  peer.on('call', call => call.answer(stream))
+                in the MockInt browser code.
+                """
+                print(f"[WebRTC] Received offer for room {data.get('room')}")
+                if self._pc:
+                    try:
+                        await self._pc.close()
+                    except Exception:
+                        pass
+
+                self._pc = RTCPeerConnection()
+                self._pc.addTrack(CameraHubTrack(self.hub))
+
+                @self._pc.on("connectionstatechange")
+                async def on_state():
+                    print(f"[WebRTC] Connection state: {self._pc.connectionState}")
+
+                await self._pc.setRemoteDescription(
+                    RTCSessionDescription(sdp=data["sdp"], type=data["type"]))
+                answer = await self._pc.createAnswer()
+                await self._pc.setLocalDescription(answer)
+
+                await self._sio.emit("webrtc-answer", {
+                    "room":        self.room_id,
+                    "student_id":  self.student_id,
+                    "sdp":         self._pc.localDescription.sdp,
+                    "type":        self._pc.localDescription.type,
+                })
+
+            @self._sio.on("webrtc-ice-candidate")
+            async def on_ice(data: dict):
+                if self._pc and data.get("candidate"):
+                    from aiortc import RTCIceCandidate
+                    try:
+                        # Parse candidate string into RTCIceCandidate
+                        cand_str = data["candidate"].get("candidate", "")
+                        if cand_str:
+                            parts = cand_str.split()
+                            candidate = RTCIceCandidate(
+                                component    = int(parts[1]),
+                                foundation   = parts[0].split(":")[1],
+                                ip           = parts[4],
+                                port         = int(parts[5]),
+                                priority     = int(parts[3]),
+                                protocol     = parts[2],
+                                type         = parts[7],
+                                sdpMid       = data["candidate"].get("sdpMid", "0"),
+                                sdpMLineIndex= data["candidate"].get("sdpMLineIndex", 0),
+                            )
+                            await self._pc.addIceCandidate(candidate)
+                    except Exception as e:
+                        print(f"[WebRTC] ICE candidate error: {e}")
+
+            try:
+                await self._sio.connect(
+                    self.server_url,
+                    transports=["websocket", "polling"],
+                    namespaces=["/"],
+                )
+                # Keep alive until stopped
+                while self._running:
+                    await asyncio.sleep(1)
+            except Exception as e:
+                print(f"[WebRTC] Student peer error: {e}")
+            finally:
+                try:
+                    await self._sio.disconnect()
+                except Exception:
+                    pass
+
+
+    class ProctorWebRTCReceiver:
+        """
+        Python-side WebRTC receiver for the proctor.
+        Mirrors PeerJS peer.call(peerId, stream) from MockInt.
+        Initiates an offer to the student and receives their video track.
+
+        On receiving a track, decoded frames are pushed into InterviewHub
+        via set_proctor_frame() so the existing Tkinter display reuses them.
+        """
+        def __init__(self, server_url: str, student_id: str, iv_hub, room_id: str = ""):
+            self.server_url = server_url
+            self.student_id = student_id
+            self.iv_hub     = iv_hub
+            self.room_id    = room_id or student_id
+            self._sio       = _sio_lib.AsyncClient(ssl_verify=False,
+                                                   reconnection=True,
+                                                   reconnection_attempts=5,
+                                                   reconnection_delay=2)
+            self._pc: "RTCPeerConnection | None" = None
+            self._running   = True
+
+        def start(self):
+            import asyncio
+            threading.Thread(
+                target=lambda: asyncio.run(self._main()),
+                daemon=True,
+                name=f"WebRTC-proctor-{self.student_id}"
+            ).start()
+
+        def stop(self):
+            self._running = False
+
+        async def _main(self):
+            import asyncio
+
+            @self._sio.on("connect")
+            async def on_connect():
+                print(f"[WebRTC] Proctor receiver → signaling server connected")
+                await self._sio.emit("webrtc-join-room", {
+                    "room":  self.room_id,
+                    "role":  "proctor",
+                })
+                await self._make_offer()
+
+            @self._sio.on("webrtc-answer")
+            async def on_answer(data: dict):
+                if self._pc:
+                    await self._pc.setRemoteDescription(
+                        RTCSessionDescription(sdp=data["sdp"], type=data["type"]))
+                    print(f"[WebRTC] Proctor receiver got answer → P2P established")
+
+            @self._sio.on("webrtc-ice-candidate")
+            async def on_ice(data: dict):
+                if self._pc and data.get("candidate"):
+                    from aiortc import RTCIceCandidate
+                    try:
+                        cand_str = data["candidate"].get("candidate", "")
+                        if cand_str:
+                            parts = cand_str.split()
+                            candidate = RTCIceCandidate(
+                                component    = int(parts[1]),
+                                foundation   = parts[0].split(":")[1],
+                                ip           = parts[4],
+                                port         = int(parts[5]),
+                                priority     = int(parts[3]),
+                                protocol     = parts[2],
+                                type         = parts[7],
+                                sdpMid       = data["candidate"].get("sdpMid", "0"),
+                                sdpMLineIndex= data["candidate"].get("sdpMLineIndex", 0),
+                            )
+                            await self._pc.addIceCandidate(candidate)
+                    except Exception as e:
+                        print(f"[WebRTC] ICE candidate error: {e}")
+
+            try:
+                await self._sio.connect(
+                    self.server_url,
+                    transports=["websocket", "polling"],
+                )
+                while self._running:
+                    await asyncio.sleep(1)
+            except Exception as e:
+                print(f"[WebRTC] Proctor receiver error: {e}")
+            finally:
+                try:
+                    await self._sio.disconnect()
+                except Exception:
+                    pass
+
+        async def _make_offer(self):
+            """Create an RTCPeerConnection, attach track handler, send SDP offer."""
+            import asyncio
             self._pc = RTCPeerConnection()
-            self._pc.addTrack(CameraHubTrack(self.hub))
-            await self._pc.setRemoteDescription(RTCSessionDescription(sdp=data["sdp"], type=data["type"]))
-            answer = await self._pc.createAnswer()
-            await self._pc.setLocalDescription(answer)
-            await self._sio.emit("answer", {"student_id": self.student_id, "sdp": self._pc.localDescription.sdp, "type": self._pc.localDescription.type})
 
-        await self._sio.connect(self.server_url, transports=["websocket"])
-        await self._sio.emit("student-join", {"student_id": self.student_id})
+            @self._pc.on("track")
+            def on_track(track):
+                if track.kind == "video":
+                    asyncio.ensure_future(self._consume_video(track))
+
+            @self._pc.on("connectionstatechange")
+            async def on_state():
+                print(f"[WebRTC] Proctor state: {self._pc.connectionState}")
+
+            offer = await self._pc.createOffer()
+            await self._pc.setLocalDescription(offer)
+
+            await self._sio.emit("webrtc-offer", {
+                "room": self.room_id,
+                "sdp":  self._pc.localDescription.sdp,
+                "type": self._pc.localDescription.type,
+            })
+
+        async def _consume_video(self, track):
+            """Decode incoming video frames → push to InterviewHub."""
+            print("[WebRTC] Proctor: consuming student video track")
+            while self._running:
+                try:
+                    frame = await track.recv()
+                    img = frame.to_ndarray(format="bgr24")
+                    if self.iv_hub:
+                        self.iv_hub.set_proctor_frame(img)
+                except Exception as e:
+                    print(f"[WebRTC] Track recv error: {e}")
+                    break
+
+
+# Global WebRTC peer handles
+_webrtc_peer:     "StudentWebRTCPeer | None"    = None
+_webrtc_proctor:  "ProctorWebRTCReceiver | None" = None
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  EXAM WINDOW  (student — unchanged)
@@ -1552,8 +1817,14 @@ class ExamWindow:
         global _webrtc_peer
         if _WEBRTC_AVAILABLE:
             try:
-                _webrtc_peer = StudentWebRTCPeer("http://localhost:6000", self.sid, self._my_hub)
+                _webrtc_peer = StudentWebRTCPeer(
+                    server_url=proctor_url or "http://localhost:6000",
+                    student_id=self.sid,
+                    hub=self._my_hub,
+                    room_id=self.sid,
+                )
                 _webrtc_peer.start()
+                print(f"[WebRTC] Student peer started for room '{self.sid}'")
             except Exception as e:
                 print(f"[WebRTC] Could not start peer: {e}")
         self.root=tk.Tk()
@@ -2610,6 +2881,35 @@ class InterviewStudentWindow:
         self._btn_notes_ctrl = self._make_meet_btn(center, "📝", GM_SURF2, GM_TEXT, _toggle_notes)
         self._btn_notes_ctrl.pack(side="left", padx=8, pady=10)
         tk.Label(center, text="Notes", font=("Helvetica",7), bg=GM_BG,
+                 fg=GM_MUTED).pack(side="left", padx=(0,8))
+
+        # Open PeerJS Video Call in browser
+        def _open_video_call():
+            import webbrowser
+            room = self.session_code or self.sid or "examshield"
+            # Build base URL from proctor_url or localhost
+            base = self.proctor_url.rstrip("/") if self.proctor_url else "http://127.0.0.1:6000"
+            url  = f"{base}/videocall/{room}"
+            webbrowser.open(url)
+            # Show a tip
+            try:
+                w = tk.Toplevel(self.root)
+                w.title("Video Call")
+                w.geometry("480x160"); w.configure(bg="#202124"); w.grab_set()
+                w.attributes("-topmost", True)
+                tk.Label(w, text="🎥  Video Call Opened in Browser",
+                         font=("Helvetica",12,"bold"), bg="#202124", fg="#8ab4f8").pack(pady=(18,4))
+                tk.Label(w, text=f"URL: {url}\n\nShare your Peer ID with the interviewer, or enter theirs to connect.",
+                         font=("Helvetica",9), bg="#202124", fg="#9aa0a6",
+                         wraplength=440, justify="center").pack(pady=4)
+                tk.Button(w, text="OK", font=("Helvetica",10,"bold"),
+                          bg="#1a73e8", fg="#fff", bd=0, relief="flat", cursor="hand2",
+                          command=w.destroy).pack(pady=12, ipadx=20, ipady=4)
+            except Exception:
+                pass
+        btn_vcall = self._make_meet_btn(center, "🌐", "#1a73e8", "#fff", _open_video_call)
+        btn_vcall.pack(side="left", padx=8, pady=10)
+        tk.Label(center, text="Video", font=("Helvetica",7), bg=GM_BG,
                  fg=GM_MUTED).pack(side="left", padx=(0,8))
 
     @staticmethod
@@ -3927,8 +4227,338 @@ def start_network_server(port=6000):
             mode         = "interview" if _iv_hub else "exam",
         )
 
+    # ══════════════════════════════════════════════════════════════════════════
+    #  PeerJS-style SIGNALING SERVER  (Flask-SocketIO)
+    #  Mirrors the Socket.io signaling layer in MockInt.
+    #  Events:
+    #    webrtc-join-room   → client joins a room (student or proctor)
+    #    webrtc-offer       → proctor sends SDP offer to student in room
+    #    webrtc-answer      → student sends SDP answer back
+    #    webrtc-ice-candidate → ICE candidate relay
+    # ══════════════════════════════════════════════════════════════════════════
+    global _socketio_server
+
+    if _FLASK_SOCKETIO_AVAILABLE:
+        from flask_socketio import SocketIO, emit, join_room
+        _socketio_server = SocketIO(app, cors_allowed_origins="*",
+                                    async_mode="threading", logger=False,
+                                    engineio_logger=False)
+
+        @_socketio_server.on("webrtc-join-room")
+        def on_join_room(data):
+            room    = data.get("room", "")
+            role    = data.get("role", "")
+            sid_req = data.get("student_id", "")
+            if not room:
+                return
+            join_room(room)
+            with _signaling_lock:
+                if room not in _signaling_rooms:
+                    _signaling_rooms[room] = {}
+                _signaling_rooms[room][role] = True
+            emit("webrtc-room-joined", {"room": room, "role": role}, room=room)
+            print(f"[Signaling] {role} joined room '{room}'")
+
+        @_socketio_server.on("webrtc-offer")
+        def on_offer(data):
+            room = data.get("room", "")
+            emit("webrtc-offer", data, room=room, include_self=False)
+            print(f"[Signaling] Offer relayed to room '{room}'")
+
+        @_socketio_server.on("webrtc-answer")
+        def on_answer(data):
+            room = data.get("room", "")
+            emit("webrtc-answer", data, room=room, include_self=False)
+            print(f"[Signaling] Answer relayed to room '{room}'")
+
+        @_socketio_server.on("webrtc-ice-candidate")
+        def on_ice(data):
+            room = data.get("room", "")
+            emit("webrtc-ice-candidate", data, room=room, include_self=False)
+
+    # ── /videocall/<room_id> — PeerJS browser video call page ─────────────────
+    # This is the key page inspired by MockInt:
+    #   • Uses navigator.mediaDevices.getUserMedia() for cam/mic
+    #   • Uses PeerJS (CDN) for WebRTC peer-to-peer video
+    #   • Uses Socket.io (CDN) for signaling (room join / offer / answer)
+    # Open this URL in a browser on BOTH machines to get instant P2P video.
+    @app.route("/videocall/<room_id>")
+    def videocall(room_id):
+        _PEERJS_HTML = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ExamShield Video Call — {room_id}</title>
+<style>
+  * {{ margin:0; padding:0; box-sizing:border-box; }}
+  body {{ background:#202124; font-family:'Google Sans',Arial,sans-serif; color:#e8eaed;
+          display:flex; flex-direction:column; height:100vh; overflow:hidden; }}
+  #header {{ background:#292a2d; padding:12px 20px; display:flex;
+              align-items:center; justify-content:space-between; flex-shrink:0; }}
+  #header h2 {{ font-size:16px; color:#8ab4f8; }}
+  #room-badge {{ font-size:11px; background:#3c4043; padding:4px 10px;
+                  border-radius:12px; color:#9aa0a6; }}
+  #status-bar {{ background:#1a1b1e; padding:6px 20px; font-size:12px;
+                 color:#9aa0a6; flex-shrink:0; border-bottom:1px solid #3c4043; }}
+  #video-grid {{ display:flex; flex:1; gap:8px; padding:8px;
+                 overflow:hidden; min-height:0; }}
+  .tile {{ flex:1; background:#1a1a1d; border-radius:12px; position:relative;
+           overflow:hidden; border:1px solid #3c4043; min-width:0; }}
+  .tile video {{ width:100%; height:calc(100% - 36px); object-fit:cover;
+                 display:block; background:#000; }}
+  .tile-label {{ position:absolute; bottom:0; left:0; right:0; height:36px;
+                  background:rgba(0,0,0,.65); display:flex; align-items:center;
+                  padding:0 14px; font-size:13px; font-weight:600; }}
+  .tile-label .mic-icon {{ margin-left:auto; font-size:14px; }}
+  .tile-placeholder {{ display:flex; align-items:center; justify-content:center;
+                        height:calc(100% - 36px); color:#5f6368; font-size:14px; }}
+  #ctrl-bar {{ background:#202124; padding:10px 0 14px;
+               display:flex; justify-content:center; gap:8px; flex-shrink:0; }}
+  .ctrl-wrap {{ display:flex; flex-direction:column; align-items:center; gap:4px; }}
+  .ctrl-btn {{ width:48px; height:48px; border-radius:50%; border:none; cursor:pointer;
+               font-size:18px; transition:filter .15s; display:flex;
+               align-items:center; justify-content:center; }}
+  .ctrl-btn:hover {{ filter:brightness(1.2); }}
+  .ctrl-btn.active {{ background:#ea4335 !important; }}
+  .ctrl-label {{ font-size:10px; color:#9aa0a6; }}
+  #end-btn {{ width:58px; height:48px; border-radius:28px; background:#ea4335; }}
+  #peer-id-display {{ font-size:11px; color:#5f6368; text-align:center;
+                       padding:4px 20px; flex-shrink:0; }}
+  #connect-section {{ background:#292a2d; border-radius:10px; margin:8px 20px;
+                       padding:12px; display:flex; align-items:center; gap:10px;
+                       flex-shrink:0; }}
+  #connect-section input {{ flex:1; background:#3c4043; border:none; border-radius:8px;
+                              padding:8px 12px; color:#e8eaed; font-size:13px; outline:none; }}
+  #connect-section button {{ background:#1a73e8; color:#fff; border:none;
+                               border-radius:8px; padding:8px 16px; cursor:pointer;
+                               font-size:13px; font-weight:600; }}
+  #connect-section button:hover {{ background:#1967d2; }}
+</style>
+</head>
+<body>
+<div id="header">
+  <h2>🎥 ExamShield Interview</h2>
+  <span id="room-badge">Room: {room_id}</span>
+</div>
+<div id="status-bar" id="status">Initialising camera…</div>
+<div id="video-grid">
+  <div class="tile" id="self-tile">
+    <video id="local-video" autoplay muted playsinline></video>
+    <div class="tile-label">
+      <span id="self-name">You</span>
+      <span class="mic-icon" id="self-mic-icon">🎤</span>
+    </div>
+  </div>
+  <div class="tile" id="remote-tile">
+    <div class="tile-placeholder" id="remote-placeholder">Waiting for peer to join…</div>
+    <video id="remote-video" autoplay playsinline style="display:none"></video>
+    <div class="tile-label" style="display:none" id="remote-label">
+      <span id="remote-name">Peer</span>
+      <span class="mic-icon" id="remote-mic-icon">🎤</span>
+    </div>
+  </div>
+</div>
+<div id="connect-section">
+  <span style="font-size:12px;color:#9aa0a6;white-space:nowrap">Connect to Peer ID:</span>
+  <input type="text" id="remote-peer-input" placeholder="Paste remote Peer ID here…">
+  <button onclick="callPeer()">📞 Call</button>
+</div>
+<div id="peer-id-display">Your Peer ID: <strong id="my-peer-id">…</strong>
+  <button onclick="copyPeerId()" style="margin-left:8px;background:#3c4043;border:none;
+    color:#8ab4f8;border-radius:6px;padding:3px 10px;cursor:pointer;font-size:11px;">Copy</button>
+</div>
+<div id="ctrl-bar">
+  <div class="ctrl-wrap">
+    <button class="ctrl-btn" id="mic-btn" style="background:#3c4043"
+            onclick="toggleMic()">🎤</button>
+    <span class="ctrl-label">Mic</span>
+  </div>
+  <div class="ctrl-wrap">
+    <button class="ctrl-btn" id="cam-btn" style="background:#3c4043"
+            onclick="toggleCam()">📹</button>
+    <span class="ctrl-label">Cam</span>
+  </div>
+  <div class="ctrl-wrap">
+    <button class="ctrl-btn" id="end-btn" onclick="endCall()">✆</button>
+    <span class="ctrl-label">Leave</span>
+  </div>
+</div>
+
+<!-- PeerJS (mirrors MockInt's peer-to-peer approach) -->
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+const ROOM_ID = "{room_id}";
+let localStream = null;
+let peer = null;
+let currentCall = null;
+let micMuted = false;
+let camOff = false;
+
+const status      = document.getElementById("status-bar");
+const localVideo  = document.getElementById("local-video");
+const remoteVideo = document.getElementById("remote-video");
+const remotePlaceholder = document.getElementById("remote-placeholder");
+const remoteLabel = document.getElementById("remote-label");
+const myPeerIdEl  = document.getElementById("my-peer-id");
+
+function setStatus(msg, color) {{
+  status.textContent = msg;
+  status.style.color = color || "#9aa0a6";
+}}
+
+// ── Step 1: getUserMedia — exactly as MockInt uses it ──────────────────────
+async function init() {{
+  setStatus("Requesting camera & microphone access…");
+  try {{
+    localStream = await navigator.mediaDevices.getUserMedia({{ video: true, audio: true }});
+    localVideo.srcObject = localStream;
+    setStatus("Camera ready. Connecting to signaling server…", "#34a853");
+    initPeer();
+  }} catch(e) {{
+    setStatus("⚠ Camera/mic access denied: " + e.message, "#ea4335");
+  }}
+}}
+
+// ── Step 2: PeerJS peer — mirrors MockInt's new Peer() ────────────────────
+function initPeer() {{
+  // Connect to PeerJS cloud server (no self-hosted needed)
+  peer = new Peer(undefined, {{
+    debug: 1,
+    config: {{
+      iceServers: [
+        {{ urls: "stun:stun.l.google.com:19302" }},
+        {{ urls: "stun:stun1.l.google.com:19302" }},
+      ]
+    }}
+  }});
+
+  peer.on("open", id => {{
+    myPeerIdEl.textContent = id;
+    setStatus("✅ Ready — share your Peer ID with the other person", "#34a853");
+    console.log("[PeerJS] My peer ID:", id);
+  }});
+
+  // ── Receive incoming call (mirrors peer.on('call') in MockInt) ───────────
+  peer.on("call", call => {{
+    console.log("[PeerJS] Incoming call from", call.peer);
+    currentCall = call;
+    call.answer(localStream);   // answer with our local stream
+
+    call.on("stream", remoteStream => {{
+      showRemoteStream(remoteStream, call.peer);
+    }});
+
+    call.on("close", () => {{
+      hideRemoteStream();
+      setStatus("Call ended by peer", "#ea4335");
+    }});
+    setStatus("📞 In call with " + call.peer, "#ffd93d");
+  }});
+
+  peer.on("error", e => {{
+    setStatus("⚠ Peer error: " + e.message, "#ea4335");
+    console.error("[PeerJS]", e);
+  }});
+
+  peer.on("disconnected", () => {{
+    setStatus("⚠ Disconnected — reconnecting…", "#ffd93d");
+    peer.reconnect();
+  }});
+}}
+
+// ── Step 3: Call remote peer (mirrors peer.call(remotePeerId, stream)) ────
+function callPeer() {{
+  const remoteId = document.getElementById("remote-peer-input").value.trim();
+  if (!remoteId || !peer || !localStream) {{
+    setStatus("⚠ Enter a valid peer ID first", "#ffd93d"); return;
+  }}
+  setStatus("📞 Calling " + remoteId + "…", "#ffd93d");
+  const call = peer.call(remoteId, localStream);
+  currentCall = call;
+
+  call.on("stream", remoteStream => {{
+    showRemoteStream(remoteStream, remoteId);
+    setStatus("📞 In call with " + remoteId, "#34a853");
+  }});
+  call.on("close", () => {{
+    hideRemoteStream();
+    setStatus("Call ended", "#9aa0a6");
+  }});
+  call.on("error", e => {{
+    setStatus("⚠ Call error: " + e.message, "#ea4335");
+  }});
+}}
+
+function showRemoteStream(stream, peerId) {{
+  remoteVideo.srcObject = stream;
+  remoteVideo.style.display = "block";
+  remotePlaceholder.style.display = "none";
+  remoteLabel.style.display = "flex";
+  document.getElementById("remote-name").textContent = peerId.slice(0, 12) + "…";
+}}
+
+function hideRemoteStream() {{
+  remoteVideo.srcObject = null;
+  remoteVideo.style.display = "none";
+  remotePlaceholder.style.display = "flex";
+  remotePlaceholder.textContent = "Call ended";
+  remoteLabel.style.display = "none";
+}}
+
+// ── Controls ──────────────────────────────────────────────────────────────
+function toggleMic() {{
+  micMuted = !micMuted;
+  localStream.getAudioTracks().forEach(t => t.enabled = !micMuted);
+  document.getElementById("mic-btn").textContent  = micMuted ? "🔇" : "🎤";
+  document.getElementById("self-mic-icon").textContent = micMuted ? "🔇" : "🎤";
+  document.getElementById("mic-btn").classList.toggle("active", micMuted);
+}}
+
+function toggleCam() {{
+  camOff = !camOff;
+  localStream.getVideoTracks().forEach(t => t.enabled = !camOff);
+  document.getElementById("cam-btn").textContent = camOff ? "🚫" : "📹";
+  document.getElementById("cam-btn").classList.toggle("active", camOff);
+}}
+
+function endCall() {{
+  if(currentCall) {{ currentCall.close(); currentCall = null; }}
+  if(peer) {{ peer.destroy(); peer = null; }}
+  if(localStream) {{ localStream.getTracks().forEach(t => t.stop()); localStream = null; }}
+  hideRemoteStream();
+  localVideo.srcObject = null;
+  setStatus("Call ended — you can close this tab", "#9aa0a6");
+}}
+
+function copyPeerId() {{
+  const id = myPeerIdEl.textContent;
+  if(id && id !== "…") {{
+    navigator.clipboard.writeText(id).then(() => setStatus("Peer ID copied!", "#34a853"));
+  }}
+}}
+
+// Start on load
+window.addEventListener("load", init);
+</script>
+</body>
+</html>"""
+        from flask import Response as _Response
+        return _Response(_PEERJS_HTML, mimetype="text/html")
+
+    # ── /videocall (GET, no room) — redirects to a room based on session code ──
+    @app.route("/videocall")
+    def videocall_redirect():
+        from flask import redirect
+        room = _PROCTOR_SESSION_CODE or "examshield"
+        return redirect(f"/videocall/{room}")
+
     def _run():
-        app.run(host="0.0.0.0", port=port, threaded=True)
+        if _FLASK_SOCKETIO_AVAILABLE and _socketio_server:
+            _socketio_server.run(app, host="0.0.0.0", port=port,
+                                 allow_unsafe_werkzeug=True, log_output=False)
+        else:
+            app.run(host="0.0.0.0", port=port, threaded=True)
 
     threading.Thread(target=_run, daemon=True).start()
 
@@ -3994,9 +4624,14 @@ def start_network_server(port=6000):
     print(f"\n{'═'*60}")
     print(f"  🌐  ExamShield v3 Network Server started on port {port}")
     print(f"  🎙  Voice Bridge (WebSocket) on port {_voice_bridge_port}")
+    print(f"  🎥  PeerJS Video Call  →  http://{local_ip}:{port}/videocall/<room>")
     print(f"  📡  Local IP  →  {local_ip}:{port}  (LAN only)")
     if _public_url:
         print(f"  🌍  Public URL (cloudflared)  →  {_public_url}")
+    if _FLASK_SOCKETIO_AVAILABLE:
+        print(f"  📡  Socket.io signaling server  →  ACTIVE (PeerJS mode)")
+    else:
+        print(f"  ⚠   Socket.io signaling  →  INACTIVE (pip install flask-socketio)")
     print(f"{'═'*60}\n")
     return local_ip, port
 
@@ -4647,6 +5282,38 @@ class MultiStudentProctorWindow:
         btn_notes_p = self._make_meet_btn_p(center_p, "📝", GM_SURF2, GM_TEXT, _open_notes_push)
         btn_notes_p.pack(side="left", padx=8, pady=18)
         tk.Label(center_p, text="Notes", font=("Helvetica",7), bg=GM_BG, fg=GM_MUTED).pack(side="left", padx=(0,8))
+
+        # Open PeerJS Video Call in browser (proctor side)
+        def _open_pro_video_call():
+            import webbrowser, socket as _sock
+            room = _PROCTOR_SESSION_CODE or "examshield"
+            try:
+                s2 = _sock.socket(_sock.AF_INET, _sock.SOCK_DGRAM)
+                s2.connect(("8.8.8.8", 80)); local_ip = s2.getsockname()[0]; s2.close()
+            except Exception:
+                local_ip = "127.0.0.1"
+            url = _public_url.rstrip("/") + f"/videocall/{room}" if _public_url \
+                  else f"http://{local_ip}:6000/videocall/{room}"
+            webbrowser.open(url)
+            try:
+                w2 = tk.Toplevel(self.root)
+                w2.title("Video Call"); w2.geometry("500x170")
+                w2.configure(bg="#202124"); w2.attributes("-topmost", True)
+                tk.Label(w2, text="🎥  Video Call Opened in Browser",
+                         font=("Helvetica",12,"bold"), bg="#202124", fg="#8ab4f8").pack(pady=(16,4))
+                tk.Label(w2, text=f"URL: {url}\n\n"
+                         "Share this URL + your Peer ID with the candidate.\n"
+                         "Both sides must open the page and exchange Peer IDs to connect P2P.",
+                         font=("Helvetica",9), bg="#202124", fg="#9aa0a6",
+                         wraplength=460, justify="center").pack()
+                tk.Button(w2, text="OK", font=("Helvetica",10,"bold"),
+                          bg="#1a73e8", fg="#fff", bd=0, relief="flat", cursor="hand2",
+                          command=w2.destroy).pack(pady=10, ipadx=20, ipady=4)
+            except Exception:
+                pass
+        btn_vcall_p = self._make_meet_btn_p(center_p, "🌐", "#1a73e8", "#fff", _open_pro_video_call)
+        btn_vcall_p.pack(side="left", padx=8, pady=18)
+        tk.Label(center_p, text="Video", font=("Helvetica",7), bg=GM_BG, fg=GM_MUTED).pack(side="left", padx=(0,8))
 
         # Volume
         vol_frame = tk.Frame(ctrl_bar, bg=GM_BG); vol_frame.pack(side="right", padx=16)
@@ -5733,6 +6400,13 @@ if __name__ == "__main__":
         print("[⚠] 'cloudflared' not found in PATH — internet (cross-network) proctoring disabled")
         print("    Fix: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/")
         print("    No account or token needed — just download and place cloudflared in PATH")
+    if not _FLASK_SOCKETIO_AVAILABLE:
+        print("[⚠] 'flask-socketio' not installed — Socket.io signaling server disabled")
+        print("    Fix: pip install flask-socketio  (needed for PeerJS video call signaling)")
+    if not _WEBRTC_AVAILABLE:
+        print("[ℹ] 'aiortc'/'socketio' not installed — Python-side WebRTC peer disabled")
+        print("    The browser-based PeerJS video call (/videocall/<room>) still works without this")
+        print("    Fix (optional): pip install aiortc python-socketio")
     try:
         import win32gui
     except ImportError:
