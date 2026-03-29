@@ -24,6 +24,12 @@ import queue
 import time
 import struct
 
+try:
+    import numpy as np
+    _NP_OK = True
+except ImportError:
+    _NP_OK = False
+
 # ── Audio constants ────────────────────────────────────────────────────────────
 SAMPLE_RATE  = 16000   # Hz  (16 kHz — good quality, low bandwidth)
 CHANNELS     = 1       # mono
@@ -125,6 +131,12 @@ class VoiceClient:
     Connects to the bridge WebSocket, streams microphone audio out, and
     plays received audio through the speaker — all in background threads.
 
+    Audio pipeline (capture side):
+      mic → delay-matched AEC → noise gate → VAD gate → mic gain → soft limiter → send
+
+    Audio pipeline (playback side):
+      receive → jitter buffer → volume → write speaker → store in AEC ring buffer
+
     Usage:
         vc = VoiceClient(role="student", bridge_url="ws://192.168.1.5:6000/ws/voice")
         vc.start()
@@ -134,12 +146,29 @@ class VoiceClient:
 
     RECONNECT_DELAY = 3.0
 
-    # ── Audio tuning constants ─────────────────────────────────────────────────
-    # Boost mic volume sent to the remote side (2.5x = ~8dB louder)
-    MIC_GAIN = 2.5
-    # Software AEC: subtract this fraction of last-played chunk from mic input
-    # to reduce speaker bleed back into the mic (echo).  0=off, 1=full cancel.
-    AEC_ATTENUATION = 0.75
+    # ── Mic gain ───────────────────────────────────────────────────────────────
+    # Applied AFTER echo cancellation so we boost voice, not echo residual.
+    MIC_GAIN = 2.0          # 2x = +6 dB.  Lower if distortion, raise if too quiet.
+
+    # ── AEC — adaptive delay-matched echo cancellation ────────────────────────
+    # How many chunks of speaker history to keep for delay search.
+    # At 100ms/chunk: 8 chunks = 800ms search window (covers most speaker→mic delay).
+    AEC_HISTORY   = 8
+    # Suppression factor once we find the best-matching delay slot (0=off, 1=full).
+    AEC_STRENGTH  = 0.92
+
+    # ── Noise gate ─────────────────────────────────────────────────────────────
+    # RMS below this threshold → frame is treated as silence and zeroed out.
+    # Stops background hiss / fan noise from being transmitted.
+    # Units: int16 amplitude (0–32767).  Typical room noise ≈ 200–600.
+    NOISE_GATE_RMS = 400
+
+    # ── Voice Activity Detection (VAD) ─────────────────────────────────────────
+    # Frames must stay above this energy to count as "voice".
+    # Prevents near-silent echo residual from being sent after AEC.
+    VAD_RMS_MIN  = 300      # below this = no voice detected
+    VAD_HOLD_MS  = 250      # keep sending for this long after voice goes silent
+                            # (prevents clipping the end of words)
 
     def __init__(self, role: str, bridge_url: str):
         self.role        = role
@@ -150,10 +179,12 @@ class VoiceClient:
         self._volume     = 1.0
         self._ws         = None
         self._play_q: queue.Queue = queue.Queue(maxsize=30)
-        # Last-played samples for software AEC
-        self._last_played     = None   # numpy array or None
-        self._last_played_lock = threading.Lock()
-        self.on_status_change = None   # optional callback(connected: bool, info: str)
+
+        # AEC ring buffer: stores last AEC_HISTORY played chunks as float32 arrays
+        self._aec_buf   = []          # list of np.ndarray, newest last
+        self._aec_lock  = threading.Lock()
+
+        self.on_status_change = None
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
@@ -177,18 +208,15 @@ class VoiceClient:
             self._ws = None
 
     def toggle_mute(self) -> bool:
-        """Toggle mic mute. Returns True if now muted."""
         self._muted = not self._muted
         return self._muted
 
     def set_volume(self, v: float):
-        """Set playback volume multiplier (0.0 – 3.0)."""
         self._volume = max(0.0, float(v))
 
     # ── Internal — connection loop ─────────────────────────────────────────────
 
     def _connect_loop(self):
-        """Keep reconnecting to the bridge until stop() is called."""
         while self._running:
             url = f"{self.bridge_url}?role={self.role}"
             self._connected = False
@@ -218,13 +246,11 @@ class VoiceClient:
                          daemon=True, name=f"VoiceCap-{self.role}").start()
 
     def _on_message(self, ws, data):
-        """Received audio chunk from the relay — enqueue for playback."""
         if not isinstance(data, (bytes, bytearray)):
             return
         chunk = bytes(data)
         if not chunk:
             return
-        # Drop oldest if full to keep latency low
         if self._play_q.full():
             try:
                 self._play_q.get_nowait()
@@ -243,17 +269,82 @@ class VoiceClient:
         self._connected = False
         self._notify_status(False, "Disconnected")
 
+    # ── Audio DSP helpers ──────────────────────────────────────────────────────
+
+    @staticmethod
+    def _rms(samples_f32):
+        """Root-mean-square energy of a float32 array."""
+        if len(samples_f32) == 0:
+            return 0.0
+        return float(np.sqrt(np.mean(samples_f32 ** 2)))
+
+    def _aec_cancel(self, mic_f32):
+        """
+        Delay-matched Acoustic Echo Cancellation.
+
+        Searches the AEC ring buffer for the past speaker chunk that correlates
+        most strongly with the current mic frame, then subtracts it at the
+        computed optimal scale.  This handles the variable speaker→mic delay
+        that made single-chunk subtraction unreliable.
+
+        Returns the cleaned mic signal (float32, same length as mic_f32).
+        """
+        with self._aec_lock:
+            history = list(self._aec_buf)   # snapshot, newest last
+
+        if not history:
+            return mic_f32
+
+        n = len(mic_f32)
+        best_corr  = -1.0
+        best_chunk = None
+
+        for ref in history:
+            if len(ref) != n:
+                continue
+            # Normalised cross-correlation (dot product of unit vectors)
+            mic_norm = mic_f32 / (np.linalg.norm(mic_f32) + 1e-9)
+            ref_norm = ref     / (np.linalg.norm(ref)     + 1e-9)
+            corr = float(np.dot(mic_norm, ref_norm))
+            if corr > best_corr:
+                best_corr  = corr
+                best_chunk = ref
+
+        if best_chunk is None or best_corr < 0.15:
+            # Low correlation → no significant echo present, don't cancel
+            return mic_f32
+
+        # Optimal scale: how much of the reference is leaking into the mic
+        scale = (np.dot(mic_f32, best_chunk) /
+                 (np.dot(best_chunk, best_chunk) + 1e-9))
+        scale = float(np.clip(scale, 0.0, 1.0))
+
+        cleaned = mic_f32 - best_chunk * (scale * self.AEC_STRENGTH)
+        return cleaned
+
+    @staticmethod
+    def _soft_limit(samples_f32, threshold=28000.0, ratio=8.0):
+        """
+        Soft-knee limiter: gentle compression above threshold, hard clip at 32767.
+        Prevents digital distortion while preserving voice dynamics below threshold.
+        """
+        above = np.abs(samples_f32) > threshold
+        if np.any(above):
+            sign = np.sign(samples_f32)
+            excess = np.abs(samples_f32) - threshold
+            compressed = threshold + excess / ratio
+            samples_f32 = np.where(above, sign * compressed, samples_f32)
+        return np.clip(samples_f32, -32767.0, 32767.0)
+
     # ── Internal — microphone capture ─────────────────────────────────────────
 
     def _capture_loop(self, ws):
         """
-        Capture mic audio, apply gain + software AEC, send as binary WS frame.
+        Full capture pipeline:
+          raw mic → AEC → noise gate → VAD → mic gain → soft limiter → send
 
-        Software AEC: subtract a scaled copy of the last-played chunk from the
-        mic input before sending.  This removes most speaker→mic bleed (echo).
-
-        CRITICAL: WebSocketApp.send() sends TEXT by default.
-        Binary audio MUST use opcode=_ws_lib.ABNF.OPCODE_BINARY.
+        CRITICAL: ws.send(data, opcode=OPCODE_BINARY) must be used.
+        WebSocketApp.send() defaults to TEXT frame which corrupts binary audio.
         """
         if not _SD_OK:
             print(f"[VoiceClient/{self.role}] sounddevice missing — capture disabled")
@@ -263,7 +354,10 @@ class VoiceClient:
         try:
             OPCODE_BINARY = _ws_lib.ABNF.OPCODE_BINARY
         except AttributeError:
-            OPCODE_BINARY = 0x2   # fallback for old websocket-client
+            OPCODE_BINARY = 0x2
+
+        vad_hold_chunks = max(1, int(self.VAD_HOLD_MS / 100))  # 100ms per chunk
+        vad_hold_count  = 0   # countdown: keep sending for this many more chunks
 
         print(f"[VoiceClient/{self.role}] Capture started")
         try:
@@ -281,25 +375,39 @@ class VoiceClient:
                         print(f"[VoiceClient/{self.role}] stream.read error: {e}")
                         break
                     if overflowed:
-                        continue   # stale buffer — discard
+                        continue
                     if self._muted:
                         continue
 
-                    samples = chunk[:, 0].astype("float32") if chunk.ndim > 1 else chunk.astype("float32")
+                    # Flatten to mono float32
+                    samples = (chunk[:, 0] if chunk.ndim > 1 else chunk).astype("float32")
 
-                    # ── Software AEC ───────────────────────────────────────────
-                    # Subtract attenuated last-played chunk to cancel speaker echo
-                    with self._last_played_lock:
-                        ref = self._last_played
-                    if ref is not None and len(ref) == len(samples):
-                        samples -= ref.astype("float32") * self.AEC_ATTENUATION
+                    # ── Stage 1: Noise gate ────────────────────────────────────
+                    raw_rms = self._rms(samples)
+                    if raw_rms < self.NOISE_GATE_RMS:
+                        # Pure noise / silence — zero out and skip (don't send)
+                        vad_hold_count = 0
+                        continue
 
-                    # ── Mic gain boost ─────────────────────────────────────────
+                    # ── Stage 2: AEC ──────────────────────────────────────────
+                    samples = self._aec_cancel(samples)
+
+                    # ── Stage 3: VAD — check if voice remains after AEC ───────
+                    post_aec_rms = self._rms(samples)
+                    if post_aec_rms >= self.VAD_RMS_MIN:
+                        vad_hold_count = vad_hold_chunks   # voice detected — reset hold
+                    elif vad_hold_count > 0:
+                        vad_hold_count -= 1                # in hold window — still send
+                    else:
+                        continue                           # no voice, hold expired — skip
+
+                    # ── Stage 4: Mic gain ─────────────────────────────────────
                     samples *= self.MIC_GAIN
 
-                    # Clip to int16 range and pack
-                    raw = np.clip(samples, -32768, 32767).astype(DTYPE).tobytes()
+                    # ── Stage 5: Soft limiter ─────────────────────────────────
+                    samples = self._soft_limit(samples)
 
+                    raw = samples.astype(DTYPE).tobytes()
                     try:
                         ws.send(raw, opcode=OPCODE_BINARY)
                     except Exception as e:
@@ -312,14 +420,18 @@ class VoiceClient:
     # ── Internal — speaker playback ────────────────────────────────────────────
 
     def _playback_loop(self):
-        """Drain the play queue and write PCM chunks to the speaker.
-        Stores each played chunk so _capture_loop can subtract it (AEC)."""
+        """
+        Playback pipeline:
+          receive → volume → write speaker → push to AEC ring buffer
+        """
         if not _SD_OK:
             return
 
         import numpy as np
 
-        silence = np.zeros(CHUNK_FRAMES, dtype=DTYPE)
+        silence_f32 = np.zeros(CHUNK_FRAMES, dtype="float32")
+        silence_i16 = np.zeros(CHUNK_FRAMES, dtype=DTYPE)
+
         print(f"[VoiceClient/{self.role}] Playback started")
         try:
             with _sd.OutputStream(
@@ -333,30 +445,37 @@ class VoiceClient:
                     try:
                         data = self._play_q.get(timeout=0.15)
                     except queue.Empty:
-                        # Write silence to keep output stream alive
-                        with self._last_played_lock:
-                            self._last_played = silence
-                        stream.write(silence)
+                        # Silence → push zeros into AEC buffer so AEC stays in sync
+                        with self._aec_lock:
+                            self._aec_buf.append(silence_f32.copy())
+                            if len(self._aec_buf) > self.AEC_HISTORY:
+                                self._aec_buf.pop(0)
+                        stream.write(silence_i16)
                         continue
 
-                    samples = np.frombuffer(data, dtype=DTYPE).copy()
-                    # Pad / trim to exact block size
-                    if len(samples) < CHUNK_FRAMES:
-                        samples = np.pad(samples, (0, CHUNK_FRAMES - len(samples)))
-                    elif len(samples) > CHUNK_FRAMES:
-                        samples = samples[:CHUNK_FRAMES]
+                    samples_i16 = np.frombuffer(data, dtype=DTYPE).copy()
+                    # Exact block size
+                    if len(samples_i16) < CHUNK_FRAMES:
+                        samples_i16 = np.pad(samples_i16, (0, CHUNK_FRAMES - len(samples_i16)))
+                    elif len(samples_i16) > CHUNK_FRAMES:
+                        samples_i16 = samples_i16[:CHUNK_FRAMES]
 
+                    # Volume adjustment
                     if self._volume != 1.0:
-                        samples = np.clip(
-                            samples.astype("float32") * self._volume,
-                            -32768, 32767
+                        samples_i16 = np.clip(
+                            samples_i16.astype("float32") * self._volume,
+                            -32767, 32767
                         ).astype(DTYPE)
 
-                    # Record what we played so capture thread can cancel echo
-                    with self._last_played_lock:
-                        self._last_played = samples.copy()
+                    # Push float32 copy into AEC ring buffer BEFORE writing to speaker
+                    # so the capture thread can find it when the echo arrives in mic
+                    ref_f32 = samples_i16.astype("float32")
+                    with self._aec_lock:
+                        self._aec_buf.append(ref_f32)
+                        if len(self._aec_buf) > self.AEC_HISTORY:
+                            self._aec_buf.pop(0)
 
-                    stream.write(samples)
+                    stream.write(samples_i16)
         except Exception as e:
             print(f"[VoiceClient/{self.role}] Playback error: {e}")
         print(f"[VoiceClient/{self.role}] Playback stopped")
