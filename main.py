@@ -2735,20 +2735,20 @@ class InterviewStudentWindow:
 
     @staticmethod
     def _fast_frame_to_photo(frame, label):
-        """Letterbox-fit BGR frame to label size. Always resizes to fit label."""
+        """Crop-to-fill BGR frame into label size — no black bars, like Google Meet."""
         h, w = frame.shape[:2]
         lw = label.winfo_width(); lh = label.winfo_height()
-        # Use label size if available, otherwise use frame size
+        # Fall back to frame size if label not yet rendered
         if lw < 10: lw = w
         if lh < 10: lh = h
-        scale = min(lw / w, lh / h)
+        # Scale so the frame COVERS the tile completely (crop edges, no black bars)
+        scale = max(lw / w, lh / h)
         nw = max(1, int(w * scale)); nh = max(1, int(h * scale))
         resized = cv2.resize(frame, (nw, nh), interpolation=cv2.INTER_LINEAR)
-        # Letterbox onto exact label size
-        canvas = np.zeros((lh, lw, 3), dtype=np.uint8)
-        y0 = (lh - nh) // 2; x0 = (lw - nw) // 2
-        canvas[y0:y0+nh, x0:x0+nw] = resized
-        return ImageTk.PhotoImage(Image.fromarray(cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB)))
+        # Centre-crop to exact tile size
+        y0 = (nh - lh) // 2; x0 = (nw - lw) // 2
+        cropped = resized[y0:y0+lh, x0:x0+lw]
+        return ImageTk.PhotoImage(Image.fromarray(cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB)))
 
     def _poll_cam(self):
         try:
