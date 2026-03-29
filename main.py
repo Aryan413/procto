@@ -2187,7 +2187,13 @@ class ExamWindow:
     def _submit(self):
         self._save()
         un=len(self.qs)-len(self.answers)
-        if un>0 and not messagebox.askyesno("Submit?",f"{un} unanswered. Submit anyway?"): return
+        if un>0:
+            global _question_popup_open
+            _question_popup_open += 1
+            confirm = messagebox.askyesno("Submit?",f"{un} unanswered. Submit anyway?",
+                                          default="no")
+            _question_popup_open = max(0, _question_popup_open - 1)
+            if not confirm: return
         self._show_results()
 
     def _show_results(self):
@@ -2211,12 +2217,15 @@ class ExamWindow:
                     wr.writerow([i+1, q[1], a, q[6], "OK" if a==q[6] else "X"])
         except Exception as e:
             print(f"[CSV] Save failed: {e}")
+        global _question_popup_open
+        _question_popup_open += 1
         messagebox.showinfo("Exam Complete",
             f"Score  : {score}/{total} ({pct}%)\n"
             f"Grade  : {grade}\n"
             f"Time   : {elapsed//60:02d}:{elapsed%60:02d}\n"
             f"Strikes: {strikes}\n\n"
             f"Results saved → {log}")
+        _question_popup_open = max(0, _question_popup_open - 1)
         try: self.root.destroy()
         except Exception: pass
 
@@ -3378,6 +3387,7 @@ class ProctorWindow:
             self.vlog.configure(state="normal")
             self.vlog.delete("1.0","end")
             self.vlog.configure(state="disabled")
+            self._vio_seen_count = 0  # reset so new violations still appear after clear
         except Exception: pass
 
     # ── Camera poll — REMOTE or LOCAL ────────────────────────────────────
@@ -3504,26 +3514,31 @@ class ProctorWindow:
             hub = _hub if self.mode=="exam" else _iv_hub
             viols = list(hub.violations) if hub else []
 
+        # Only append NEW entries — never clear existing log so proctor
+        # always sees the full live history without flicker.
         if viols is not None:
-            try:
-                self.vlog.configure(state="normal")
-                self.vlog.delete("1.0","end")
-                for v in viols:
-                    vu = v.upper()
-                    if   "STRIKE"     in vu: tag = "strike"
-                    elif "TERMINATED" in vu: tag = "strike"
-                    elif "WARNING"    in vu: tag = "warn"
-                    elif "BLOCKED_APP"in vu: tag = "blocked"
-                    elif "TAB_SWITCH" in vu: tag = "blocked"
-                    elif "KEYSTROKE"  in vu: tag = "keystroke"
-                    elif "APP_WARNING"in vu: tag = "appwarn"
-                    elif "START"      in vu: tag = "ok"
-                    else:                    tag = "info"
-                    self.vlog.insert("end", v + "\n", tag)
-                self.vlog.configure(state="disabled")
-                self.vlog.see("end")
-            except Exception as e:
-                print(f"[ViolationPoll] {e}")
+            seen = getattr(self, "_vio_seen_count", 0)
+            new_viols = viols[seen:]
+            if new_viols:
+                try:
+                    self.vlog.configure(state="normal")
+                    for v in new_viols:
+                        vu = v.upper()
+                        if   "STRIKE"      in vu: tag = "strike"
+                        elif "TERMINATED"  in vu: tag = "strike"
+                        elif "WARNING"     in vu: tag = "warn"
+                        elif "BLOCKED_APP" in vu: tag = "blocked"
+                        elif "TAB_SWITCH"  in vu: tag = "blocked"
+                        elif "KEYSTROKE"   in vu: tag = "keystroke"
+                        elif "APP_WARNING" in vu: tag = "appwarn"
+                        elif "START"       in vu: tag = "ok"
+                        else:                     tag = "info"
+                        self.vlog.insert("end", v + "\n", tag)
+                    self.vlog.configure(state="disabled")
+                    self.vlog.see("end")
+                    self._vio_seen_count = seen + len(new_viols)
+                except Exception as e:
+                    print(f"[ViolationPoll] {e}")
 
         self.root.after(800, self._poll_violations)
 
@@ -5710,7 +5725,8 @@ class MultiStudentProctorWindow:
                   bg="#21262d", fg="#8b949e", bd=0, relief="flat", cursor="hand2",
                   command=lambda: (self.vlog.configure(state="normal"),
                                    self.vlog.delete("1.0","end"),
-                                   self.vlog.configure(state="disabled"))).pack(pady=(0,6))
+                                   self.vlog.configure(state="disabled"),
+                                   setattr(self, "_last_vio_db_id", 0))).pack(pady=(0,6))
 
     def _refresh_violations(self):
         if not hasattr(self, 'vlog'): return   # interview mode has no violations panel
@@ -5719,24 +5735,81 @@ class MultiStudentProctorWindow:
             self._sel_lbl.configure(text=f"Showing violations for: {sid}")
         else:
             self._sel_lbl.configure(text="All students (select a student to filter)")
-        self._show_all_violations(sid)
+        # On a filter/student change, do a full reload; otherwise append only new rows.
+        new_sid = sid
+        if getattr(self, "_last_vio_sid", "___UNSET___") != new_sid:
+            self._last_vio_sid = new_sid
+            self._last_vio_db_id = 0
+            try:
+                self.vlog.configure(state="normal")
+                self.vlog.delete("1.0", "end")
+                self.vlog.configure(state="disabled")
+            except Exception:
+                pass
+        self._append_new_violations(sid)
+
+    def _append_new_violations(self, sid=None):
+        """Append only DB rows newer than _last_vio_db_id — no clearing, no flicker."""
+        last_id = getattr(self, "_last_vio_db_id", 0)
+        try:
+            conn = sqlite3.connect(DB)
+            if sid:
+                rows = conn.execute(
+                    "SELECT id,timestamp,event,detail FROM violations "
+                    "WHERE student_id=? AND id>? ORDER BY id ASC LIMIT 200",
+                    (sid, last_id)).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT id,student_id||' | '||timestamp,event,detail FROM violations "
+                    "WHERE id>? ORDER BY id ASC LIMIT 200",
+                    (last_id,)).fetchall()
+            conn.close()
+        except Exception as e:
+            print(f"[Violations] DB error: {e}")
+            return
+        if not rows:
+            return
+        try:
+            self.vlog.configure(state="normal")
+            for row in rows:
+                row_id, ts, ev, det = row
+                vu = ev.upper()
+                if   "STRIKE"      in vu: tag = "strike"
+                elif "TERMINATED"  in vu: tag = "strike"
+                elif "WARNING"     in vu: tag = "warn"
+                elif "BLOCKED_APP" in vu: tag = "blocked"
+                elif "TAB_SWITCH"  in vu: tag = "blocked"
+                elif "KEYSTROKE"   in vu: tag = "keystroke"
+                elif "APP_WARNING" in vu: tag = "appwarn"
+                elif "START"       in vu: tag = "ok"
+                else:                    tag = "info"
+                self.vlog.insert("end", f"[{ts}] {ev}: {det}\n", tag)
+                self._last_vio_db_id = row_id
+            self.vlog.configure(state="disabled")
+            self.vlog.see("end")
+        except Exception as e:
+            print(f"[Violations] {e}")
 
     def _show_all_violations(self, sid=None):
         conn = sqlite3.connect(DB)
         if sid:
             rows = conn.execute(
-                "SELECT timestamp,event,detail FROM violations WHERE student_id=? ORDER BY id DESC LIMIT 200",
+                "SELECT id,timestamp,event,detail FROM violations WHERE student_id=? ORDER BY id ASC LIMIT 200",
                 (sid,)).fetchall()
         else:
             rows = conn.execute(
-                "SELECT student_id||' | '||timestamp,event,detail FROM violations ORDER BY id DESC LIMIT 200"
+                "SELECT id,student_id||' | '||timestamp,event,detail FROM violations ORDER BY id ASC LIMIT 200"
             ).fetchall()
         conn.close()
 
+        # Full reload — clear existing log and reset the incremental tracker
+        self._last_vio_sid = sid
+        self._last_vio_db_id = rows[-1][0] if rows else 0
         try:
             self.vlog.configure(state="normal")
             self.vlog.delete("1.0","end")
-            for ts, ev, det in rows:
+            for row in rows:
+                row_id, ts, ev, det = row
                 vu = ev.upper()
                 if   "STRIKE"      in vu: tag = "strike"
                 elif "TERMINATED"  in vu: tag = "strike"
