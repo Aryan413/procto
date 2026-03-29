@@ -1,16 +1,16 @@
 Q#,Question,Your Answer,Correct,Result
-1,Which of the following is an operating system?,B,B,OK
-2,Which protocol is used to send emails?,A,C,X
-3,Which device is used to input data into a computer?,C,C,OK
-4,What does CPU stand for?,B,A,X
-5,Which of the following is a programming language?,A,A,OK
-6,What is the binary representation of decimal 5?,C,A,X
-7,Which technology is commonly used for real-time video communication?,A,C,X
-8,Which memory is temporary?,B,C,X
-9,What does RAM stand for?,A,A,OK
-10,Which sorting algorithm has the best average-case time complexity?,-,C,X
-11,Who invented the World Wide Web?,-,B,X
-12,What is 2^10 (2 to the power of 10)?,-,B,X
-13,What does SQL stand for?,-,A,X
-14,Which data structure uses LIFO (Last In First Out)?,-,B,X
-15,Which layer of the OSI model is responsible for routing packets?,-,C,X
+1,Which protocol is used to send emails?,-,C,X
+2,Which layer of the OSI model is responsible for routing packets?,A,C,X
+3,Which data structure uses LIFO (Last In First Out)?,B,B,OK
+4,Which memory is temporary?,B,C,X
+5,Which technology is commonly used for real-time video communication?,D,C,X
+6,Which of the following is a programming language?,-,A,X
+7,What is 2^10 (2 to the power of 10)?,-,B,X
+8,What does CPU stand for?,-,A,X
+9,Which sorting algorithm has the best average-case time complexity?,-,C,X
+10,Who invented the World Wide Web?,-,B,X
+11,What is the binary representation of decimal 5?,-,A,X
+12,What does SQL stand for?,-,A,X
+13,Which of the following is an operating system?,-,B,X
+14,What does RAM stand for?,-,A,X
+15,Which device is used to input data into a computer?,-,C,X

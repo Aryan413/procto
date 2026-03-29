@@ -625,6 +625,12 @@ class CameraHub:
         no_face_t=None   # tracks when face count first dropped to 0
         frame_n=0; last_boxes=[]
 
+        # Clear any violations left over from a previous session for this student
+        try:
+            _conn = sqlite3.connect(DB)
+            _conn.execute("DELETE FROM violations WHERE student_id=?", (self.student_id,))
+            _conn.commit(); _conn.close()
+        except Exception: pass
         self._log("EXAM_START", self.student_id)
         print(f"[✅ EXAM START] {self.student_id} | Camera hidden from student")
 
@@ -683,7 +689,9 @@ class CameraHub:
             else: multi_t=None
 
             # ── No face detected ──────────────────────────────────────────────
-            if fc == 0:
+            # Gaze tracking locates pupils → face is present even if mesh missed it.
+            # Only fire the no-face strike when BOTH face-mesh AND gaze report nothing.
+            if fc == 0 and not gaze.pupils_located:
                 cv2.putText(frame,"NO FACE DETECTED",(50,80),cv2.FONT_HERSHEY_SIMPLEX,0.8,(0,0,255),2)
                 if no_face_t is None:
                     no_face_t = time.time()
@@ -878,6 +886,8 @@ class InterviewHub:
         self.student_id      = student_id
         # Double-slot pattern for zero-lag reads
         self._sf_a = None; self._sf_b = None; self._sf_write_a = True
+        # Proctor-annotated frame slots (Gaze/Face/Strikes overlay — hidden from student)
+        self._sf_pro_a = None; self._sf_pro_b = None; self._sf_pro_write_a = True
         self._pf_a = None; self._pf_b = None; self._pf_write_a = True
         self.student_frame   = None   # backwards compat
         self.proctor_frame   = None
@@ -895,8 +905,18 @@ class InterviewHub:
     def stop(self):   self.running = False
 
     def get_student_frame(self):
+        """Clean frame — no gaze/face/strike overlay. Shown in student's own PiP."""
         with self._lock:
             f = self._sf_b if self._sf_write_a else self._sf_a
+            return f.copy() if f is not None else None
+
+    def get_student_frame_proctor(self):
+        """Annotated frame with gaze/face/strike overlay — shown only on proctor tile."""
+        with self._lock:
+            f = self._sf_pro_b if self._sf_pro_write_a else self._sf_pro_a
+            # Fall back to clean frame if annotated slot not yet populated
+            if f is None:
+                f = self._sf_b if self._sf_write_a else self._sf_a
             return f.copy() if f is not None else None
 
     def get_proctor_frame(self):
@@ -950,6 +970,12 @@ class InterviewHub:
         phone_t=None; no_face_t=None
         frame_n=0; last_boxes=[]
         YOLO_INTERVAL = 8
+        # Clear any violations left over from a previous session for this student
+        try:
+            _conn = sqlite3.connect(DB)
+            _conn.execute("DELETE FROM violations WHERE student_id=?", (self.student_id,))
+            _conn.commit(); _conn.close()
+        except Exception: pass
         self._log("INTERVIEW_START", self.student_id)
 
         while self.running:
@@ -1013,7 +1039,8 @@ class InterviewHub:
             else: multi_t=None
 
             # ── No face detected ──────────────────────────────────────────────
-            if fc == 0:
+            # Gaze tracking locates pupils → face is present even if mesh missed it.
+            if fc == 0 and not gaze.pupils_located:
                 cv2.putText(frame_s,"NO FACE DETECTED",(50,80),cv2.FONT_HERSHEY_SIMPLEX,0.8,(0,0,255),2)
                 if no_face_t is None:
                     no_face_t = time.time()
@@ -1033,6 +1060,10 @@ class InterviewHub:
             else:
                 phone_t = None
 
+            # Save a clean copy BEFORE drawing any overlays.
+            # The student must never see gaze/face/strike info in their PiP.
+            frame_s_clean = frame_s.copy()
+
             h,w=frame_s.shape[:2]
             ov=frame_s.copy(); cv2.rectangle(ov,(0,0),(w,60),(10,10,10),-1)
             cv2.addWeighted(ov,0.75,frame_s,0.25,0,frame_s)
@@ -1049,23 +1080,35 @@ class InterviewHub:
                             cv2.FONT_HERSHEY_DUPLEX,1.2,(255,255,255),3)
                 self._log("INTERVIEW_TERMINATED","Max strikes reached")
                 self.terminated=True
-                disp_s = cv2.resize(frame_s, (self.DISPLAY_W, self.DISPLAY_H),
-                                    interpolation=cv2.INTER_LINEAR)
+                disp_pro = cv2.resize(frame_s,       (self.DISPLAY_W, self.DISPLAY_H),
+                                      interpolation=cv2.INTER_LINEAR)
+                disp_stu = cv2.resize(frame_s_clean, (self.DISPLAY_W, self.DISPLAY_H),
+                                      interpolation=cv2.INTER_LINEAR)
                 with self._lock:
-                    self._sf_a = disp_s; self.student_frame = disp_s
+                    self._sf_a = disp_stu; self.student_frame = disp_stu
+                    self._sf_pro_a = disp_pro
                     self._pf_a = frame_p; self.proctor_frame = frame_p
                 break
 
-            # ── Double-slot store (downscaled) ───────────────────────
-            disp_s = cv2.resize(frame_s, (self.DISPLAY_W, self.DISPLAY_H),
-                                interpolation=cv2.INTER_LINEAR)
+            # ── Double-slot store: clean for student PiP, annotated for proctor ──
+            disp_pro = cv2.resize(frame_s,       (self.DISPLAY_W, self.DISPLAY_H),
+                                  interpolation=cv2.INTER_LINEAR)
+            disp_stu = cv2.resize(frame_s_clean, (self.DISPLAY_W, self.DISPLAY_H),
+                                  interpolation=cv2.INTER_LINEAR)
             with self._lock:
+                # Student-facing (clean)
                 if self._sf_write_a:
-                    self._sf_a = disp_s
+                    self._sf_a = disp_stu
                 else:
-                    self._sf_b = disp_s
+                    self._sf_b = disp_stu
                 self._sf_write_a = not self._sf_write_a
-                self.student_frame = disp_s   # backwards compat
+                self.student_frame = disp_stu   # backwards compat
+                # Proctor-facing (annotated)
+                if self._sf_pro_write_a:
+                    self._sf_pro_a = disp_pro
+                else:
+                    self._sf_pro_b = disp_pro
+                self._sf_pro_write_a = not self._sf_pro_write_a
                 self.face_count    = fc
                 self.gaze_dir      = gd
                 self.phone_detected = bool(last_boxes)
@@ -4271,6 +4314,23 @@ def start_network_server(port=6000):
             mode         = "interview" if _iv_hub else "exam",
         )
 
+    # ── /result_csv/<student_id> (GET) — proctor fetches student's result CSV ─
+    @app.route("/result_csv/<student_id>")
+    def result_csv(student_id):
+        """Serve the student's _result.csv so the remote proctor can read it."""
+        import re
+        if not re.match(r'^[\w\-\.@]+$', student_id):
+            return Response("bad id", status=400)
+        path = f"{student_id}_result.csv"
+        if not os.path.exists(path):
+            return Response("not found", status=404)
+        try:
+            with open(path, encoding='utf-8') as f:
+                content = f.read()
+            return Response(content, mimetype='text/csv')
+        except Exception as e:
+            return Response(str(e), status=500)
+
     # ── /ws/voice  — in-process voice relay (no separate port needed) ────────
     # VoiceClient (voice_bridge.py) connects as:
     #   ws://host:6000/ws/voice?role=student   (student machine)
@@ -5924,8 +5984,14 @@ class MultiStudentProctorWindow:
             hub = _hub or _iv_hub
             terminated = False
             if hub and getattr(hub, 'student_id', None) == sid:
-                frame = (hub.get_frame() if hasattr(hub,'get_frame')
-                         else hub.get_student_frame())
+                # For InterviewHub use the proctor-annotated frame (with gaze/face overlay).
+                # For CameraHub (exam) use get_frame() as before.
+                if hasattr(hub, 'get_student_frame_proctor'):
+                    frame = hub.get_student_frame_proctor()
+                elif hasattr(hub, 'get_frame'):
+                    frame = hub.get_frame()
+                else:
+                    frame = hub.get_student_frame()
                 fc = hub.face_count; gd = hub.gaze_dir; sc = hub.strike_count
                 terminated = hub.terminated
                 # Local hub — update last_seen on every frame
@@ -6017,21 +6083,44 @@ class MultiStudentProctorWindow:
                         lbl.configure(text="", fg="#3a3a5a")
             except Exception: pass
 
-            # ── Fix 2: Live result summary from _result.csv ──
+            # ── Live result summary from _result.csv (local or remote) ──
             try:
                 result_lbl = tile.get("result_lbl")
                 if result_lbl:
+                    csv_content = None
                     csv_path = f"{sid}_result.csv"
                     if os.path.exists(csv_path):
-                        score = 0; total = 0
                         with open(csv_path, encoding="utf-8", newline="") as f:
-                            reader = csv.reader(f)
-                            next(reader, None)   # skip header
-                            for row in reader:
-                                if len(row) >= 5:
-                                    total += 1
-                                    if row[4].strip().upper() == "OK":
-                                        score += 1
+                            csv_content = f.read()
+                    elif _REQUESTS_AVAILABLE:
+                        # Remote student — fetch from their Flask server
+                        with _student_data_lock:
+                            slot = _student_data.get(sid)
+                        if slot:
+                            with slot["lock"]:
+                                student_url = slot.get("url")
+                            if student_url and not tile.get("_result_fetched"):
+                                try:
+                                    r = _requests.get(
+                                        f"{student_url}/result_csv/{sid}",
+                                        timeout=1.5)
+                                    if r.status_code == 200:
+                                        csv_content = r.text
+                                        # Cache locally so we don't hammer the network
+                                        try:
+                                            with open(csv_path, "w", encoding="utf-8") as f:
+                                                f.write(csv_content)
+                                        except Exception: pass
+                                        tile["_result_fetched"] = True
+                                except Exception: pass
+                    if csv_content:
+                        import io as _io
+                        score = 0; total = 0
+                        for row in csv.reader(_io.StringIO(csv_content)):
+                            if row and row[0] != "Q#" and len(row) >= 5:
+                                total += 1
+                                if row[4].strip().upper() == "OK":
+                                    score += 1
                         if total > 0:
                             pct = int(score / total * 100)
                             color = "#0be881" if pct >= 75 else "#ffaa00" if pct >= 50 else "#ff4444"
