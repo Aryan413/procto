@@ -533,6 +533,9 @@ class CameraHub:
     GAZE_DIRS     = {"left","right","up","down"}
     MULTI_GRACE   = 1.5
     YOLO_INTERVAL = 8   # run YOLO less often → frees CPU
+    PHONE_COOLDOWN  = 10.0   # seconds before another phone strike can fire
+    NO_FACE_GRACE   = 3.0    # seconds with 0 faces before a strike
+    NO_FACE_COOLDOWN = 8.0   # seconds between repeated no-face strikes
 
     # Display resolution — smaller = faster rendering on proctor side
     DISPLAY_W = 480
@@ -595,6 +598,7 @@ class CameraHub:
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
         phone_t=None; multi_t=None; gaze_streak=0; gaze_timer=None
+        no_face_t=None   # tracks when face count first dropped to 0
         frame_n=0; last_boxes=[]
 
         self._log("EXAM_START", self.student_id)
@@ -654,11 +658,26 @@ class CameraHub:
                     multi_t=time.time()
             else: multi_t=None
 
+            # ── No face detected ──────────────────────────────────────────────
+            if fc == 0:
+                cv2.putText(frame,"NO FACE DETECTED",(50,80),cv2.FONT_HERSHEY_SIMPLEX,0.8,(0,0,255),2)
+                if no_face_t is None:
+                    no_face_t = time.time()
+                elif time.time()-no_face_t >= self.NO_FACE_GRACE:
+                    self.strike_count+=1
+                    self._log(f"STRIKE {self.strike_count}","No face in frame")
+                    no_face_t = time.time() + self.NO_FACE_COOLDOWN - self.NO_FACE_GRACE
+            else:
+                no_face_t = None
+
+            # ── Phone detected ────────────────────────────────────────────────
             if last_boxes:
-                if phone_t is None:
-                    phone_t=time.time(); self.strike_count+=1
+                if phone_t is None or time.time()-phone_t >= self.PHONE_COOLDOWN:
+                    phone_t = time.time()
+                    self.strike_count+=1
                     self._log(f"STRIKE {self.strike_count}","Phone detected")
-            else: phone_t=None
+            else:
+                phone_t = None
 
             h,w=frame.shape[:2]
             ov=frame.copy(); cv2.rectangle(ov,(0,0),(w,68),(15,15,15),-1)
@@ -824,6 +843,9 @@ class InterviewHub:
     WARNING_SECS  = 4.0
     GAZE_DIRS     = {"left","right","up","down"}
     MULTI_GRACE   = 2.0
+    PHONE_COOLDOWN   = 10.0
+    NO_FACE_GRACE    = 3.0
+    NO_FACE_COOLDOWN = 8.0
 
     DISPLAY_W = 480
     DISPLAY_H = 360
@@ -840,6 +862,7 @@ class InterviewHub:
         self.strike_count    = 0
         self.face_count      = 0
         self.gaze_dir        = "center"
+        self.phone_detected  = False
         self.terminated      = False
         self._lock           = threading.Lock()
         self._thread         = threading.Thread(target=self._run, daemon=True)
@@ -881,6 +904,7 @@ class InterviewHub:
 
     def _run(self):
         from gaze_tracking import GazeTracking
+        yolo      = YOLO("yolov8n.pt")
         face_mesh = mp.solutions.face_mesh.FaceMesh(
             max_num_faces=4, min_detection_confidence=0.9, min_tracking_confidence=0.9)
         gaze = GazeTracking()
@@ -899,11 +923,15 @@ class InterviewHub:
                     (30, h_ph//2 + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (60, 60, 140), 1)
 
         gaze_streak=0; gaze_timer=None; multi_t=None
+        phone_t=None; no_face_t=None
+        frame_n=0; last_boxes=[]
+        YOLO_INTERVAL = 8
         self._log("INTERVIEW_START", self.student_id)
 
         while self.running:
             ret_s, frame_s = cap_s.read()
             if not ret_s: break
+            frame_n += 1
 
             frame_p = self.get_proctor_frame()
             if frame_p is None:
@@ -927,6 +955,17 @@ class InterviewHub:
                 for coords in [gaze.pupil_left_coords(),gaze.pupil_right_coords()]:
                     if coords: cv2.circle(frame_s,coords,4,(0,255,120),-1)
 
+            # ── YOLO phone detection (every N frames) ─────────────────────────
+            if frame_n % YOLO_INTERVAL == 0:
+                det = yolo(frame_s, verbose=False)[0]; last_boxes=[]
+                for box in det.boxes:
+                    if yolo.names[int(box.cls[0])]=="cell phone" and float(box.conf[0])>0.45:
+                        x1,y1,x2,y2=map(int,box.xyxy[0])
+                        last_boxes.append((x1,y1,x2,y2,float(box.conf[0])))
+            for x1,y1,x2,y2,cf in last_boxes:
+                cv2.rectangle(frame_s,(x1,y1),(x2,y2),(0,60,255),2)
+                cv2.putText(frame_s,f"PHONE {cf:.0%}",(x1,y1-8),cv2.FONT_HERSHEY_SIMPLEX,0.6,(0,60,255),2)
+
             if gaze.calibration.is_complete() and gd in self.GAZE_DIRS:
                 gaze_streak+=1
                 if gaze_streak>=self.GAZE_FRAMES:
@@ -939,13 +978,36 @@ class InterviewHub:
             else:
                 gaze_streak=0; gaze_timer=None
 
+            # ── Multiple faces ────────────────────────────────────────────────
             if fc>1:
+                cv2.putText(frame_s,"MULTIPLE FACES",(50,110),cv2.FONT_HERSHEY_SIMPLEX,0.8,(0,140,255),2)
                 if multi_t is None: multi_t=time.time()
                 elif time.time()-multi_t>=self.MULTI_GRACE:
                     self.strike_count+=1
                     self._log(f"STRIKE {self.strike_count}",f"Multiple faces ({fc})")
                     multi_t=time.time()
             else: multi_t=None
+
+            # ── No face detected ──────────────────────────────────────────────
+            if fc == 0:
+                cv2.putText(frame_s,"NO FACE DETECTED",(50,80),cv2.FONT_HERSHEY_SIMPLEX,0.8,(0,0,255),2)
+                if no_face_t is None:
+                    no_face_t = time.time()
+                elif time.time()-no_face_t >= self.NO_FACE_GRACE:
+                    self.strike_count+=1
+                    self._log(f"STRIKE {self.strike_count}","No face in frame")
+                    no_face_t = time.time() + self.NO_FACE_COOLDOWN - self.NO_FACE_GRACE
+            else:
+                no_face_t = None
+
+            # ── Phone strike (with cooldown so it can repeat) ─────────────────
+            if last_boxes:
+                if phone_t is None or time.time()-phone_t >= self.PHONE_COOLDOWN:
+                    phone_t = time.time()
+                    self.strike_count+=1
+                    self._log(f"STRIKE {self.strike_count}","Phone detected")
+            else:
+                phone_t = None
 
             h,w=frame_s.shape[:2]
             ov=frame_s.copy(); cv2.rectangle(ov,(0,0),(w,60),(10,10,10),-1)
@@ -980,8 +1042,9 @@ class InterviewHub:
                     self._sf_b = disp_s
                 self._sf_write_a = not self._sf_write_a
                 self.student_frame = disp_s   # backwards compat
-                self.face_count = fc
-                self.gaze_dir   = gd
+                self.face_count    = fc
+                self.gaze_dir      = gd
+                self.phone_detected = bool(last_boxes)
 
         cap_s.release()
         face_mesh.close()
@@ -2257,7 +2320,7 @@ class InterviewStudentWindow:
                             "face_count":   _iv_hub.face_count,
                             "gaze_dir":     _iv_hub.gaze_dir,
                             "strike_count": _iv_hub.strike_count,
-                            "phone":        False,
+                            "phone":        _iv_hub.phone_detected,
                             "terminated":   _iv_hub.terminated,
                             "max_strikes":  InterviewHub.MAX_STRIKES,
                             "mode":         "interview",
@@ -4127,66 +4190,54 @@ def start_network_server(port=6000):
             pass  # older flask-sock versions may not support this attribute
 
         def _voice_relay_handler(ws, role):
-            """Relay raw PCM audio bytes between student and proctor.
+            """Relay raw audio bytes between student and proctor.
 
-            Design decisions:
-              • receive(timeout=5) loops quickly, prevents Cloudflare 100s WS timeout.
-              • None / timeout → keepalive tick, not a disconnect signal.
-              • Only bytes frames are forwarded; text/ping frames are ignored.
-              • Bytes are forwarded with ws.send(data) — flask-sock automatically
-                sends bytes as a binary frame, no extra opcode needed.
+            Key design decisions:
+              • receive(timeout=5) with a short timeout so we loop frequently
+                and never block indefinitely — prevents the 30s idle disconnect.
+              • None / timeout returns are treated as keepalive ticks, not errors.
+              • Only a genuine exception (socket closed) breaks the loop.
             """
             if role not in ("student", "proctor"):
                 print(f"[VoiceRelay] Unknown role '{role}' — rejected")
                 return
-
             with _voice_peers_lock:
-                # Clean up any stale connection occupying this role slot
-                old = _voice_peers.get(role)
-                if old is not None and old is not ws:
-                    try:
-                        old.close()
-                    except Exception:
-                        pass
                 _voice_peers[role] = ws
-
             peer_role = "proctor" if role == "student" else "student"
-            print(f"[VoiceRelay] {role} connected  peers={list(_voice_peers.keys())}")
+            print(f"[VoiceRelay] {role} connected  (peers: {list(_voice_peers.keys())})")
             try:
                 while True:
                     try:
+                        # Short timeout: loops back quickly, keeps connection alive,
+                        # and doesn't block forwarding in the other direction.
                         data = ws.receive(timeout=5)
                     except ConnectionError:
-                        break        # client closed the connection
+                        break          # client actually disconnected
                     except Exception:
-                        continue     # timeout or transient error — keep looping
-                    if data is None:
-                        continue     # ping / timeout tick — not a disconnect
-
-                    # Only forward raw PCM binary frames; skip any stray text frames
-                    if not isinstance(data, (bytes, bytearray)):
+                        # TimeoutError / other transient errors — keep looping
                         continue
-
+                    if data is None:
+                        # None = timeout tick or ping frame — NOT a close signal.
+                        # Just loop back; the VoiceClient ping_interval handles keepalive.
+                        continue
+                    # Forward audio bytes to the other peer
                     with _voice_peers_lock:
                         peer = _voice_peers.get(peer_role)
-                    if peer is not None:
+                    if peer:
                         try:
-                            peer.send(data)   # flask-sock sends bytes as binary frame
+                            peer.send(data)
                         except Exception:
                             with _voice_peers_lock:
-                                if _voice_peers.get(peer_role) is peer:
-                                    _voice_peers.pop(peer_role, None)
-                            print(f"[VoiceRelay] {peer_role} send failed — evicted")
+                                _voice_peers.pop(peer_role, None)
             finally:
                 with _voice_peers_lock:
                     if _voice_peers.get(role) is ws:
                         _voice_peers.pop(role, None)
-                print(f"[VoiceRelay] {role} disconnected  peers={list(_voice_peers.keys())}")
+                print(f"[VoiceRelay] {role} disconnected")
 
         @_sock_ext.route("/ws/voice")
         def ws_voice(ws):
-            # Read ?role= from the URL query string BEFORE entering the handler.
-            # flask-sock preserves Flask request context inside the route function.
+            # VoiceClient (voice_bridge.py) connects with ?role=student or ?role=proctor
             role = request.args.get("role", "").strip().lower()
             _voice_relay_handler(ws, role)
 

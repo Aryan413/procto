@@ -132,18 +132,28 @@ class VoiceClient:
         vc.stop()
     """
 
-    RECONNECT_DELAY = 3.0   # seconds between reconnect attempts
+    RECONNECT_DELAY = 3.0
+
+    # ── Audio tuning constants ─────────────────────────────────────────────────
+    # Boost mic volume sent to the remote side (2.5x = ~8dB louder)
+    MIC_GAIN = 2.5
+    # Software AEC: subtract this fraction of last-played chunk from mic input
+    # to reduce speaker bleed back into the mic (echo).  0=off, 1=full cancel.
+    AEC_ATTENUATION = 0.75
 
     def __init__(self, role: str, bridge_url: str):
         self.role        = role
         self.bridge_url  = bridge_url
         self._running    = False
+        self._connected  = False
         self._muted      = False
         self._volume     = 1.0
-        self._ws         = None          # current WebSocketApp instance
-        self._connected  = False         # True while WebSocket handshake is live
+        self._ws         = None
         self._play_q: queue.Queue = queue.Queue(maxsize=30)
-        self.on_status_change = None     # optional callback(connected: bool, info: str)
+        # Last-played samples for software AEC
+        self._last_played     = None   # numpy array or None
+        self._last_played_lock = threading.Lock()
+        self.on_status_change = None   # optional callback(connected: bool, info: str)
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
@@ -159,13 +169,12 @@ class VoiceClient:
     def stop(self):
         self._running   = False
         self._connected = False
-        ws = self._ws
-        if ws:
+        if self._ws:
             try:
-                ws.close()
+                self._ws.close()
             except Exception:
                 pass
-        self._ws = None
+            self._ws = None
 
     def toggle_mute(self) -> bool:
         """Toggle mic mute. Returns True if now muted."""
@@ -193,7 +202,6 @@ class VoiceClient:
                     on_close   = self._on_close,
                 )
                 self._ws = ws
-                # ping_interval keeps Cloudflare tunnel alive (times out at ~100s idle)
                 ws.run_forever(ping_interval=20, ping_timeout=10)
             except Exception as e:
                 self._notify_status(False, str(e))
@@ -206,19 +214,17 @@ class VoiceClient:
     def _on_open(self, ws):
         self._connected = True
         self._notify_status(True, "Connected")
-        # Start a dedicated capture thread tied to this WebSocket session
         threading.Thread(target=self._capture_loop, args=(ws,),
                          daemon=True, name=f"VoiceCap-{self.role}").start()
 
     def _on_message(self, ws, data):
         """Received audio chunk from the relay — enqueue for playback."""
-        # Only accept binary frames (raw PCM bytes); ignore text/ping frames
         if not isinstance(data, (bytes, bytearray)):
             return
         chunk = bytes(data)
-        if len(chunk) == 0:
+        if not chunk:
             return
-        # Drop oldest chunk if queue is full to keep latency low
+        # Drop oldest if full to keep latency low
         if self._play_q.full():
             try:
                 self._play_q.get_nowait()
@@ -241,31 +247,32 @@ class VoiceClient:
 
     def _capture_loop(self, ws):
         """
-        Capture mic audio and send to relay while connected.
+        Capture mic audio, apply gain + software AEC, send as binary WS frame.
 
-        CRITICAL: WebSocketApp.send() sends as TEXT frame by default.
-        For binary audio data we MUST pass opcode=websocket.ABNF.OPCODE_BINARY.
-        Using send_binary() is wrong — it doesn't exist on WebSocketApp.
-        The correct call is ws.send(data, opcode=_ws_lib.ABNF.OPCODE_BINARY).
+        Software AEC: subtract a scaled copy of the last-played chunk from the
+        mic input before sending.  This removes most speaker→mic bleed (echo).
+
+        CRITICAL: WebSocketApp.send() sends TEXT by default.
+        Binary audio MUST use opcode=_ws_lib.ABNF.OPCODE_BINARY.
         """
         if not _SD_OK:
-            print(f"[VoiceClient/{self.role}] sounddevice not available — capture disabled")
+            print(f"[VoiceClient/{self.role}] sounddevice missing — capture disabled")
             return
 
+        import numpy as np
         try:
             OPCODE_BINARY = _ws_lib.ABNF.OPCODE_BINARY
         except AttributeError:
-            # Fallback for older websocket-client versions
-            OPCODE_BINARY = 0x2
+            OPCODE_BINARY = 0x2   # fallback for old websocket-client
 
-        print(f"[VoiceClient/{self.role}] Capture thread started")
+        print(f"[VoiceClient/{self.role}] Capture started")
         try:
             with _sd.InputStream(
-                samplerate  = SAMPLE_RATE,
-                channels    = CHANNELS,
-                dtype       = DTYPE,
-                blocksize   = CHUNK_FRAMES,
-                latency     = "low",
+                samplerate = SAMPLE_RATE,
+                channels   = CHANNELS,
+                dtype      = DTYPE,
+                blocksize  = CHUNK_FRAMES,
+                latency    = "low",
             ) as stream:
                 while self._running and self._connected:
                     try:
@@ -274,69 +281,85 @@ class VoiceClient:
                         print(f"[VoiceClient/{self.role}] stream.read error: {e}")
                         break
                     if overflowed:
-                        # Input overflow — mic buffer fell behind; discard stale data
-                        continue
+                        continue   # stale buffer — discard
                     if self._muted:
                         continue
-                    raw = chunk.tobytes()
+
+                    samples = chunk[:, 0].astype("float32") if chunk.ndim > 1 else chunk.astype("float32")
+
+                    # ── Software AEC ───────────────────────────────────────────
+                    # Subtract attenuated last-played chunk to cancel speaker echo
+                    with self._last_played_lock:
+                        ref = self._last_played
+                    if ref is not None and len(ref) == len(samples):
+                        samples -= ref.astype("float32") * self.AEC_ATTENUATION
+
+                    # ── Mic gain boost ─────────────────────────────────────────
+                    samples *= self.MIC_GAIN
+
+                    # Clip to int16 range and pack
+                    raw = np.clip(samples, -32768, 32767).astype(DTYPE).tobytes()
+
                     try:
-                        # Send as a proper BINARY WebSocket frame so the relay and
-                        # receiver can distinguish audio from text/control frames.
                         ws.send(raw, opcode=OPCODE_BINARY)
                     except Exception as e:
-                        print(f"[VoiceClient/{self.role}] send error: {e} — stopping capture")
+                        print(f"[VoiceClient/{self.role}] send error: {e}")
                         break
         except Exception as e:
             print(f"[VoiceClient/{self.role}] Capture error: {e}")
-        finally:
-            print(f"[VoiceClient/{self.role}] Capture thread exited")
+        print(f"[VoiceClient/{self.role}] Capture stopped")
 
     # ── Internal — speaker playback ────────────────────────────────────────────
 
     def _playback_loop(self):
-        """Drain the play queue and write PCM chunks to the speaker."""
+        """Drain the play queue and write PCM chunks to the speaker.
+        Stores each played chunk so _capture_loop can subtract it (AEC)."""
         if not _SD_OK:
-            print(f"[VoiceClient/{self.role}] sounddevice not available — playback disabled")
             return
 
-        import numpy as np   # import once outside the hot loop
+        import numpy as np
 
-        print(f"[VoiceClient/{self.role}] Playback thread started")
+        silence = np.zeros(CHUNK_FRAMES, dtype=DTYPE)
+        print(f"[VoiceClient/{self.role}] Playback started")
         try:
             with _sd.OutputStream(
-                samplerate  = SAMPLE_RATE,
-                channels    = CHANNELS,
-                dtype       = DTYPE,
-                blocksize   = CHUNK_FRAMES,
-                latency     = "low",
+                samplerate = SAMPLE_RATE,
+                channels   = CHANNELS,
+                dtype      = DTYPE,
+                blocksize  = CHUNK_FRAMES,
+                latency    = "low",
             ) as stream:
-                silence = np.zeros(CHUNK_FRAMES, dtype=DTYPE)
                 while self._running:
                     try:
                         data = self._play_q.get(timeout=0.15)
                     except queue.Empty:
-                        # Write silence to prevent output buffer underrun / glitches
+                        # Write silence to keep output stream alive
+                        with self._last_played_lock:
+                            self._last_played = silence
                         stream.write(silence)
                         continue
-                    try:
-                        samples = np.frombuffer(data, dtype=DTYPE).copy()
-                        # Pad or trim to exactly CHUNK_FRAMES samples
-                        if len(samples) < CHUNK_FRAMES:
-                            samples = np.pad(samples, (0, CHUNK_FRAMES - len(samples)))
-                        elif len(samples) > CHUNK_FRAMES:
-                            samples = samples[:CHUNK_FRAMES]
-                        if self._volume != 1.0:
-                            samples = np.clip(
-                                samples.astype("float32") * self._volume,
-                                -32768, 32767
-                            ).astype(DTYPE)
-                        stream.write(samples)
-                    except Exception as e:
-                        print(f"[VoiceClient/{self.role}] Playback chunk error: {e}")
+
+                    samples = np.frombuffer(data, dtype=DTYPE).copy()
+                    # Pad / trim to exact block size
+                    if len(samples) < CHUNK_FRAMES:
+                        samples = np.pad(samples, (0, CHUNK_FRAMES - len(samples)))
+                    elif len(samples) > CHUNK_FRAMES:
+                        samples = samples[:CHUNK_FRAMES]
+
+                    if self._volume != 1.0:
+                        samples = np.clip(
+                            samples.astype("float32") * self._volume,
+                            -32768, 32767
+                        ).astype(DTYPE)
+
+                    # Record what we played so capture thread can cancel echo
+                    with self._last_played_lock:
+                        self._last_played = samples.copy()
+
+                    stream.write(samples)
         except Exception as e:
             print(f"[VoiceClient/{self.role}] Playback error: {e}")
-        finally:
-            print(f"[VoiceClient/{self.role}] Playback thread exited")
+        print(f"[VoiceClient/{self.role}] Playback stopped")
 
     # ── Status helper ──────────────────────────────────────────────────────────
 
