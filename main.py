@@ -3843,6 +3843,7 @@ def _get_or_create_student_slot(student_id):
                 "stats": {},
                 "violations": [],
                 "url": None,       # set to "http://<student_ip>:6000" on first frame push
+                "last_seen": time.time(),
                 "lock": threading.Lock()
             }
         return _student_data[student_id]
@@ -3968,6 +3969,7 @@ def start_network_server(port=6000):
         slot = _get_or_create_student_slot(student_id)
         with slot["lock"]:
             slot["frame"] = frame
+            slot["last_seen"] = time.time()
             # Remember the student's server URL the first time we see a frame,
             # so the proctor can push camera frames back in interview mode.
             #
@@ -3999,6 +4001,7 @@ def start_network_server(port=6000):
         slot = _get_or_create_student_slot(sid)
         with slot["lock"]:
             slot["stats"] = data
+            slot["last_seen"] = time.time()
         return jsonify(ok=True)
 
     # ── /push_violation (POST) — student pushes violation string ─────────────
@@ -5410,10 +5413,27 @@ class MultiStudentProctorWindow:
                                bg=_stats_bg, fg="#0be881")
         strikes_lbl.pack(side="left", padx=4)
 
+        # ── Live result summary (appears as soon as _result.csv is written) ──
+        result_lbl = tk.Label(card, text="", font=("Helvetica",7,"bold"),
+                              bg=_stats_bg, fg="#8b949e", anchor="w")
+        result_lbl.pack(fill="x", padx=4)
+
+        # ── Mini violations log (last 4 events, colour-coded) ──
+        viol_frame = tk.Frame(card, bg="#0b0b13"); viol_frame.pack(fill="x", padx=2, pady=(1,3))
+        viol_labels = []
+        for _ in range(4):
+            lbl = tk.Label(viol_frame, text="", font=("Courier",6),
+                           bg="#0b0b13", fg="#3a3a5a", anchor="w", justify="left")
+            lbl.pack(fill="x", padx=3)
+            viol_labels.append(lbl)
+
         self._student_tiles[sid] = {
             "card": card, "cam_lbl": cam_lbl,
             "faces_lbl": faces_lbl, "gaze_lbl": gaze_lbl, "strikes_lbl": strikes_lbl,
-            "name_lbl": name_lbl
+            "name_lbl": name_lbl,
+            "result_lbl": result_lbl,
+            "viol_labels": viol_labels,
+            "last_seen": time.time(),
         }
         try:
             n = len(self._student_tiles)
@@ -5897,13 +5917,20 @@ class MultiStudentProctorWindow:
             self._refresh_violations()
 
         # 2. Update each student tile
+        _STALE_TIMEOUT = 12   # seconds without a heartbeat → student has closed the app
+        to_remove = []
         for sid, tile in list(self._student_tiles.items()):
             # Get frame from in-process hub (local) or _student_data (remote push)
             hub = _hub or _iv_hub
+            terminated = False
             if hub and getattr(hub, 'student_id', None) == sid:
                 frame = (hub.get_frame() if hasattr(hub,'get_frame')
                          else hub.get_student_frame())
                 fc = hub.face_count; gd = hub.gaze_dir; sc = hub.strike_count
+                terminated = hub.terminated
+                # Local hub — update last_seen on every frame
+                if frame is not None:
+                    tile["last_seen"] = time.time()
             else:
                 with _student_data_lock:
                     slot = _student_data.get(sid)
@@ -5911,11 +5938,21 @@ class MultiStudentProctorWindow:
                     with slot["lock"]:
                         frame = slot["frame"].copy() if slot["frame"] is not None else None
                         s = dict(slot["stats"])
+                        ls = slot.get("last_seen", tile["last_seen"])
                     fc = s.get("face_count", 0)
                     gd = s.get("gaze_dir", "—")
                     sc = s.get("strike_count", 0)
+                    terminated = s.get("terminated", False)
+                    if frame is not None:
+                        tile["last_seen"] = ls
                 else:
                     frame = None; fc = 0; gd = "—"; sc = 0
+
+            # ── Auto-remove: terminated flag or heartbeat timeout ──
+            stale = (time.time() - tile["last_seen"]) > _STALE_TIMEOUT
+            if terminated or stale:
+                to_remove.append(sid)
+                continue
 
             # Update camera thumbnail — letterbox-fit to exact tile dimensions
             if frame is not None:
@@ -5949,10 +5986,80 @@ class MultiStudentProctorWindow:
                 tile["faces_lbl"].configure(text=f"Faces:{fc}", fg=fc_col)
                 tile["gaze_lbl"].configure(text=f"Gaze:{gd}")
                 tile["strikes_lbl"].configure(text=f"Strikes:{sc}", fg=sc_col)
-                # Highlight card red if terminated
+                # Highlight card red if max strikes reached
                 if sc >= CameraHub.MAX_STRIKES:
                     tile["card"].configure(highlightbackground="#ff4444")
                     tile["name_lbl"].configure(fg="#ff4444", text=f"🚫 {sid} TERMINATED")
+            except Exception: pass
+
+            # ── Fix 1: Refresh mini violations log on each tile ──
+            try:
+                # Pull from DB (works for both local & remote; DB is always on this machine)
+                conn = sqlite3.connect(DB)
+                rows = conn.execute(
+                    "SELECT timestamp,event,detail FROM violations "
+                    "WHERE student_id=? ORDER BY id DESC LIMIT 8",
+                    (sid,)).fetchall()
+                conn.close()
+                rows = list(reversed(rows))   # chronological order
+                _VIOL_COLORS = {
+                    "STRIKE": "#ff4444", "WARNING": "#ffaa00",
+                    "TAB_SWITCH": "#ff8800", "SESSION_START": "#0be881",
+                }
+                viol_labels = tile.get("viol_labels", [])
+                for i, lbl in enumerate(viol_labels):
+                    if i < len(rows):
+                        ts, ev, det = rows[i]
+                        color = _VIOL_COLORS.get(ev, "#8b949e")
+                        text = f"[{ts}] {ev}: {det}"[:52]
+                        lbl.configure(text=text, fg=color)
+                    else:
+                        lbl.configure(text="", fg="#3a3a5a")
+            except Exception: pass
+
+            # ── Fix 2: Live result summary from _result.csv ──
+            try:
+                result_lbl = tile.get("result_lbl")
+                if result_lbl:
+                    csv_path = f"{sid}_result.csv"
+                    if os.path.exists(csv_path):
+                        score = 0; total = 0
+                        with open(csv_path, encoding="utf-8", newline="") as f:
+                            reader = csv.reader(f)
+                            next(reader, None)   # skip header
+                            for row in reader:
+                                if len(row) >= 5:
+                                    total += 1
+                                    if row[4].strip().upper() == "OK":
+                                        score += 1
+                        if total > 0:
+                            pct = int(score / total * 100)
+                            color = "#0be881" if pct >= 75 else "#ffaa00" if pct >= 50 else "#ff4444"
+                            icon  = "✅" if pct >= 75 else "⚠" if pct >= 50 else "❌"
+                            result_lbl.configure(
+                                text=f"📊 Result: {score}/{total} ({pct}%) {icon}",
+                                fg=color)
+            except Exception: pass
+
+        # ── Fix 3: Remove tiles for exited/terminated students ──
+        for sid in to_remove:
+            tile = self._student_tiles.pop(sid, None)
+            if tile:
+                try:
+                    tile["card"].grid_forget()
+                    tile["card"].destroy()
+                except Exception: pass
+        if to_remove:
+            self._reflow_tiles()
+            if not self._student_tiles:
+                try:
+                    self._no_students_lbl.pack(pady=40)
+                except Exception: pass
+            try: self._update_rq_student_menu()
+            except Exception: pass
+            try: self._update_chat_candidate_menu()
+            except Exception: pass
+            try: self._update_participants_panel()
             except Exception: pass
 
         self.root.after(self.POLL_MS, self._poll_cameras)
