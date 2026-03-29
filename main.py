@@ -630,12 +630,6 @@ class CameraHub:
         no_face_t=None   # tracks when face count first dropped to 0
         frame_n=0; last_boxes=[]
 
-        # Clear any violations left over from a previous session for this student
-        try:
-            _conn = sqlite3.connect(DB)
-            _conn.execute("DELETE FROM violations WHERE student_id=?", (self.student_id,))
-            _conn.commit(); _conn.close()
-        except Exception: pass
         self._log("EXAM_START", self.student_id)
         print(f"[✅ EXAM START] {self.student_id} | Camera hidden from student")
 
@@ -975,12 +969,6 @@ class InterviewHub:
         phone_t=None; no_face_t=None
         frame_n=0; last_boxes=[]
         YOLO_INTERVAL = 8
-        # Clear any violations left over from a previous session for this student
-        try:
-            _conn = sqlite3.connect(DB)
-            _conn.execute("DELETE FROM violations WHERE student_id=?", (self.student_id,))
-            _conn.commit(); _conn.close()
-        except Exception: pass
         self._log("INTERVIEW_START", self.student_id)
 
         while self.running:
@@ -1612,6 +1600,14 @@ class MainLogin(BaseWindow):
             global _STUDENT_SESSION_CODE
             _STUDENT_SESSION_CODE = session_code
 
+            # Clear ALL past violations for this student immediately at login —
+            # ensures proctor sees only the current session from the very first event.
+            try:
+                _c = sqlite3.connect(DB)
+                _c.execute("DELETE FROM violations WHERE student_id=?", (uid,))
+                _c.commit(); _c.close()
+            except Exception: pass
+
             if mode=="exam":
                 self.animating=False; self.root.destroy()
                 ExamWindow(uid, proctor_url=proctor_url, session_code=session_code).run()
@@ -1725,6 +1721,8 @@ class ExamWindow:
         self.root.bind("<FocusOut>", self._on_focus_out)
         self.root.bind("<FocusIn>",  self._on_focus_in)
         self._focus_lost_time=None
+        # Grace period: ignore focus events for first 5s (window init/zoom fires spurious events)
+        self._focus_grace_until = time.time() + 5.0
         self._tick()
         self._check_termination()
         if proctor_url:
@@ -1944,11 +1942,15 @@ class ExamWindow:
         except Exception: pass
 
     def _on_focus_out(self, event):
+        if time.time() < getattr(self, "_focus_grace_until", 0):
+            return   # startup grace — ignore spurious focus loss during window init
         if _question_popup_open > 0:
             return   # question popup took focus — not a tab switch
         self._focus_lost_time=time.time()
 
     def _on_focus_in(self, event):
+        if time.time() < getattr(self, "_focus_grace_until", 0):
+            self._focus_lost_time = None; return
         if _question_popup_open > 0:
             self._focus_lost_time = None   # clear timer — popup is closing
             return
@@ -2281,6 +2283,8 @@ class InterviewStudentWindow:
         self.root.bind("<FocusOut>",self._focus_out)
         self.root.bind("<FocusIn>", self._focus_in)
         self._focus_lost=None
+        # Grace period: ignore focus events for first 5s (window init/zoom fires spurious events)
+        self._focus_grace_until = time.time() + 5.0
         self._build()
         self._poll_cam()
         self._tick()
@@ -2536,15 +2540,15 @@ class InterviewStudentWindow:
     def _on_sec(self, event, detail):
         if event == "APP_WARNING":
             if _iv_hub: _iv_hub._log("APP_WARNING", detail)
-            self._flash(f"🔔 {detail}", color="#4a3800", duration=2000)
+            # Silent in interview mode — proctor sees it in violation log
             return
         if event == "KEYSTROKE":
             if _iv_hub: _iv_hub._log("KEYSTROKE_BLOCKED", detail)
-            self._flash(f"🚫 {detail}", color="#1a1a4a", duration=1500)
+            # Silent in interview mode — don't interrupt the live interview
             return
+        # Strike — log and push to proctor silently (no popup during interview)
         if _iv_hub: _iv_hub.add_strike(event, detail)
         self._push_violation_remote(event, detail)
-        self._flash(f"⚠ STRIKE: {detail}")
 
     def _flash(self, msg, color="#6a0000", duration=2500):
         try:
@@ -2557,11 +2561,15 @@ class InterviewStudentWindow:
         except Exception: pass
 
     def _focus_out(self,e):
+        if time.time() < getattr(self, "_focus_grace_until", 0):
+            return   # startup grace
         if _question_popup_open > 0:
             return   # question popup took focus — not a tab switch
         self._focus_lost=time.time()
 
     def _focus_in(self,e):
+        if time.time() < getattr(self, "_focus_grace_until", 0):
+            self._focus_lost = None; return
         if _question_popup_open > 0:
             self._focus_lost = None   # clear timer — popup is closing
             return
