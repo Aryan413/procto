@@ -3455,7 +3455,10 @@ class ProctorWindow:
                             self.cam_main.configure(
                                 text="Camera starting…", fg="#575fcf", image="")
                     else:
-                        sf = hub.get_student_frame()
+                        # Use annotated frame (gaze/face/strikes overlay) for proctor view
+                        sf = (hub.get_student_frame_proctor()
+                              if hasattr(hub, 'get_student_frame_proctor')
+                              else hub.get_student_frame())
                         if sf is not None:
                             self._show_frame(self.cam_main, sf)
                         pf = hub.get_proctor_frame()
@@ -4068,11 +4071,15 @@ def start_network_server(port=6000):
     # ── /frame/<student_id> (GET) ─────────────────────────────────────────────
     @app.route("/frame/<student_id>")
     def frame(student_id):
-        # Local same-machine mode
+        # Local same-machine mode — serve annotated (proctor-facing) frame
         hub = _hub or _iv_hub
         if hub and getattr(hub, 'student_id', None) == student_id:
-            f = (hub.get_frame() if hasattr(hub,'get_frame')
-                 else hub.get_student_frame())
+            if hasattr(hub, 'get_frame'):
+                f = hub.get_frame()
+            elif hasattr(hub, 'get_student_frame_proctor'):
+                f = hub.get_student_frame_proctor()
+            else:
+                f = hub.get_student_frame()
         else:
             with _student_data_lock:
                 slot = _student_data.get(student_id)
@@ -4279,8 +4286,12 @@ def start_network_server(port=6000):
         hub = _hub or _iv_hub
         if hub is None:
             return Response("no session", status=204)
-        f = (hub.get_frame() if hasattr(hub, 'get_frame')
-             else hub.get_student_frame())
+        if hasattr(hub, 'get_frame'):
+            f = hub.get_frame()
+        elif hasattr(hub, 'get_student_frame_proctor'):
+            f = hub.get_student_frame_proctor()
+        else:
+            f = hub.get_student_frame()
         if f is None:
             return Response("no frame", status=204)
         ok, buf = cv2.imencode(".jpg", f, [cv2.IMWRITE_JPEG_QUALITY, 62])
