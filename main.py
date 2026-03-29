@@ -2274,35 +2274,45 @@ class InterviewStudentWindow:
             if not self.root.winfo_exists(): return
         except Exception: return
         if not self.proctor_url or not _REQUESTS_AVAILABLE: return
-        # In-flight guard: don't start a new push if previous is still running
         if getattr(self, "_push_in_flight", False):
             self.root.after(50, self._push_frame_loop)
             return
+        cam_off = getattr(self, "_cam_off", False)
         def _push():
             try:
                 if _iv_hub:
-                    frame = _iv_hub.get_student_frame()
-                    if frame is not None:
-                        try:
-                            # Downscale to 480x360 before encoding — halves bytes on the wire
-                            small = cv2.resize(frame, (480, 360), interpolation=cv2.INTER_LINEAR)
-                            ok, buf = cv2.imencode(".jpg", small,
-                                                   [cv2.IMWRITE_JPEG_QUALITY, 45])
-                            if ok:
-                                # Pass client_url so the proctor server knows our local Flask address.
-                                _requests.post(
-                                    f"{self.proctor_url}/push_student_frame",
-                                    params={
-                                        "student_id": self.sid,
-                                        "client_url": _get_my_client_url(),
-                                    },
-                                    data=buf.tobytes(), timeout=0.8)
-                        except Exception: pass
+                    if cam_off:
+                        # Camera off — send a black 480×360 JPEG so proctor sees
+                        # a black tile with "Camera off" text, not a frozen frame
+                        black = np.zeros((360, 480, 3), dtype=np.uint8)
+                        cv2.putText(black, "Camera off",
+                                    (480//2 - 65, 360//2 + 8),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, (80, 80, 80), 2)
+                        ok, buf = cv2.imencode(".jpg", black,
+                                              [cv2.IMWRITE_JPEG_QUALITY, 30])
+                    else:
+                        frame = _iv_hub.get_student_frame()
+                        if frame is None:
+                            return
+                        small = cv2.resize(frame, (480, 360),
+                                           interpolation=cv2.INTER_LINEAR)
+                        ok, buf = cv2.imencode(".jpg", small,
+                                              [cv2.IMWRITE_JPEG_QUALITY, 45])
+                    if ok:
+                        _requests.post(
+                            f"{self.proctor_url}/push_student_frame",
+                            params={
+                                "student_id": self.sid,
+                                "client_url": _get_my_client_url(),
+                            },
+                            data=buf.tobytes(), timeout=0.8)
+            except Exception:
+                pass
             finally:
                 self._push_in_flight = False
         self._push_in_flight = True
         threading.Thread(target=_push, daemon=True).start()
-        self.root.after(50, self._push_frame_loop)   # ~20 fps push — avoids queuing
+        self.root.after(50, self._push_frame_loop)
 
     def _push_stats_loop(self):
         """Push stats at lower frequency (every 1 s) so it never blocks cam push."""
@@ -2861,11 +2871,29 @@ class InterviewStudentWindow:
             if not self.root.winfo_exists(): return
         except Exception: return
 
+        cam_off = getattr(self, "_cam_off", False)
+
         if _iv_hub:
             sf = _iv_hub.get_student_frame()
-            if sf is not None:
+
+            # ── Self-view (PiP) ───────────────────────────────────────────────
+            if cam_off:
+                # Camera off → show solid black frame in PiP, like Google Meet
                 try:
-                    # PiP self-view: use stored pip dimensions for crop-to-fill
+                    pw = getattr(self, "_pip_w", 200)
+                    ph = getattr(self, "_pip_h", 150)
+                    black = np.zeros((ph, pw, 3), dtype=np.uint8)
+                    # "Camera off" label centred on the black frame
+                    cv2.putText(black, "Camera off",
+                                (max(0, pw//2 - 45), ph//2 + 5),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.45, (90, 90, 90), 1)
+                    img = ImageTk.PhotoImage(Image.fromarray(black))
+                    self.cam_self.configure(image=img, text="")
+                    self.cam_self.image = img
+                except Exception as e:
+                    print(f"[student cam off] {e}")
+            elif sf is not None:
+                try:
                     pw = getattr(self, "_pip_w", 200)
                     ph = getattr(self, "_pip_h", 150)
                     img = self._fast_frame_to_photo_sized(sf, pw, ph)
@@ -2874,7 +2902,7 @@ class InterviewStudentWindow:
                 except Exception as e:
                     print(f"[student cam] {e}")
 
-            # Render interviewer camera in the main (large) tile
+            # ── Interviewer camera (main tile) ────────────────────────────────
             if self.proctor_url:
                 pf = _iv_hub.get_proctor_frame()
                 if pf is not None:

@@ -31,10 +31,10 @@ except ImportError:
     _NP_OK = False
 
 # ── Audio constants ────────────────────────────────────────────────────────────
-SAMPLE_RATE  = 16000   # Hz  (16 kHz — good quality, low bandwidth)
+SAMPLE_RATE  = 16000   # Hz
 CHANNELS     = 1       # mono
-CHUNK_FRAMES = 1600    # 100 ms per chunk  (SAMPLE_RATE / 10)
-DTYPE        = "int16" # 16-bit PCM
+CHUNK_FRAMES = 320     # 20 ms per chunk — low latency (was 100ms = 1600 frames)
+DTYPE        = "int16"
 
 # ── Optional imports ───────────────────────────────────────────────────────────
 try:
@@ -147,28 +147,21 @@ class VoiceClient:
     RECONNECT_DELAY = 3.0
 
     # ── Mic gain ───────────────────────────────────────────────────────────────
-    # Applied AFTER echo cancellation so we boost voice, not echo residual.
-    MIC_GAIN = 2.0          # 2x = +6 dB.  Lower if distortion, raise if too quiet.
+    MIC_GAIN = 2.0
 
     # ── AEC — adaptive delay-matched echo cancellation ────────────────────────
-    # How many chunks of speaker history to keep for delay search.
-    # At 100ms/chunk: 8 chunks = 800ms search window (covers most speaker→mic delay).
-    AEC_HISTORY   = 8
-    # Suppression factor once we find the best-matching delay slot (0=off, 1=full).
-    AEC_STRENGTH  = 0.92
+    # At 20ms/chunk: 25 chunks = 500ms search window
+    AEC_HISTORY  = 25
+    AEC_STRENGTH = 0.90
 
     # ── Noise gate ─────────────────────────────────────────────────────────────
-    # RMS below this threshold → frame is treated as silence and zeroed out.
-    # Stops background hiss / fan noise from being transmitted.
-    # Units: int16 amplitude (0–32767).  Typical room noise ≈ 200–600.
-    NOISE_GATE_RMS = 400
+    # Lower threshold — 20ms chunks have naturally lower RMS than 100ms chunks.
+    # Typical quiet room RMS at 20ms ≈ 50–150.  Voice ≈ 300+.
+    NOISE_GATE_RMS = 120
 
-    # ── Voice Activity Detection (VAD) ─────────────────────────────────────────
-    # Frames must stay above this energy to count as "voice".
-    # Prevents near-silent echo residual from being sent after AEC.
-    VAD_RMS_MIN  = 300      # below this = no voice detected
-    VAD_HOLD_MS  = 250      # keep sending for this long after voice goes silent
-                            # (prevents clipping the end of words)
+    # ── Voice Activity Detection ───────────────────────────────────────────────
+    VAD_RMS_MIN  = 150      # below this post-AEC = no voice
+    VAD_HOLD_MS  = 300      # hold window after voice stops (ms)
 
     def __init__(self, role: str, bridge_url: str):
         self.role        = role
@@ -178,7 +171,7 @@ class VoiceClient:
         self._muted      = False
         self._volume     = 1.0
         self._ws         = None
-        self._play_q: queue.Queue = queue.Queue(maxsize=30)
+        self._play_q: queue.Queue = queue.Queue(maxsize=3)  # 3×20ms = 60ms max buffer
 
         # AEC ring buffer: stores last AEC_HISTORY played chunks as float32 arrays
         self._aec_buf   = []          # list of np.ndarray, newest last
