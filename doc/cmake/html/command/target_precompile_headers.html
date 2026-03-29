@@ -5,13 +5,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <title>target_precompile_headers &mdash; CMake 3.31.11 Documentation</title>
+  <title>target_precompile_headers &mdash; CMake 4.3.0 Documentation</title>
 
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a2c47e09" />
-    <link rel="stylesheet" type="text/css" href="../_static/cmake.css?v=3e562cf9" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a3862c66" />
+    <link rel="stylesheet" type="text/css" href="../_static/cmake.css?v=d27bb136" />
     
-    <script src="../_static/documentation_options.js?v=5746678a"></script>
-    <script src="../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../_static/documentation_options.js?v=a17b270f"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     
     <link rel="icon" href="../_static/cmake-favicon.ico"/>
@@ -22,8 +22,12 @@
  
 
   </head><body>
+    <input id="sidebar-check" type="checkbox" />
+    <label id="sidebar-overlay" for="sidebar-check"></label>
 
-    <div class="related" role="navigation" aria-label="related navigation">
+
+
+    <div class="related relbar1" role="navigation" aria-label="Related">
       <h3>Navigation</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
@@ -36,14 +40,15 @@
           <a href="target_link_options.html" title="target_link_options"
              accesskey="P">previous</a> |</li>
   <li>
-    <img src="../_static/cmake-logo-16.png" alt=""
-         style="vertical-align: middle; margin-top: -2px" />
+    <label class="sidebar-toggle" for="sidebar-check"></label>
+  </li>
+  <li class="rootlink">
+    <img src="../_static/cmake-logo-16.png" width="16" height="16" alt=""/>
+    <a href="https://cmake.org/">CMake 4.3.0</a>
+    <span class="reldelim1"> &#187;</span>
   </li>
   <li>
-    <a href="https://cmake.org/">CMake</a> &#187;
-  </li>
-  <li>
-    <a href="../index.html">3.31.11 Documentation</a> &#187;
+    <a href="../index.html">Documentation</a> &#187;
   </li>
 
           <li class="nav-item nav-item-1"><a href="../manual/cmake-commands.7.html" accesskey="U">cmake-commands(7)</a> &#187;</li>
@@ -68,8 +73,8 @@ compilations rather than repeatedly parsing the original headers.</p>
 <section id="main-form">
 <h2>Main Form<a class="headerlink" href="#main-form" title="Link to this heading">¶</a></h2>
 <div class="highlight-cmake notranslate"><div class="highlight"><pre><span></span><span class="nf">target_precompile_headers(</span><span class="nv">&lt;target&gt;</span>
-<span class="w">  </span><span class="o">&lt;</span><span class="no">INTERFACE</span><span class="p">|</span><span class="no">PUBLIC</span><span class="p">|</span><span class="no">PRIVATE</span><span class="o">&gt;</span><span class="w"> </span><span class="p">[</span><span class="nb">header1...</span><span class="p">]</span>
-<span class="w">  </span><span class="p">[</span><span class="o">&lt;</span><span class="no">INTERFACE</span><span class="p">|</span><span class="no">PUBLIC</span><span class="p">|</span><span class="no">PRIVATE</span><span class="o">&gt;</span><span class="w"> </span><span class="p">[</span><span class="nb">header2...</span><span class="p">]</span><span class="w"> </span><span class="p">...]</span><span class="nf">)</span>
+<span class="w">  </span><span class="p">{</span><span class="no">INTERFACE</span><span class="p">|</span><span class="no">PUBLIC</span><span class="p">|</span><span class="no">PRIVATE</span><span class="p">}</span><span class="w"> </span><span class="nv">&lt;header&gt;...</span>
+<span class="w">  </span><span class="p">[{</span><span class="no">INTERFACE</span><span class="p">|</span><span class="no">PUBLIC</span><span class="p">|</span><span class="no">PRIVATE</span><span class="p">}</span><span class="w"> </span><span class="nv">&lt;header&gt;...</span><span class="p">]...</span><span class="nf">)</span>
 </pre></div>
 </div>
 <p>The command adds header files to the <span class="target" id="index-0-prop_tgt:PRECOMPILE_HEADERS"></span><a class="reference internal" href="../prop_tgt/PRECOMPILE_HEADERS.html#prop_tgt:PRECOMPILE_HEADERS" title="PRECOMPILE_HEADERS"><code class="xref cmake cmake-prop_tgt docutils literal notranslate"><span class="pre">PRECOMPILE_HEADERS</span></code></a> and/or
@@ -113,17 +118,14 @@ included by absolute path.  For example:</p>
 <span class="w">  </span><span class="no">PUBLIC</span>
 <span class="w">    </span><span class="nb">project_header.h</span>
 <span class="w">  </span><span class="no">PRIVATE</span>
-<span class="w">    </span><span class="p">[[</span><span class="s">&quot;other_header.h&quot;</span><span class="p">]]</span>
+<span class="w">    </span><span class="s s-Multiline">[[&quot;other_header.h&quot;]]</span>
 <span class="w">    </span><span class="nv">&lt;unordered_map&gt;</span>
 <span class="nf">)</span>
 </pre></div>
 </div>
-<blockquote>
-<div><p>for more on defining buildsystem properties.</p>
-</div></blockquote>
 <p>Arguments to <code class="docutils literal notranslate"><span class="pre">target_precompile_headers</span></code> may use generator expressions
 with the syntax <code class="docutils literal notranslate"><span class="pre">$&lt;...&gt;</span></code>. See the <span class="target" id="index-0-manual:cmake-generator-expressions(7)"></span><a class="reference internal" href="../manual/cmake-generator-expressions.7.html#manual:cmake-generator-expressions(7)" title="cmake-generator-expressions(7)"><code class="xref cmake cmake-manual docutils literal notranslate"><span class="pre">cmake-generator-expressions(7)</span></code></a>
-manual for available expressions.  The <span class="target" id="index-1-genex:COMPILE_LANGUAGE"></span><a class="reference internal" href="../manual/cmake-generator-expressions.7.html#genex:COMPILE_LANGUAGE" title="COMPILE_LANGUAGE"><code class="xref cmake cmake-genex docutils literal notranslate"><span class="pre">$&lt;COMPILE_LANGUAGE:...&gt;</span></code></a> generator
+manual for available expressions.  The <span class="target" id="index-1-genex:COMPILE_LANGUAGE:languages"></span><a class="reference internal" href="../manual/cmake-generator-expressions.7.html#genex:COMPILE_LANGUAGE:languages" title="COMPILE_LANGUAGE:languages"><code class="xref cmake cmake-genex docutils literal notranslate"><span class="pre">$&lt;COMPILE_LANGUAGE:...&gt;</span></code></a> generator
 expression is particularly useful for specifying a language-specific header
 to precompile for only one language (e.g. <code class="docutils literal notranslate"><span class="pre">CXX</span></code> and not <code class="docutils literal notranslate"><span class="pre">C</span></code>).  In this
 case, header file names that are not explicitly in double quotes or angle
@@ -183,10 +185,10 @@ source file, see the <span class="target" id="index-0-prop_sf:SKIP_PRECOMPILE_HE
           </div>
         </div>
       </div>
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
         <div class="sphinxsidebarwrapper">
   <div>
-    <h3><a href="../index.html">Table of Contents</a></h3>
+    <h3>Table of Contents</h3>
     <ul>
 <li><a class="reference internal" href="#">target_precompile_headers</a><ul>
 <li><a class="reference internal" href="#main-form">Main Form</a></li>
@@ -228,7 +230,7 @@ source file, see the <span class="target" id="index-0-prop_sf:SKIP_PRECOMPILE_HE
       </div>
       <div class="clearer"></div>
     </div>
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>Navigation</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
@@ -241,14 +243,15 @@ source file, see the <span class="target" id="index-0-prop_sf:SKIP_PRECOMPILE_HE
           <a href="target_link_options.html" title="target_link_options"
              >previous</a> |</li>
   <li>
-    <img src="../_static/cmake-logo-16.png" alt=""
-         style="vertical-align: middle; margin-top: -2px" />
+    <label class="sidebar-toggle" for="sidebar-check"></label>
+  </li>
+  <li class="rootlink">
+    <img src="../_static/cmake-logo-16.png" width="16" height="16" alt=""/>
+    <a href="https://cmake.org/">CMake 4.3.0</a>
+    <span class="reldelim1"> &#187;</span>
   </li>
   <li>
-    <a href="https://cmake.org/">CMake</a> &#187;
-  </li>
-  <li>
-    <a href="../index.html">3.31.11 Documentation</a> &#187;
+    <a href="../index.html">Documentation</a> &#187;
   </li>
 
           <li class="nav-item nav-item-1"><a href="../manual/cmake-commands.7.html" >cmake-commands(7)</a> &#187;</li>
@@ -257,8 +260,17 @@ source file, see the <span class="target" id="index-0-prop_sf:SKIP_PRECOMPILE_HE
     </div>
 
     <div class="footer" role="contentinfo">
-    &#169; Copyright 2000-2024 Kitware, Inc. and Contributors.
-      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.3.7.
+    &#169; Copyright 2000-2026 Kitware, Inc. and Contributors.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3.
     </div>
+<script type="text/javascript">
+(function() {
+  "use strict";
+  const hide = () => document.getElementById("sidebar-check").checked = false;
+  addEventListener("keydown", e => (e.key === "Escape") && hide());
+  addEventListener("click", e => (e.target.tagName === "A") && hide());
+  addEventListener("hashchange", hide)
+})();
+</script>
   </body>
 </html>

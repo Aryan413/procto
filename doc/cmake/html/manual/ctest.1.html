@@ -5,13 +5,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <title>ctest(1) &mdash; CMake 3.31.11 Documentation</title>
+  <title>ctest(1) &mdash; CMake 4.3.0 Documentation</title>
 
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a2c47e09" />
-    <link rel="stylesheet" type="text/css" href="../_static/cmake.css?v=3e562cf9" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a3862c66" />
+    <link rel="stylesheet" type="text/css" href="../_static/cmake.css?v=d27bb136" />
     
-    <script src="../_static/documentation_options.js?v=5746678a"></script>
-    <script src="../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../_static/documentation_options.js?v=a17b270f"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     
     <link rel="icon" href="../_static/cmake-favicon.ico"/>
@@ -22,8 +22,12 @@
  
 
   </head><body>
+    <input id="sidebar-check" type="checkbox" />
+    <label id="sidebar-overlay" for="sidebar-check"></label>
 
-    <div class="related" role="navigation" aria-label="related navigation">
+
+
+    <div class="related relbar1" role="navigation" aria-label="Related">
       <h3>Navigation</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
@@ -36,14 +40,15 @@
           <a href="cmake.1.html" title="cmake(1)"
              accesskey="P">previous</a> |</li>
   <li>
-    <img src="../_static/cmake-logo-16.png" alt=""
-         style="vertical-align: middle; margin-top: -2px" />
+    <label class="sidebar-toggle" for="sidebar-check"></label>
+  </li>
+  <li class="rootlink">
+    <img src="../_static/cmake-logo-16.png" width="16" height="16" alt=""/>
+    <a href="https://cmake.org/">CMake 4.3.0</a>
+    <span class="reldelim1"> &#187;</span>
   </li>
   <li>
-    <a href="https://cmake.org/">CMake</a> &#187;
-  </li>
-  <li>
-    <a href="../index.html">3.31.11 Documentation</a> &#187;
+    <a href="../index.html">Documentation</a> &#187;
   </li>
 
         <li class="nav-item nav-item-this"><a href="">ctest(1)</a></li> 
@@ -482,15 +487,27 @@ name which can be very annoying.</p>
 
 <dl class="std option">
 <dt class="sig sig-object std" id="cmdoption-ctest-interactive-debug-mode">
-<span class="sig-name descname"><span class="pre">--interactive-debug-mode</span></span><span class="sig-prename descclassname"> <span class="pre">[0|1]</span></span><a class="headerlink" href="#cmdoption-ctest-interactive-debug-mode" title="Link to this definition">¶</a></dt>
-<dd><p>Set the interactive mode to <code class="docutils literal notranslate"><span class="pre">0</span></code> or <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p>
+<span class="sig-name descname"><span class="pre">--interactive-debug-mode</span></span><span class="sig-prename descclassname"> <span class="pre">&lt;0|1&gt;</span></span><a class="headerlink" href="#cmdoption-ctest-interactive-debug-mode" title="Link to this definition">¶</a></dt>
+<dd><p>Disable (<code class="docutils literal notranslate"><span class="pre">0</span></code>) or enable (<code class="docutils literal notranslate"><span class="pre">1</span></code>) interactive debug mode.</p>
 <p>This option causes CTest to run tests in either an interactive mode
 or a non-interactive mode.  In dashboard mode (<code class="docutils literal notranslate"><span class="pre">Experimental</span></code>, <code class="docutils literal notranslate"><span class="pre">Nightly</span></code>,
 <code class="docutils literal notranslate"><span class="pre">Continuous</span></code>), the default is non-interactive.  In non-interactive mode,
 the environment variable <span class="target" id="index-0-envvar:DASHBOARD_TEST_FROM_CTEST"></span><a class="reference internal" href="../envvar/DASHBOARD_TEST_FROM_CTEST.html#envvar:DASHBOARD_TEST_FROM_CTEST" title="DASHBOARD_TEST_FROM_CTEST"><code class="xref cmake cmake-envvar docutils literal notranslate"><span class="pre">DASHBOARD_TEST_FROM_CTEST</span></code></a> is set.</p>
-<p>Prior to CMake 3.11, interactive mode on Windows allowed system debug
-popup windows to appear.  Now, due to CTest's use of <code class="docutils literal notranslate"><span class="pre">libuv</span></code> to launch
-test processes, all system debug popup windows are always blocked.</p>
+<p>Interactive Mode allows Windows Error Reporting (WER) to show debug popup
+windows and to create core dumps.  To enable core dumps in tests,
+use interactive mode, and follow the Windows documentation
+on <a class="reference external" href="https://learn.microsoft.com/en-us/windows/win32/wer/collecting-user-mode-dumps">Collecting User-Mode Dumps</a>.</p>
+<div class="versionchanged">
+<p><span class="versionmodified changed">Changed in version 4.0: </span>Windows Error Reporting (WER) is enabled in interactive mode, so
+test processes may show debug popup windows and create core dumps.
+This was made possible by updates to <code class="docutils literal notranslate"><span class="pre">libuv</span></code>.</p>
+</div>
+<div class="versionchanged">
+<p><span class="versionmodified changed">Changed in version 3.11: </span>Windows Error Reporting (WER) is disabled in both interactive and
+non-interactive modes, so test processes do not show popup windows
+or create core dumps.  This is due to launching test processes with
+<code class="docutils literal notranslate"><span class="pre">libuv</span></code>.</p>
+</div>
 </dd></dl>
 
 <dl class="std option">
@@ -562,10 +579,8 @@ This option will overwrite the configuration option.</p>
 <dl class="std option">
 <dt class="sig sig-object std" id="cmdoption-ctest-force-new-ctest-process">
 <span class="sig-name descname"><span class="pre">--force-new-ctest-process</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-ctest-force-new-ctest-process" title="Link to this definition">¶</a></dt>
-<dd><p>Run child CTest instances as new processes.</p>
-<p>By default CTest will run child CTest instances within the same
-process.  If this behavior is not desired, this argument will
-enforce new processes for child CTest processes.</p>
+<dd><p>Ignored.  This option once disabled a now-removed optimization
+for tests running <code class="docutils literal notranslate"><span class="pre">ctest</span></code> itself.</p>
 </dd></dl>
 
 <dl class="std option">
@@ -574,6 +589,17 @@ enforce new processes for child CTest processes.</p>
 <dd><p>Use a random order for scheduling tests.</p>
 <p>This option will run the tests in a random order.  It is commonly
 used to detect implicit dependencies in a test suite.</p>
+</dd></dl>
+
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-ctest-schedule-random-seed">
+<span class="sig-name descname"><span class="pre">--schedule-random-seed</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-ctest-schedule-random-seed" title="Link to this definition">¶</a></dt>
+<dd><div class="versionadded">
+<p><span class="versionmodified added">Added in version 4.1.</span></p>
+</div>
+<p>Override the random order seed</p>
+<p>This option is used to allow recreating failures owing to
+random order of execution by <code class="docutils literal notranslate"><span class="pre">--schedule-random</span></code>.</p>
 </dd></dl>
 
 <dl class="std option">
@@ -625,6 +651,17 @@ were found or by ignoring it.</p>
 environment variable.</p>
 </dd></dl>
 
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-ctest-collect-instrumentation">
+<span class="sig-name descname"><span class="pre">--collect-instrumentation</span></span><span class="sig-prename descclassname"> <span class="pre">&lt;build&gt;</span></span><a class="headerlink" href="#cmdoption-ctest-collect-instrumentation" title="Link to this definition">¶</a></dt>
+<dd><div class="versionadded">
+<p><span class="versionmodified added">Added in version 4.0.</span></p>
+</div>
+<p>Manually collect instrumentation data from the specified build directory. See
+the <a class="reference internal" href="cmake-instrumentation.7.html#cmake-instrumentation-indexing"><span class="std std-ref">Indexing</span></a> section of CMake instrumentation for
+more details.</p>
+</dd></dl>
+
 </section>
 <section id="view-help">
 <h2><a class="toc-backref" href="#id19" role="doc-backlink">View Help</a><a class="headerlink" href="#view-help" title="Link to this heading">¶</a></h2>
@@ -632,9 +669,14 @@ environment variable.</p>
 use one of the following options:</p>
 <dl class="std option">
 <dt class="sig sig-object std" id="cmdoption-ctest-version">
-<span id="cmdoption-ctest-version"></span><span id="cmdoption-ctest-0"></span><span class="sig-name descname"><span class="pre">-version</span></span><span class="sig-prename descclassname"> <span class="pre">[&lt;file&gt;]</span></span><span class="sig-prename descclassname"><span class="pre">,</span> </span><span class="sig-name descname"><span class="pre">--version</span></span><span class="sig-prename descclassname"> <span class="pre">[&lt;file&gt;]</span></span><span class="sig-prename descclassname"><span class="pre">,</span> </span><span class="sig-name descname"><span class="pre">/V</span></span><span class="sig-prename descclassname"> <span class="pre">[&lt;file&gt;]</span></span><a class="headerlink" href="#cmdoption-ctest-version" title="Link to this definition">¶</a></dt>
-<dd><p>Show program name/version banner and exit.
+<span id="cmdoption-ctest-version"></span><span id="cmdoption-ctest-0"></span><span id="cmdoption-ctest-version"></span><span class="sig-name descname"><span class="pre">-version</span></span><span class="sig-prename descclassname"><span class="pre">[=json-v1]</span> <span class="pre">[&lt;file&gt;]</span></span><span class="sig-prename descclassname"><span class="pre">,</span> </span><span class="sig-name descname"><span class="pre">--version</span></span><span class="sig-prename descclassname"><span class="pre">[=json-v1]</span> <span class="pre">[&lt;file&gt;]</span></span><span class="sig-prename descclassname"><span class="pre">,</span> </span><span class="sig-name descname"><span class="pre">/V</span></span><span class="sig-prename descclassname"><span class="pre">[=json-v1]</span> <span class="pre">[&lt;file&gt;]</span></span><span class="sig-prename descclassname"><span class="pre">,</span> </span><span class="sig-name descname"><span class="pre">/version</span></span><span class="sig-prename descclassname"><span class="pre">[=json-v1]</span> <span class="pre">[&lt;file&gt;]</span></span><a class="headerlink" href="#cmdoption-ctest-version" title="Link to this definition">¶</a></dt>
+<dd><p>Show program name/version banner and exit. If <code class="docutils literal notranslate"><span class="pre">json-v1</span></code> is
+specified, print extended version information in JSON format.
+The JSON output contains the versions for the CMake and its
+dependencies.
 The output is printed to a named <code class="docutils literal notranslate"><span class="pre">&lt;file&gt;</span></code> if given.</p>
+<p>The JSON output format is described in machine-readable form by
+<a class="reference download internal" download="" href="../_downloads/8841c8b524587a9aee211c0ac198f604/version-schema.json"><code class="xref download docutils literal notranslate"><span class="pre">this</span> <span class="pre">JSON</span> <span class="pre">schema</span></code></a>.</p>
 </dd></dl>
 
 <dl class="std option">
@@ -863,7 +905,7 @@ timing summary.  See <a class="reference internal" href="../command/ctest_test.h
 </div>
 <p>When the <span class="target" id="index-1-prop_test:PROCESSORS"></span><a class="reference internal" href="../prop_test/PROCESSORS.html#prop_test:PROCESSORS" title="PROCESSORS"><code class="xref cmake cmake-prop_test docutils literal notranslate"><span class="pre">PROCESSORS</span></code></a> test property is set, CTest will display a
 weighted test timing result in label and subproject summaries. The time is
-reported with <cite>sec*proc</cite> instead of just <cite>sec</cite>.</p>
+reported with <code class="docutils literal notranslate"><span class="pre">sec</span> <span class="pre">*</span> <span class="pre">proc</span></code> instead of just <code class="docutils literal notranslate"><span class="pre">sec</span></code>.</p>
 <p>The weighted time summary reported for each label or subproject <code class="docutils literal notranslate"><span class="pre">j</span></code>
 is computed as:</p>
 <div class="highlight-none notranslate"><div class="highlight"><pre><span></span>Weighted Time Summary for Label/Subproject j =
@@ -1130,8 +1172,8 @@ dashboard.</p>
 <dl class="std option">
 <dt class="sig sig-object std" id="cmdoption-ctest-extra-submit">
 <span class="sig-name descname"><span class="pre">--extra-submit</span></span><span class="sig-prename descclassname"> <span class="pre">&lt;file&gt;[;&lt;file&gt;]</span></span><a class="headerlink" href="#cmdoption-ctest-extra-submit" title="Link to this definition">¶</a></dt>
-<dd><p>Submit extra files to the dashboard.</p>
-<p>This option will submit extra files to the dashboard.</p>
+<dd><p>Submit extra <code class="docutils literal notranslate"><span class="pre">.xml</span></code> part files to the dashboard.
+See the <span class="target" id="index-0-command:ctest_submit"></span><a class="reference internal" href="../command/ctest_submit.html#command:ctest_submit" title="ctest_submit"><code class="xref cmake cmake-command docutils literal notranslate"><span class="pre">ctest_submit()</span></code></a> command's <code class="docutils literal notranslate"><span class="pre">PARTS</span> <span class="pre">ExtraFiles</span></code> option.</p>
 </dd></dl>
 
 <dl class="std option">
@@ -1149,9 +1191,9 @@ This option may be specified more than once.</p>
 <dl class="std option">
 <dt class="sig sig-object std" id="cmdoption-ctest-http1.0">
 <span class="sig-name descname"><span class="pre">--http1.0</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-ctest-http1.0" title="Link to this definition">¶</a></dt>
-<dd><p>Submit using <cite>HTTP 1.0</cite>.</p>
-<p>This option will force CTest to use <cite>HTTP 1.0</cite> to submit files to the
-dashboard, instead of <cite>HTTP 1.1</cite>.</p>
+<dd><p>Submit using <code class="docutils literal notranslate"><span class="pre">HTTP</span> <span class="pre">1.0</span></code>.</p>
+<p>This option will force CTest to use <code class="docutils literal notranslate"><span class="pre">HTTP</span> <span class="pre">1.0</span></code> to submit files to the
+dashboard, instead of <code class="docutils literal notranslate"><span class="pre">HTTP</span> <span class="pre">1.1</span></code>.</p>
 </dd></dl>
 
 <dl class="std option">
@@ -1729,7 +1771,7 @@ They will be placed prior to the test command line.</p>
 </section>
 <section id="ctest-submit-step">
 <span id="id13"></span><h3><a class="toc-backref" href="#id36" role="doc-backlink">CTest Submit Step</a><a class="headerlink" href="#ctest-submit-step" title="Link to this heading">¶</a></h3>
-<p>In a <a class="reference internal" href="#ctest-script">CTest Script</a>, the <span class="target" id="index-0-command:ctest_submit"></span><a class="reference internal" href="../command/ctest_submit.html#command:ctest_submit" title="ctest_submit"><code class="xref cmake cmake-command docutils literal notranslate"><span class="pre">ctest_submit()</span></code></a> command runs this step.
+<p>In a <a class="reference internal" href="#ctest-script">CTest Script</a>, the <span class="target" id="index-1-command:ctest_submit"></span><a class="reference internal" href="../command/ctest_submit.html#command:ctest_submit" title="ctest_submit"><code class="xref cmake cmake-command docutils literal notranslate"><span class="pre">ctest_submit()</span></code></a> command runs this step.
 Arguments to the command may specify some of the step settings.</p>
 <p>Configuration settings include:</p>
 <dl>
@@ -1749,14 +1791,14 @@ Arguments to the command may specify some of the step settings.</p>
 <dt><code class="docutils literal notranslate"><span class="pre">CTestSubmitRetryCount</span></code></dt><dd><p>Specify a number of attempts to retry submission on network failure.</p>
 <ul class="simple">
 <li><p><a class="reference internal" href="#ctest-script">CTest Script</a> variable: none,
-use the <span class="target" id="index-1-command:ctest_submit"></span><a class="reference internal" href="../command/ctest_submit.html#command:ctest_submit" title="ctest_submit"><code class="xref cmake cmake-command docutils literal notranslate"><span class="pre">ctest_submit()</span></code></a> <code class="docutils literal notranslate"><span class="pre">RETRY_COUNT</span></code> option.</p></li>
+use the <span class="target" id="index-2-command:ctest_submit"></span><a class="reference internal" href="../command/ctest_submit.html#command:ctest_submit" title="ctest_submit"><code class="xref cmake cmake-command docutils literal notranslate"><span class="pre">ctest_submit()</span></code></a> <code class="docutils literal notranslate"><span class="pre">RETRY_COUNT</span></code> option.</p></li>
 <li><p><span class="target" id="index-53-module:CTest"></span><a class="reference internal" href="../module/CTest.html#module:CTest" title="CTest"><code class="xref cmake cmake-module docutils literal notranslate"><span class="pre">CTest</span></code></a> module variable: <code class="docutils literal notranslate"><span class="pre">CTEST_SUBMIT_RETRY_COUNT</span></code></p></li>
 </ul>
 </dd>
 <dt><code class="docutils literal notranslate"><span class="pre">CTestSubmitRetryDelay</span></code></dt><dd><p>Specify a delay before retrying submission on network failure.</p>
 <ul class="simple">
 <li><p><a class="reference internal" href="#ctest-script">CTest Script</a> variable: none,
-use the <span class="target" id="index-2-command:ctest_submit"></span><a class="reference internal" href="../command/ctest_submit.html#command:ctest_submit" title="ctest_submit"><code class="xref cmake cmake-command docutils literal notranslate"><span class="pre">ctest_submit()</span></code></a> <code class="docutils literal notranslate"><span class="pre">RETRY_DELAY</span></code> option.</p></li>
+use the <span class="target" id="index-3-command:ctest_submit"></span><a class="reference internal" href="../command/ctest_submit.html#command:ctest_submit" title="ctest_submit"><code class="xref cmake cmake-command docutils literal notranslate"><span class="pre">ctest_submit()</span></code></a> <code class="docutils literal notranslate"><span class="pre">RETRY_DELAY</span></code> option.</p></li>
 <li><p><span class="target" id="index-54-module:CTest"></span><a class="reference internal" href="../module/CTest.html#module:CTest" title="CTest"><code class="xref cmake cmake-module docutils literal notranslate"><span class="pre">CTest</span></code></a> module variable: <code class="docutils literal notranslate"><span class="pre">CTEST_SUBMIT_RETRY_DELAY</span></code></p></li>
 </ul>
 </dd>
@@ -1811,7 +1853,7 @@ else <code class="docutils literal notranslate"><span class="pre">CTEST_DROP_SIT
 <ul class="simple">
 <li><p><a class="reference internal" href="#ctest-script">CTest Script</a> variable: <span class="target" id="index-0-variable:CTEST_DROP_SITE_PASSWORD"></span><a class="reference internal" href="../variable/CTEST_DROP_SITE_PASSWORD.html#variable:CTEST_DROP_SITE_PASSWORD" title="CTEST_DROP_SITE_PASSWORD"><code class="xref cmake cmake-variable docutils literal notranslate"><span class="pre">CTEST_DROP_SITE_PASSWORD</span></code></a></p></li>
 <li><p><span class="target" id="index-59-module:CTest"></span><a class="reference internal" href="../module/CTest.html#module:CTest" title="CTest"><code class="xref cmake cmake-module docutils literal notranslate"><span class="pre">CTest</span></code></a> module variable: <code class="docutils literal notranslate"><span class="pre">DROP_SITE_PASSWORD</span></code> if set,
-else <code class="docutils literal notranslate"><span class="pre">CTEST_DROP_SITE_PASWORD</span></code></p></li>
+else <code class="docutils literal notranslate"><span class="pre">CTEST_DROP_SITE_PASSWORD</span></code></p></li>
 </ul>
 </dd>
 <dt><code class="docutils literal notranslate"><span class="pre">DropSiteUser</span></code></dt><dd><p>Legacy option.  When <code class="docutils literal notranslate"><span class="pre">SubmitURL</span></code> is not set, it is constructed from
@@ -1908,11 +1950,13 @@ model is defined as follows:</p>
 <dl>
 <dt><code class="docutils literal notranslate"><span class="pre">kind</span></code></dt><dd><p>The string &quot;ctestInfo&quot;.</p>
 </dd>
-<dt><code class="docutils literal notranslate"><span class="pre">version</span></code></dt><dd><p>A JSON object specifying the version components.  Its members are</p>
+<dt><code class="docutils literal notranslate"><span class="pre">version</span></code></dt><dd><p>A JSON object specifying the version components.  Its members are:</p>
 <dl class="simple">
-<dt><code class="docutils literal notranslate"><span class="pre">major</span></code></dt><dd><p>A non-negative integer specifying the major version component.</p>
+<dt><code class="docutils literal notranslate"><span class="pre">major</span></code></dt><dd><p>A positive integer specifying the major version component
+of the JSON object model.</p>
 </dd>
-<dt><code class="docutils literal notranslate"><span class="pre">minor</span></code></dt><dd><p>A non-negative integer specifying the minor version component.</p>
+<dt><code class="docutils literal notranslate"><span class="pre">minor</span></code></dt><dd><p>A non-negative integer specifying the minor version component
+of the JSON object model.</p>
 </dd>
 </dl>
 </dd>
@@ -1925,14 +1969,21 @@ following members:</p>
 </dd>
 <dt><code class="docutils literal notranslate"><span class="pre">nodes</span></code></dt><dd><p>List of node JSON objects with members:</p>
 <dl class="simple">
-<dt><code class="docutils literal notranslate"><span class="pre">command</span></code></dt><dd><p>Index into the <code class="docutils literal notranslate"><span class="pre">commands</span></code> member of the <code class="docutils literal notranslate"><span class="pre">backtraceGraph</span></code>.</p>
+<dt><code class="docutils literal notranslate"><span class="pre">command</span></code></dt><dd><p>An optional member present when the node represents a command
+invocation within the file.  The value is an unsigned integer 0-based
+index into the <code class="docutils literal notranslate"><span class="pre">commands</span></code> member of the <code class="docutils literal notranslate"><span class="pre">backtraceGraph</span></code>.</p>
 </dd>
-<dt><code class="docutils literal notranslate"><span class="pre">file</span></code></dt><dd><p>Index into the <code class="docutils literal notranslate"><span class="pre">files</span></code> member of the <code class="docutils literal notranslate"><span class="pre">backtraceGraph</span></code>.</p>
+<dt><code class="docutils literal notranslate"><span class="pre">file</span></code></dt><dd><p>An unsigned integer 0-based index into the <code class="docutils literal notranslate"><span class="pre">files</span></code> member of the
+<code class="docutils literal notranslate"><span class="pre">backtraceGraph</span></code>.</p>
 </dd>
-<dt><code class="docutils literal notranslate"><span class="pre">line</span></code></dt><dd><p>Line number in the file where the backtrace was added.</p>
+<dt><code class="docutils literal notranslate"><span class="pre">line</span></code></dt><dd><p>An optional member present when the node represents a line within
+the file.  The value is an unsigned integer 1-based line number
+in the file where the backtrace was added.</p>
 </dd>
-<dt><code class="docutils literal notranslate"><span class="pre">parent</span></code></dt><dd><p>Index into the <code class="docutils literal notranslate"><span class="pre">nodes</span></code> member of the <code class="docutils literal notranslate"><span class="pre">backtraceGraph</span></code>
-representing the parent in the graph.</p>
+<dt><code class="docutils literal notranslate"><span class="pre">parent</span></code></dt><dd><p>An optional member present when the node is not the bottom of the
+call stack.  The value is an unsigned integer 0-based index into the
+<code class="docutils literal notranslate"><span class="pre">nodes</span></code> member of the <code class="docutils literal notranslate"><span class="pre">backtraceGraph</span></code> representing the parent
+in the graph.</p>
 </dd>
 </dl>
 </dd>
@@ -1940,23 +1991,39 @@ representing the parent in the graph.</p>
 </dd>
 <dt><code class="docutils literal notranslate"><span class="pre">tests</span></code></dt><dd><p>A JSON array listing information about each test.  Each entry
 is a JSON object with members:</p>
-<dl class="simple">
-<dt><code class="docutils literal notranslate"><span class="pre">name</span></code></dt><dd><p>Test name.</p>
+<dl>
+<dt><code class="docutils literal notranslate"><span class="pre">name</span></code></dt><dd><p>Test name. This cannot be empty.</p>
 </dd>
-<dt><code class="docutils literal notranslate"><span class="pre">config</span></code></dt><dd><p>Configuration that the test can run on.
-Empty string means any config.</p>
+<dt><code class="docutils literal notranslate"><span class="pre">config</span></code></dt><dd><p>Optional field specifying the configuration for which the test will run.
+This will always match the <a class="reference internal" href="#cmdoption-ctest-C"><code class="xref std std-option docutils literal notranslate"><span class="pre">-C</span></code></a> option specified on the
+<code class="docutils literal notranslate"><span class="pre">ctest</span></code> command line.  If no such option was given, this field will not
+be present.</p>
 </dd>
-<dt><code class="docutils literal notranslate"><span class="pre">command</span></code></dt><dd><p>List where the first element is the test command and the
-remaining elements are the command arguments.</p>
+<dt><code class="docutils literal notranslate"><span class="pre">command</span></code></dt><dd><p>Optional array where the first element is the test command and the
+remaining elements are the command arguments.  Normally, this field should
+be present and non-empty, but in certain corner cases involving generator
+expressions, it is possible for a test to have no command and therefore
+this field can be missing.</p>
 </dd>
 <dt><code class="docutils literal notranslate"><span class="pre">backtrace</span></code></dt><dd><p>Index into the <code class="docutils literal notranslate"><span class="pre">nodes</span></code> member of the <code class="docutils literal notranslate"><span class="pre">backtraceGraph</span></code>.</p>
 </dd>
-<dt><code class="docutils literal notranslate"><span class="pre">properties</span></code></dt><dd><p>Test properties.
-Can contain keys for each of the supported test properties.</p>
+<dt><code class="docutils literal notranslate"><span class="pre">properties</span></code></dt><dd><p>Optional array of test properties.
+Each array item will be a JSON object with the following members:</p>
+<dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">name</span></code></dt><dd><p>The name of the test property. This cannot be empty.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">value</span></code></dt><dd><p>The property value, which can be a string, a number, a boolean, or an
+array of strings.</p>
 </dd>
 </dl>
 </dd>
 </dl>
+</dd>
+</dl>
+<div class="versionadded">
+<p><span class="versionmodified added">Added in version 4.1: </span>The JSON output format is described in machine-readable form by
+<a class="reference download internal" download="" href="../_downloads/a23288746b718529293c28c8c3fad9df/show-only-schema.json"><code class="xref download docutils literal notranslate"><span class="pre">this</span> <span class="pre">JSON</span> <span class="pre">schema</span></code></a>.</p>
+</div>
 </section>
 <section id="resource-allocation">
 <span id="ctest-resource-allocation"></span><h2><a class="toc-backref" href="#id38" role="doc-backlink">Resource Allocation</a><a class="headerlink" href="#resource-allocation" title="Link to this heading">¶</a></h2>
@@ -2260,10 +2327,10 @@ found on this web page.</p>
           </div>
         </div>
       </div>
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
         <div class="sphinxsidebarwrapper">
   <div>
-    <h3><a href="../index.html">Table of Contents</a></h3>
+    <h3>Table of Contents</h3>
     <ul>
 <li><a class="reference internal" href="#">ctest(1)</a><ul>
 <li><a class="reference internal" href="#synopsis">Synopsis</a></li>
@@ -2337,7 +2404,7 @@ found on this web page.</p>
       </div>
       <div class="clearer"></div>
     </div>
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>Navigation</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
@@ -2350,14 +2417,15 @@ found on this web page.</p>
           <a href="cmake.1.html" title="cmake(1)"
              >previous</a> |</li>
   <li>
-    <img src="../_static/cmake-logo-16.png" alt=""
-         style="vertical-align: middle; margin-top: -2px" />
+    <label class="sidebar-toggle" for="sidebar-check"></label>
+  </li>
+  <li class="rootlink">
+    <img src="../_static/cmake-logo-16.png" width="16" height="16" alt=""/>
+    <a href="https://cmake.org/">CMake 4.3.0</a>
+    <span class="reldelim1"> &#187;</span>
   </li>
   <li>
-    <a href="https://cmake.org/">CMake</a> &#187;
-  </li>
-  <li>
-    <a href="../index.html">3.31.11 Documentation</a> &#187;
+    <a href="../index.html">Documentation</a> &#187;
   </li>
 
         <li class="nav-item nav-item-this"><a href="">ctest(1)</a></li> 
@@ -2365,8 +2433,17 @@ found on this web page.</p>
     </div>
 
     <div class="footer" role="contentinfo">
-    &#169; Copyright 2000-2024 Kitware, Inc. and Contributors.
-      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.3.7.
+    &#169; Copyright 2000-2026 Kitware, Inc. and Contributors.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3.
     </div>
+<script type="text/javascript">
+(function() {
+  "use strict";
+  const hide = () => document.getElementById("sidebar-check").checked = false;
+  addEventListener("keydown", e => (e.key === "Escape") && hide());
+  addEventListener("click", e => (e.target.tagName === "A") && hide());
+  addEventListener("hashchange", hide)
+})();
+</script>
   </body>
 </html>

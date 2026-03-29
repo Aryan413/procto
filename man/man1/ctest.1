@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "CTEST" "1" "Jan 26, 2026" "3.31.11" "CMake"
+.TH "CTEST" "1" "Mar 17, 2026" "4.3.0" "CMake"
 .SH NAME
 ctest \- CTest Command-Line Reference
 .SS Contents
@@ -105,8 +105,7 @@ ctest \- CTest Command-Line Reference
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 \fI\%Run Tests\fP
  ctest [<options>] [\-\-test\-dir <path\-to\-build>]
 
@@ -124,15 +123,14 @@ ctest \- CTest Command-Line Reference
 
 \fI\%View Help\fP
  ctest \-\-help[\-<topic>]
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .SH DESCRIPTION
 .sp
 The \fBctest\fP executable is the CMake test driver program.
 CMake\-generated build trees created for projects that use the
-\X'tty: link #command:enable_testing'\fI\%enable_testing()\fP\X'tty: link' and \X'tty: link #command:add_test'\fI\%add_test()\fP\X'tty: link' commands have testing support.
+\fI\%enable_testing()\fP and \fI\%add_test()\fP commands have testing support.
 This program will run the tests and report results.
 .SH RUN TESTS
 .INDENT 0.0
@@ -141,7 +139,7 @@ This program will run the tests and report results.
 Use a test preset to specify test options. The project binary directory
 is inferred from the \fBconfigurePreset\fP key. The current working directory
 must contain CMake preset files.
-See \X'tty: link #manual:cmake-presets(7)'\fI\%preset\fP\X'tty: link' for more details.
+See \fI\%preset\fP for more details.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -172,7 +170,7 @@ Test completion messages are still output on their own line for failed
 tests and the final test summary will also still be logged.
 .sp
 This option can also be enabled by setting the environment variable
-\X'tty: link #envvar:CTEST_PROGRESS_OUTPUT'\fI\%CTEST_PROGRESS_OUTPUT\fP\X'tty: link'\&.
+\fI\%CTEST_PROGRESS_OUTPUT\fP\&.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -203,7 +201,7 @@ useful for debugging dashboard problems.
 .B \-\-output\-on\-failure
 Output anything outputted by the test program if the test should fail.
 This option can also be enabled by setting the
-\X'tty: link #envvar:CTEST_OUTPUT_ON_FAILURE'\fI\%CTEST_OUTPUT_ON_FAILURE\fP\X'tty: link' environment variable
+\fI\%CTEST_OUTPUT_ON_FAILURE\fP environment variable
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -237,10 +235,10 @@ Otherwise, if the value is \fB0\fP, parallelism is unbounded.
 .UNINDENT
 
 .sp
-This option may instead be specified by the \X'tty: link #envvar:CTEST_PARALLEL_LEVEL'\fI\%CTEST_PARALLEL_LEVEL\fP\X'tty: link'
+This option may instead be specified by the \fI\%CTEST_PARALLEL_LEVEL\fP
 environment variable.
 .sp
-This option can be used with the \X'tty: link #prop_test:PROCESSORS'\fI\%PROCESSORS\fP\X'tty: link' test property.
+This option can be used with the \fI\%PROCESSORS\fP test property.
 See the \fI\%Label and Subproject Summary\fP\&.
 .UNINDENT
 .INDENT 0.0
@@ -294,7 +292,7 @@ Write test results in JUnit format.
 This option tells CTest to write test results to \fB<file>\fP in JUnit XML
 format. If \fB<file>\fP already exists, it will be overwritten. If using the
 \fI\%\-S\fP option to run a dashboard script, use the
-\fBOUTPUT_JUNIT\fP keyword with the \X'tty: link #command:ctest_test'\fI\%ctest_test()\fP\X'tty: link' command instead.
+\fBOUTPUT_JUNIT\fP keyword with the \fI\%ctest_test()\fP command instead.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -328,7 +326,7 @@ See \fI\%Show as JSON Object Model\fP\&.
 .TP
 .B \-L <regex>, \-\-label\-regex <regex>
 Run tests with labels matching regular expression as described under
-\X'tty: link #regex-specification'\fI\%string(REGEX)\fP\X'tty: link'\&.
+\fI\%string(REGEX)\fP\&.
 .sp
 This option tells CTest to run only the tests whose labels match the
 given regular expression.  When more than one \fB\-L\fP option is given,
@@ -489,17 +487,29 @@ name which can be very annoying.
 .UNINDENT
 .INDENT 0.0
 .TP
-.B \-\-interactive\-debug\-mode [0|1]
-Set the interactive mode to \fB0\fP or \fB1\fP\&.
+.B \-\-interactive\-debug\-mode <0|1>
+Disable (\fB0\fP) or enable (\fB1\fP) interactive debug mode.
 .sp
 This option causes CTest to run tests in either an interactive mode
 or a non\-interactive mode.  In dashboard mode (\fBExperimental\fP, \fBNightly\fP,
 \fBContinuous\fP), the default is non\-interactive.  In non\-interactive mode,
-the environment variable \X'tty: link #envvar:DASHBOARD_TEST_FROM_CTEST'\fI\%DASHBOARD_TEST_FROM_CTEST\fP\X'tty: link' is set.
+the environment variable \fI\%DASHBOARD_TEST_FROM_CTEST\fP is set.
 .sp
-Prior to CMake 3.11, interactive mode on Windows allowed system debug
-popup windows to appear.  Now, due to CTest\(aqs use of \fBlibuv\fP to launch
-test processes, all system debug popup windows are always blocked.
+Interactive Mode allows Windows Error Reporting (WER) to show debug popup
+windows and to create core dumps.  To enable core dumps in tests,
+use interactive mode, and follow the Windows documentation
+on \X'tty: link https://learn.microsoft.com/en-us/windows/win32/wer/collecting-user-mode-dumps'\fI\%Collecting User\-Mode Dumps\fP\X'tty: link'\&.
+.sp
+Changed in version 4.0: Windows Error Reporting (WER) is enabled in interactive mode, so
+test processes may show debug popup windows and create core dumps.
+This was made possible by updates to \fBlibuv\fP\&.
+
+.sp
+Changed in version 3.11: Windows Error Reporting (WER) is disabled in both interactive and
+non\-interactive modes, so test processes do not show popup windows
+or create core dumps.  This is due to launching test processes with
+\fBlibuv\fP\&.
+
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -568,11 +578,8 @@ This option will overwrite the configuration option.
 .INDENT 0.0
 .TP
 .B \-\-force\-new\-ctest\-process
-Run child CTest instances as new processes.
-.sp
-By default CTest will run child CTest instances within the same
-process.  If this behavior is not desired, this argument will
-enforce new processes for child CTest processes.
+Ignored.  This option once disabled a now\-removed optimization
+for tests running \fBctest\fP itself.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -581,6 +588,17 @@ Use a random order for scheduling tests.
 .sp
 This option will run the tests in a random order.  It is commonly
 used to detect implicit dependencies in a test suite.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B \-\-schedule\-random\-seed
+Added in version 4.1.
+
+.sp
+Override the random order seed
+.sp
+This option is used to allow recreating failures owing to
+random order of execution by \fB\-\-schedule\-random\fP\&.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -594,7 +612,7 @@ Do not use.
 Set the default test timeout.
 .sp
 This option effectively sets a timeout on all tests that do not
-already have a timeout set on them via the \X'tty: link #prop_test:TIMEOUT'\fI\%TIMEOUT\fP\X'tty: link'
+already have a timeout set on them via the \fI\%TIMEOUT\fP
 property.
 .UNINDENT
 .INDENT 0.0
@@ -628,8 +646,18 @@ were found or by ignoring it.
 Added in version 3.26.
 
 .sp
-This option can also be set by setting the \X'tty: link #envvar:CTEST_NO_TESTS_ACTION'\fI\%CTEST_NO_TESTS_ACTION\fP\X'tty: link'
+This option can also be set by setting the \fI\%CTEST_NO_TESTS_ACTION\fP
 environment variable.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B \-\-collect\-instrumentation <build>
+Added in version 4.0.
+
+.sp
+Manually collect instrumentation data from the specified build directory. See
+the \fI\%Indexing\fP section of CMake instrumentation for
+more details.
 .UNINDENT
 .SH VIEW HELP
 .sp
@@ -637,9 +665,15 @@ To print version details or selected pages from the CMake documentation,
 use one of the following options:
 .INDENT 0.0
 .TP
-.B \-version [<file>], \-\-version [<file>], /V [<file>]
-Show program name/version banner and exit.
+.B \-version[=json\-v1] [<file>], \-\-version[=json\-v1] [<file>], /V[=json\-v1] [<file>], /version[=json\-v1] [<file>]
+Show program name/version banner and exit. If \fBjson\-v1\fP is
+specified, print extended version information in JSON format.
+The JSON output contains the versions for the CMake and its
+dependencies.
 The output is printed to a named \fB<file>\fP if given.
+.sp
+The JSON output format is described in machine\-readable form by
+\fBthis JSON schema\fP\&.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -693,7 +727,7 @@ The output is printed to a named \fB<file>\fP if given.
 .B \-\-help\-command <cmd> [<file>]
 Print help for one command and exit.
 .sp
-The \X'tty: link #manual:cmake-commands(7)'\fI\%cmake\-commands(7)\fP\X'tty: link' manual entry for \fB<cmd>\fP is
+The \fI\%cmake\-commands(7)\fP manual entry for \fB<cmd>\fP is
 printed in a human\-readable text format.
 The output is printed to a named \fB<file>\fP if given.
 .UNINDENT
@@ -711,7 +745,7 @@ The output is printed to a named \fB<file>\fP if given.
 .B \-\-help\-commands [<file>]
 Print cmake\-commands manual and exit.
 .sp
-The \X'tty: link #manual:cmake-commands(7)'\fI\%cmake\-commands(7)\fP\X'tty: link' manual is printed in a
+The \fI\%cmake\-commands(7)\fP manual is printed in a
 human\-readable text format.
 The output is printed to a named \fB<file>\fP if given.
 .UNINDENT
@@ -720,7 +754,7 @@ The output is printed to a named \fB<file>\fP if given.
 .B \-\-help\-module <mod> [<file>]
 Print help for one module and exit.
 .sp
-The \X'tty: link #manual:cmake-modules(7)'\fI\%cmake\-modules(7)\fP\X'tty: link' manual entry for \fB<mod>\fP is printed
+The \fI\%cmake\-modules(7)\fP manual entry for \fB<mod>\fP is printed
 in a human\-readable text format.
 The output is printed to a named \fB<file>\fP if given.
 .UNINDENT
@@ -738,7 +772,7 @@ The output is printed to a named \fB<file>\fP if given.
 .B \-\-help\-modules [<file>]
 Print cmake\-modules manual and exit.
 .sp
-The \X'tty: link #manual:cmake-modules(7)'\fI\%cmake\-modules(7)\fP\X'tty: link' manual is printed in a human\-readable
+The \fI\%cmake\-modules(7)\fP manual is printed in a human\-readable
 text format.
 The output is printed to a named \fB<file>\fP if given.
 .UNINDENT
@@ -747,7 +781,7 @@ The output is printed to a named \fB<file>\fP if given.
 .B \-\-help\-policy <cmp> [<file>]
 Print help for one policy and exit.
 .sp
-The \X'tty: link #manual:cmake-policies(7)'\fI\%cmake\-policies(7)\fP\X'tty: link' manual entry for \fB<cmp>\fP is
+The \fI\%cmake\-policies(7)\fP manual entry for \fB<cmp>\fP is
 printed in a human\-readable text format.
 The output is printed to a named \fB<file>\fP if given.
 .UNINDENT
@@ -765,7 +799,7 @@ The output is printed to a named \fB<file>\fP if given.
 .B \-\-help\-policies [<file>]
 Print cmake\-policies manual and exit.
 .sp
-The \X'tty: link #manual:cmake-policies(7)'\fI\%cmake\-policies(7)\fP\X'tty: link' manual is printed in a
+The \fI\%cmake\-policies(7)\fP manual is printed in a
 human\-readable text format.
 The output is printed to a named \fB<file>\fP if given.
 .UNINDENT
@@ -774,7 +808,7 @@ The output is printed to a named \fB<file>\fP if given.
 .B \-\-help\-property <prop> [<file>]
 Print help for one property and exit.
 .sp
-The \X'tty: link #manual:cmake-properties(7)'\fI\%cmake\-properties(7)\fP\X'tty: link' manual entries for \fB<prop>\fP are
+The \fI\%cmake\-properties(7)\fP manual entries for \fB<prop>\fP are
 printed in a human\-readable text format.
 The output is printed to a named \fB<file>\fP if given.
 .UNINDENT
@@ -792,7 +826,7 @@ The output is printed to a named \fB<file>\fP if given.
 .B \-\-help\-properties [<file>]
 Print cmake\-properties manual and exit.
 .sp
-The \X'tty: link #manual:cmake-properties(7)'\fI\%cmake\-properties(7)\fP\X'tty: link' manual is printed in a
+The \fI\%cmake\-properties(7)\fP manual is printed in a
 human\-readable text format.
 The output is printed to a named \fB<file>\fP if given.
 .UNINDENT
@@ -801,7 +835,7 @@ The output is printed to a named \fB<file>\fP if given.
 .B \-\-help\-variable <var> [<file>]
 Print help for one variable and exit.
 .sp
-The \X'tty: link #manual:cmake-variables(7)'\fI\%cmake\-variables(7)\fP\X'tty: link' manual entry for \fB<var>\fP is
+The \fI\%cmake\-variables(7)\fP manual entry for \fB<var>\fP is
 printed in a human\-readable text format.
 The output is printed to a named \fB<file>\fP if given.
 .UNINDENT
@@ -819,7 +853,7 @@ The output is printed to a named \fB<file>\fP if given.
 .B \-\-help\-variables [<file>]
 Print cmake\-variables manual and exit.
 .sp
-The \X'tty: link #manual:cmake-variables(7)'\fI\%cmake\-variables(7)\fP\X'tty: link' manual is printed in a
+The \fI\%cmake\-variables(7)\fP manual is printed in a
 human\-readable text format.
 The output is printed to a named \fB<file>\fP if given.
 .UNINDENT
@@ -872,26 +906,24 @@ associated with the tests run. The label time summary will not include labels
 that are mapped to subprojects.
 .sp
 Added in version 3.22: Labels added dynamically during test execution are also reported in the
-timing summary.  See \X'tty: link #additional-labels'\fI\%Additional Labels\fP\X'tty: link'\&.
+timing summary.  See \fI\%Additional Labels\fP\&.
 
 .sp
-When the \X'tty: link #prop_test:PROCESSORS'\fI\%PROCESSORS\fP\X'tty: link' test property is set, CTest will display a
+When the \fI\%PROCESSORS\fP test property is set, CTest will display a
 weighted test timing result in label and subproject summaries. The time is
-reported with \fIsec*proc\fP instead of just \fIsec\fP\&.
+reported with \fBsec * proc\fP instead of just \fBsec\fP\&.
 .sp
 The weighted time summary reported for each label or subproject \fBj\fP
 is computed as:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 Weighted Time Summary for Label/Subproject j =
     sum(raw_test_time[j,i] * num_processors[j,i], i=1...num_tests[j])
 
 for labels/subprojects j=1...total
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -901,7 +933,7 @@ where:
 \fBraw_test_time[j,i]\fP: Wall\-clock time for the \fBi\fP test
 for the \fBj\fP label or subproject
 .IP \(bu 2
-\fBnum_processors[j,i]\fP: Value of the CTest \X'tty: link #prop_test:PROCESSORS'\fI\%PROCESSORS\fP\X'tty: link' property
+\fBnum_processors[j,i]\fP: Value of the CTest \fI\%PROCESSORS\fP property
 for the \fBi\fP test for the \fBj\fP label or subproject
 .IP \(bu 2
 \fBnum_tests[j]\fP: Number of tests associated with the \fBj\fP label or subproject
@@ -928,15 +960,13 @@ build, and/or execute a test:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 ctest \-\-build\-and\-test <path\-to\-source> <path\-to\-build>
       \-\-build\-generator <generator>
       [<options>...]
       [\-\-build\-options <opts>...]
       [\-\-test\-command <command> [<args>...]]
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -987,7 +1017,7 @@ Specify the directory for the executable.
 .INDENT 0.0
 .TP
 .B \-\-build\-generator
-Specify the generator to use. See the \X'tty: link #manual:cmake-generators(7)'\fI\%cmake\-generators(7)\fP\X'tty: link' manual.
+Specify the generator to use. See the \fI\%cmake\-generators(7)\fP manual.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -1051,14 +1081,12 @@ a \X'tty: link https://www.cdash.org'\fI\%CDash\fP\X'tty: link' server. The comm
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 ctest \-D <dashboard>         [\-\- <dashboard\-options>...]
 ctest \-M <model> \-T <action> [\-\- <dashboard\-options>...]
 ctest \-S <script>            [\-\- <dashboard\-options>...]
 ctest \-SP <script>           [\-\- <dashboard\-options>...]
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -1163,9 +1191,8 @@ This is useful if the build will not finish in one day.
 .INDENT 0.0
 .TP
 .B \-\-extra\-submit <file>[;<file>]
-Submit extra files to the dashboard.
-.sp
-This option will submit extra files to the dashboard.
+Submit extra \fB\&.xml\fP part files to the dashboard.
+See the \fI\%ctest_submit()\fP command\(aqs \fBPARTS ExtraFiles\fP option.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -1182,10 +1209,10 @@ This option may be specified more than once.
 .INDENT 0.0
 .TP
 .B \-\-http1.0
-Submit using \fIHTTP 1.0\fP\&.
+Submit using \fBHTTP 1.0\fP\&.
 .sp
-This option will force CTest to use \fIHTTP 1.0\fP to submit files to the
-dashboard, instead of \fIHTTP 1.1\fP\&.
+This option will force CTest to use \fBHTTP 1.0\fP to submit files to the
+dashboard, instead of \fBHTTP 1.1\fP\&.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -1273,12 +1300,10 @@ to the build tree and use one of these signatures:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 ctest \-D <mode>[<step>]
 ctest \-M <mode> [\-T <step>]...
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -1292,13 +1317,11 @@ of the file is:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 # Lines starting in \(aq#\(aq are comments.
 # Other non\-blank lines are key\-value pairs.
 <setting>: <value>
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -1306,12 +1329,12 @@ where \fB<setting>\fP is the setting name and \fB<value>\fP is the
 setting value.
 .sp
 In build trees generated by CMake, this configuration file is
-generated by the \X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module if included by the project.
+generated by the \fI\%CTest\fP module if included by the project.
 The module uses variables to obtain a value for each setting
 as documented with the settings below.
 .SS Dashboard Client via CTest Script
 .sp
-CTest can perform testing driven by a \X'tty: link #manual:cmake-language(7)'\fI\%cmake\-language(7)\fP\X'tty: link'
+CTest can perform testing driven by a \fI\%cmake\-language(7)\fP
 script that creates and maintains the source and build tree as
 well as performing the testing steps.  Run the \fBctest\fP command
 with the current working directory set outside of any build tree
@@ -1319,16 +1342,14 @@ and use one of these signatures:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 ctest \-S <script>
 ctest \-SP <script>
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
-The \fB<script>\fP file must call \X'tty: link #ctest-commands'\fI\%CTest Commands\fP\X'tty: link' commands
+The \fB<script>\fP file must call \fI\%CTest Commands\fP commands
 to run testing steps explicitly as documented below.  The commands
 obtain \fI\%Dashboard Client Configuration\fP settings from their
 arguments or from variables set in the script.
@@ -1341,7 +1362,7 @@ settings as documented in the following sections.
 Start a new dashboard submission to be composed of results recorded
 by the following steps.
 .sp
-In a \fI\%CTest Script\fP, the \X'tty: link #command:ctest_start'\fI\%ctest_start()\fP\X'tty: link' command runs this step.
+In a \fI\%CTest Script\fP, the \fI\%ctest_start()\fP command runs this step.
 Arguments to the command may specify some of the step settings.
 The command first runs the command\-line specified by the
 \fBCTEST_CHECKOUT_COMMAND\fP variable, if set, to initialize the source
@@ -1354,23 +1375,23 @@ Configuration settings include:
 The full path to the project build tree.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_BINARY_DIRECTORY'\fI\%CTEST_BINARY_DIRECTORY\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_BINARY_DIRECTORY\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \X'tty: link #variable:PROJECT_BINARY_DIR'\fI\%PROJECT_BINARY_DIR\fP\X'tty: link'
+\fI\%CTest\fP module variable: \fI\%PROJECT_BINARY_DIR\fP
 .UNINDENT
 .TP
 .B \fBSourceDirectory\fP
 The full path to the project source tree.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_SOURCE_DIRECTORY'\fI\%CTEST_SOURCE_DIRECTORY\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_SOURCE_DIRECTORY\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \X'tty: link #variable:PROJECT_SOURCE_DIR'\fI\%PROJECT_SOURCE_DIR\fP\X'tty: link'
+\fI\%CTest\fP module variable: \fI\%PROJECT_SOURCE_DIR\fP
 .UNINDENT
 .UNINDENT
 .SS CTest Update Step
 .sp
-In a \fI\%CTest Script\fP, the \X'tty: link #command:ctest_update'\fI\%ctest_update()\fP\X'tty: link' command runs this step.
+In a \fI\%CTest Script\fP, the \fI\%ctest_update()\fP command runs this step.
 Arguments to the command may specify some of the step settings.
 .sp
 Configuration settings to specify the version control tool include:
@@ -1380,45 +1401,45 @@ Configuration settings to specify the version control tool include:
 \fBbzr\fP command\-line tool to use if source tree is managed by Bazaar.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_BZR_COMMAND'\fI\%CTEST_BZR_COMMAND\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_BZR_COMMAND\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: none
+\fI\%CTest\fP module variable: none
 .UNINDENT
 .TP
 .B \fBBZRUpdateOptions\fP
 Command\-line options to the \fBBZRCommand\fP when updating the source.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_BZR_UPDATE_OPTIONS'\fI\%CTEST_BZR_UPDATE_OPTIONS\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_BZR_UPDATE_OPTIONS\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: none
+\fI\%CTest\fP module variable: none
 .UNINDENT
 .TP
 .B \fBCVSCommand\fP
 \fBcvs\fP command\-line tool to use if source tree is managed by CVS.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_CVS_COMMAND'\fI\%CTEST_CVS_COMMAND\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_CVS_COMMAND\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBCVSCOMMAND\fP
+\fI\%CTest\fP module variable: \fBCVSCOMMAND\fP
 .UNINDENT
 .TP
 .B \fBCVSUpdateOptions\fP
 Command\-line options to the \fBCVSCommand\fP when updating the source.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_CVS_UPDATE_OPTIONS'\fI\%CTEST_CVS_UPDATE_OPTIONS\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_CVS_UPDATE_OPTIONS\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBCVS_UPDATE_OPTIONS\fP
+\fI\%CTest\fP module variable: \fBCVS_UPDATE_OPTIONS\fP
 .UNINDENT
 .TP
 .B \fBGITCommand\fP
 \fBgit\fP command\-line tool to use if source tree is managed by Git.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_GIT_COMMAND'\fI\%CTEST_GIT_COMMAND\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_GIT_COMMAND\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBGITCOMMAND\fP
+\fI\%CTest\fP module variable: \fBGITCOMMAND\fP
 .UNINDENT
 .sp
 The source tree is updated by \fBgit fetch\fP followed by
@@ -1430,9 +1451,9 @@ Use \fBGITUpdateCustom\fP to specify a different approach.
 If set, CTest will update the repository\(aqs submodules before updating.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_GIT_INIT_SUBMODULES'\fI\%CTEST_GIT_INIT_SUBMODULES\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_GIT_INIT_SUBMODULES\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBCTEST_GIT_INIT_SUBMODULES\fP
+\fI\%CTest\fP module variable: \fBCTEST_GIT_INIT_SUBMODULES\fP
 .UNINDENT
 .TP
 .B \fBGITUpdateCustom\fP
@@ -1441,63 +1462,63 @@ in the source tree (Git work tree) to update it instead of running
 the \fBGITCommand\fP\&.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_GIT_UPDATE_CUSTOM'\fI\%CTEST_GIT_UPDATE_CUSTOM\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_GIT_UPDATE_CUSTOM\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBCTEST_GIT_UPDATE_CUSTOM\fP
+\fI\%CTest\fP module variable: \fBCTEST_GIT_UPDATE_CUSTOM\fP
 .UNINDENT
 .TP
 .B \fBGITUpdateOptions\fP
 Command\-line options to the \fBGITCommand\fP when updating the source.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_GIT_UPDATE_OPTIONS'\fI\%CTEST_GIT_UPDATE_OPTIONS\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_GIT_UPDATE_OPTIONS\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBGIT_UPDATE_OPTIONS\fP
+\fI\%CTest\fP module variable: \fBGIT_UPDATE_OPTIONS\fP
 .UNINDENT
 .TP
 .B \fBHGCommand\fP
 \fBhg\fP command\-line tool to use if source tree is managed by Mercurial.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_HG_COMMAND'\fI\%CTEST_HG_COMMAND\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_HG_COMMAND\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: none
+\fI\%CTest\fP module variable: none
 .UNINDENT
 .TP
 .B \fBHGUpdateOptions\fP
 Command\-line options to the \fBHGCommand\fP when updating the source.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_HG_UPDATE_OPTIONS'\fI\%CTEST_HG_UPDATE_OPTIONS\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_HG_UPDATE_OPTIONS\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: none
+\fI\%CTest\fP module variable: none
 .UNINDENT
 .TP
 .B \fBP4Client\fP
 Value of the \fB\-c\fP option to the \fBP4Command\fP\&.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_P4_CLIENT'\fI\%CTEST_P4_CLIENT\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_P4_CLIENT\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBCTEST_P4_CLIENT\fP
+\fI\%CTest\fP module variable: \fBCTEST_P4_CLIENT\fP
 .UNINDENT
 .TP
 .B \fBP4Command\fP
 \fBp4\fP command\-line tool to use if source tree is managed by Perforce.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_P4_COMMAND'\fI\%CTEST_P4_COMMAND\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_P4_COMMAND\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBP4COMMAND\fP
+\fI\%CTest\fP module variable: \fBP4COMMAND\fP
 .UNINDENT
 .TP
 .B \fBP4Options\fP
 Command\-line options to the \fBP4Command\fP for all invocations.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_P4_OPTIONS'\fI\%CTEST_P4_OPTIONS\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_P4_OPTIONS\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBCTEST_P4_OPTIONS\fP
+\fI\%CTest\fP module variable: \fBCTEST_P4_OPTIONS\fP
 .UNINDENT
 .TP
 .B \fBP4UpdateCustom\fP
@@ -1508,43 +1529,43 @@ the \fBP4Command\fP\&.
 .IP \(bu 2
 \fI\%CTest Script\fP variable: none
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBCTEST_P4_UPDATE_CUSTOM\fP
+\fI\%CTest\fP module variable: \fBCTEST_P4_UPDATE_CUSTOM\fP
 .UNINDENT
 .TP
 .B \fBP4UpdateOptions\fP
 Command\-line options to the \fBP4Command\fP when updating the source.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_P4_UPDATE_OPTIONS'\fI\%CTEST_P4_UPDATE_OPTIONS\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_P4_UPDATE_OPTIONS\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBCTEST_P4_UPDATE_OPTIONS\fP
+\fI\%CTest\fP module variable: \fBCTEST_P4_UPDATE_OPTIONS\fP
 .UNINDENT
 .TP
 .B \fBSVNCommand\fP
 \fBsvn\fP command\-line tool to use if source tree is managed by Subversion.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_SVN_COMMAND'\fI\%CTEST_SVN_COMMAND\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_SVN_COMMAND\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBSVNCOMMAND\fP
+\fI\%CTest\fP module variable: \fBSVNCOMMAND\fP
 .UNINDENT
 .TP
 .B \fBSVNOptions\fP
 Command\-line options to the \fBSVNCommand\fP for all invocations.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_SVN_OPTIONS'\fI\%CTEST_SVN_OPTIONS\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_SVN_OPTIONS\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBCTEST_SVN_OPTIONS\fP
+\fI\%CTest\fP module variable: \fBCTEST_SVN_OPTIONS\fP
 .UNINDENT
 .TP
 .B \fBSVNUpdateOptions\fP
 Command\-line options to the \fBSVNCommand\fP when updating the source.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_SVN_UPDATE_OPTIONS'\fI\%CTEST_SVN_UPDATE_OPTIONS\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_SVN_UPDATE_OPTIONS\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBSVN_UPDATE_OPTIONS\fP
+\fI\%CTest\fP module variable: \fBSVN_UPDATE_OPTIONS\fP
 .UNINDENT
 .TP
 .B \fBUpdateCommand\fP
@@ -1552,9 +1573,9 @@ Specify the version\-control command\-line tool to use without
 detecting the VCS that manages the source tree.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_UPDATE_COMMAND'\fI\%CTEST_UPDATE_COMMAND\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_UPDATE_COMMAND\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fB<VCS>COMMAND\fP
+\fI\%CTest\fP module variable: \fB<VCS>COMMAND\fP
 when \fBUPDATE_TYPE\fP is \fB<vcs>\fP, else \fBUPDATE_COMMAND\fP
 .UNINDENT
 .TP
@@ -1562,9 +1583,9 @@ when \fBUPDATE_TYPE\fP is \fB<vcs>\fP, else \fBUPDATE_COMMAND\fP
 Command\-line options to the \fBUpdateCommand\fP\&.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_UPDATE_OPTIONS'\fI\%CTEST_UPDATE_OPTIONS\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_UPDATE_OPTIONS\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fB<VCS>_UPDATE_OPTIONS\fP
+\fI\%CTest\fP module variable: \fB<VCS>_UPDATE_OPTIONS\fP
 when \fBUPDATE_TYPE\fP is \fB<vcs>\fP, else \fBUPDATE_OPTIONS\fP
 .UNINDENT
 .TP
@@ -1577,7 +1598,7 @@ The value may be \fBbzr\fP, \fBcvs\fP, \fBgit\fP, \fBhg\fP,
 .IP \(bu 2
 \fI\%CTest Script\fP variable: none, detected from source tree
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBUPDATE_TYPE\fP if set,
+\fI\%CTest\fP module variable: \fBUPDATE_TYPE\fP if set,
 else \fBCTEST_UPDATE_TYPE\fP
 .UNINDENT
 .UNINDENT
@@ -1589,7 +1610,7 @@ discover the current version that is checked out, and not to update
 to a different version.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_UPDATE_VERSION_ONLY'\fI\%CTEST_UPDATE_VERSION_ONLY\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_UPDATE_VERSION_ONLY\fP
 .UNINDENT
 .UNINDENT
 .INDENT 0.0
@@ -1604,7 +1625,7 @@ version that is checked out. Use of this variable supersedes
 CTest not to update the source tree to a different version.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_UPDATE_VERSION_OVERRIDE'\fI\%CTEST_UPDATE_VERSION_OVERRIDE\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_UPDATE_VERSION_OVERRIDE\fP
 .UNINDENT
 .UNINDENT
 .sp
@@ -1620,15 +1641,15 @@ This is not well\-defined in distributed version\-control systems so
 the setting is ignored.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_NIGHTLY_START_TIME'\fI\%CTEST_NIGHTLY_START_TIME\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_NIGHTLY_START_TIME\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBNIGHTLY_START_TIME\fP if set,
+\fI\%CTest\fP module variable: \fBNIGHTLY_START_TIME\fP if set,
 else \fBCTEST_NIGHTLY_START_TIME\fP
 .UNINDENT
 .UNINDENT
 .SS CTest Configure Step
 .sp
-In a \fI\%CTest Script\fP, the \X'tty: link #command:ctest_configure'\fI\%ctest_configure()\fP\X'tty: link' command runs this step.
+In a \fI\%CTest Script\fP, the \fI\%ctest_configure()\fP command runs this step.
 Arguments to the command may specify some of the step settings.
 .sp
 Configuration settings include:
@@ -1640,10 +1661,10 @@ It will be executed in the location specified by the
 \fBBuildDirectory\fP setting.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_CONFIGURE_COMMAND'\fI\%CTEST_CONFIGURE_COMMAND\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_CONFIGURE_COMMAND\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \X'tty: link #variable:CMAKE_COMMAND'\fI\%CMAKE_COMMAND\fP\X'tty: link'
-followed by \X'tty: link #variable:PROJECT_SOURCE_DIR'\fI\%PROJECT_SOURCE_DIR\fP\X'tty: link'
+\fI\%CTest\fP module variable: \fI\%CMAKE_COMMAND\fP
+followed by \fI\%PROJECT_SOURCE_DIR\fP
 .UNINDENT
 .TP
 .B \fBLabelsForSubprojects\fP
@@ -1652,16 +1673,16 @@ subprojects. This mapping will be passed on to CDash when configure, test or
 build results are submitted.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_LABELS_FOR_SUBPROJECTS'\fI\%CTEST_LABELS_FOR_SUBPROJECTS\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_LABELS_FOR_SUBPROJECTS\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBCTEST_LABELS_FOR_SUBPROJECTS\fP
+\fI\%CTest\fP module variable: \fBCTEST_LABELS_FOR_SUBPROJECTS\fP
 .UNINDENT
 .sp
 See \fI\%Label and Subproject Summary\fP\&.
 .UNINDENT
 .SS CTest Build Step
 .sp
-In a \fI\%CTest Script\fP, the \X'tty: link #command:ctest_build'\fI\%ctest_build()\fP\X'tty: link' command runs this step.
+In a \fI\%CTest Script\fP, the \fI\%ctest_build()\fP command runs this step.
 Arguments to the command may specify some of the step settings.
 .sp
 Configuration settings include:
@@ -1676,10 +1697,10 @@ into the value of \fBMakeCommand\fP to replace the literal string
 \fB${CTEST_CONFIGURATION_TYPE}\fP if it appears.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_CONFIGURATION_TYPE'\fI\%CTEST_CONFIGURATION_TYPE\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_CONFIGURATION_TYPE\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBDEFAULT_CTEST_CONFIGURATION_TYPE\fP,
-initialized by the \X'tty: link #envvar:CMAKE_CONFIG_TYPE'\fI\%CMAKE_CONFIG_TYPE\fP\X'tty: link' environment variable
+\fI\%CTest\fP module variable: \fBDEFAULT_CTEST_CONFIGURATION_TYPE\fP,
+initialized by the \fI\%CMAKE_CONFIG_TYPE\fP environment variable
 .UNINDENT
 .TP
 .B \fBLabelsForSubprojects\fP
@@ -1688,9 +1709,9 @@ subprojects. This mapping will be passed on to CDash when configure, test or
 build results are submitted.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_LABELS_FOR_SUBPROJECTS'\fI\%CTEST_LABELS_FOR_SUBPROJECTS\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_LABELS_FOR_SUBPROJECTS\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBCTEST_LABELS_FOR_SUBPROJECTS\fP
+\fI\%CTest\fP module variable: \fBCTEST_LABELS_FOR_SUBPROJECTS\fP
 .UNINDENT
 .sp
 See \fI\%Label and Subproject Summary\fP\&.
@@ -1701,19 +1722,19 @@ It will be executed in the location specified by the
 \fBBuildDirectory\fP setting.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_BUILD_COMMAND'\fI\%CTEST_BUILD_COMMAND\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_BUILD_COMMAND\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBMAKECOMMAND\fP,
-initialized by the \X'tty: link #command:build_command'\fI\%build_command()\fP\X'tty: link' command
+\fI\%CTest\fP module variable: \fBMAKECOMMAND\fP,
+initialized by the \fI\%build_command()\fP command
 .UNINDENT
 .TP
 .B \fBUseLaunchers\fP
 For build trees generated by CMake using one of the
-\X'tty: link #makefile-generators'\fI\%Makefile Generators\fP\X'tty: link' or the \X'tty: link #generator:Ninja'\fI\%Ninja\fP\X'tty: link'
+\fI\%Makefile Generators\fP or the \fI\%Ninja\fP
 generator, specify whether the
 \fBCTEST_USE_LAUNCHERS\fP feature is enabled by the
-\X'tty: link #module:CTestUseLaunchers'\fI\%CTestUseLaunchers\fP\X'tty: link' module (also included by the
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module).  When enabled, the generated build
+\fI\%CTestUseLaunchers\fP module (also included by the
+\fI\%CTest\fP module).  When enabled, the generated build
 system wraps each invocation of the compiler, linker, or
 custom command line with a \(dqlauncher\(dq that communicates
 with CTest via environment variables and files to report
@@ -1721,14 +1742,14 @@ granular build warning and error information.  Otherwise,
 CTest must \(dqscrape\(dq the build output log for diagnostics.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_USE_LAUNCHERS'\fI\%CTEST_USE_LAUNCHERS\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_USE_LAUNCHERS\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBCTEST_USE_LAUNCHERS\fP
+\fI\%CTest\fP module variable: \fBCTEST_USE_LAUNCHERS\fP
 .UNINDENT
 .UNINDENT
 .SS CTest Test Step
 .sp
-In a \fI\%CTest Script\fP, the \X'tty: link #command:ctest_test'\fI\%ctest_test()\fP\X'tty: link' command runs this step.
+In a \fI\%CTest Script\fP, the \fI\%ctest_test()\fP command runs this step.
 Arguments to the command may specify some of the step settings.
 .sp
 Configuration settings include:
@@ -1739,9 +1760,9 @@ Specify a
 \fI\%resource specification file\fP\&.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_RESOURCE_SPEC_FILE'\fI\%CTEST_RESOURCE_SPEC_FILE\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_RESOURCE_SPEC_FILE\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBCTEST_RESOURCE_SPEC_FILE\fP
+\fI\%CTest\fP module variable: \fBCTEST_RESOURCE_SPEC_FILE\fP
 .UNINDENT
 .sp
 See \fI\%Resource Allocation\fP for more information.
@@ -1752,9 +1773,9 @@ subprojects. This mapping will be passed on to CDash when configure, test or
 build results are submitted.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_LABELS_FOR_SUBPROJECTS'\fI\%CTEST_LABELS_FOR_SUBPROJECTS\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_LABELS_FOR_SUBPROJECTS\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBCTEST_LABELS_FOR_SUBPROJECTS\fP
+\fI\%CTest\fP module variable: \fBCTEST_LABELS_FOR_SUBPROJECTS\fP
 .UNINDENT
 .sp
 See \fI\%Label and Subproject Summary\fP\&.
@@ -1765,27 +1786,27 @@ try not to start tests when they may cause the CPU load to pass above
 a given threshold.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_TEST_LOAD'\fI\%CTEST_TEST_LOAD\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_TEST_LOAD\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBCTEST_TEST_LOAD\fP
+\fI\%CTest\fP module variable: \fBCTEST_TEST_LOAD\fP
 .UNINDENT
 .TP
 .B \fBTimeOut\fP
 The default timeout for each test if not specified by the
-\X'tty: link #prop_test:TIMEOUT'\fI\%TIMEOUT\fP\X'tty: link' test property or the
+\fI\%TIMEOUT\fP test property or the
 \fI\%\-\-timeout\fP flag.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_TEST_TIMEOUT'\fI\%CTEST_TEST_TIMEOUT\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_TEST_TIMEOUT\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBDART_TESTING_TIMEOUT\fP
+\fI\%CTest\fP module variable: \fBDART_TESTING_TIMEOUT\fP
 .UNINDENT
 .UNINDENT
 .sp
-To report extra test values to CDash, see \X'tty: link #additional-test-measurements'\fI\%Additional Test Measurements\fP\X'tty: link'\&.
+To report extra test values to CDash, see \fI\%Additional Test Measurements\fP\&.
 .SS CTest Coverage Step
 .sp
-In a \fI\%CTest Script\fP, the \X'tty: link #command:ctest_coverage'\fI\%ctest_coverage()\fP\X'tty: link' command runs this step.
+In a \fI\%CTest Script\fP, the \fI\%ctest_coverage()\fP command runs this step.
 Arguments to the command may specify some of the step settings.
 .sp
 Configuration settings include:
@@ -1797,25 +1818,25 @@ It will be executed in the location specified by the
 \fBBuildDirectory\fP setting.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_COVERAGE_COMMAND'\fI\%CTEST_COVERAGE_COMMAND\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_COVERAGE_COMMAND\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBCOVERAGE_COMMAND\fP
+\fI\%CTest\fP module variable: \fBCOVERAGE_COMMAND\fP
 .UNINDENT
 .TP
 .B \fBCoverageExtraFlags\fP
 Specify command\-line options to the \fBCoverageCommand\fP tool.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_COVERAGE_EXTRA_FLAGS'\fI\%CTEST_COVERAGE_EXTRA_FLAGS\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_COVERAGE_EXTRA_FLAGS\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBCOVERAGE_EXTRA_FLAGS\fP
+\fI\%CTest\fP module variable: \fBCOVERAGE_EXTRA_FLAGS\fP
 .UNINDENT
 .sp
 These options are the first arguments passed to \fBCoverageCommand\fP\&.
 .UNINDENT
 .SS CTest MemCheck Step
 .sp
-In a \fI\%CTest Script\fP, the \X'tty: link #command:ctest_memcheck'\fI\%ctest_memcheck()\fP\X'tty: link' command runs this step.
+In a \fI\%CTest Script\fP, the \fI\%ctest_memcheck()\fP command runs this step.
 Arguments to the command may specify some of the step settings.
 .sp
 Configuration settings include:
@@ -1826,9 +1847,9 @@ Command\-line tool to perform dynamic analysis.  Test command lines
 will be launched through this tool.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_MEMORYCHECK_COMMAND'\fI\%CTEST_MEMORYCHECK_COMMAND\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_MEMORYCHECK_COMMAND\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBMEMORYCHECK_COMMAND\fP
+\fI\%CTest\fP module variable: \fBMEMORYCHECK_COMMAND\fP
 .UNINDENT
 .TP
 .B \fBMemoryCheckCommandOptions\fP
@@ -1836,27 +1857,27 @@ Specify command\-line options to the \fBMemoryCheckCommand\fP tool.
 They will be placed prior to the test command line.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_MEMORYCHECK_COMMAND_OPTIONS'\fI\%CTEST_MEMORYCHECK_COMMAND_OPTIONS\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_MEMORYCHECK_COMMAND_OPTIONS\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBMEMORYCHECK_COMMAND_OPTIONS\fP
+\fI\%CTest\fP module variable: \fBMEMORYCHECK_COMMAND_OPTIONS\fP
 .UNINDENT
 .TP
 .B \fBMemoryCheckType\fP
 Specify the type of memory checking to perform.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_MEMORYCHECK_TYPE'\fI\%CTEST_MEMORYCHECK_TYPE\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_MEMORYCHECK_TYPE\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBMEMORYCHECK_TYPE\fP
+\fI\%CTest\fP module variable: \fBMEMORYCHECK_TYPE\fP
 .UNINDENT
 .TP
 .B \fBMemoryCheckSanitizerOptions\fP
 Specify options to sanitizers when running with a sanitize\-enabled build.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_MEMORYCHECK_SANITIZER_OPTIONS'\fI\%CTEST_MEMORYCHECK_SANITIZER_OPTIONS\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_MEMORYCHECK_SANITIZER_OPTIONS\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBMEMORYCHECK_SANITIZER_OPTIONS\fP
+\fI\%CTest\fP module variable: \fBMEMORYCHECK_SANITIZER_OPTIONS\fP
 .UNINDENT
 .TP
 .B \fBMemoryCheckSuppressionFile\fP
@@ -1865,9 +1886,9 @@ Specify a file containing suppression rules for the
 appropriate to the tool.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_MEMORYCHECK_SUPPRESSIONS_FILE'\fI\%CTEST_MEMORYCHECK_SUPPRESSIONS_FILE\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_MEMORYCHECK_SUPPRESSIONS_FILE\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBMEMORYCHECK_SUPPRESSIONS_FILE\fP
+\fI\%CTest\fP module variable: \fBMEMORYCHECK_SUPPRESSIONS_FILE\fP
 .UNINDENT
 .UNINDENT
 .sp
@@ -1881,7 +1902,7 @@ compatible with Bounds Checker.
 .IP \(bu 2
 \fI\%CTest Script\fP variable: none
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: none
+\fI\%CTest\fP module variable: none
 .UNINDENT
 .TP
 .B \fBPurifyCommand\fP
@@ -1891,7 +1912,7 @@ compatible with Purify.
 .IP \(bu 2
 \fI\%CTest Script\fP variable: none
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBPURIFYCOMMAND\fP
+\fI\%CTest\fP module variable: \fBPURIFYCOMMAND\fP
 .UNINDENT
 .TP
 .B \fBValgrindCommand\fP
@@ -1901,7 +1922,7 @@ compatible with Valgrind.
 .IP \(bu 2
 \fI\%CTest Script\fP variable: none
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBVALGRIND_COMMAND\fP
+\fI\%CTest\fP module variable: \fBVALGRIND_COMMAND\fP
 .UNINDENT
 .TP
 .B \fBValgrindCommandOptions\fP
@@ -1911,7 +1932,7 @@ They will be placed prior to the test command line.
 .IP \(bu 2
 \fI\%CTest Script\fP variable: none
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBVALGRIND_COMMAND_OPTIONS\fP
+\fI\%CTest\fP module variable: \fBVALGRIND_COMMAND_OPTIONS\fP
 .UNINDENT
 .TP
 .B \fBDrMemoryCommand\fP
@@ -1921,7 +1942,7 @@ compatible with DrMemory.
 .IP \(bu 2
 \fI\%CTest Script\fP variable: none
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBDRMEMORY_COMMAND\fP
+\fI\%CTest\fP module variable: \fBDRMEMORY_COMMAND\fP
 .UNINDENT
 .TP
 .B \fBDrMemoryCommandOptions\fP
@@ -1931,7 +1952,7 @@ They will be placed prior to the test command line.
 .IP \(bu 2
 \fI\%CTest Script\fP variable: none
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBDRMEMORY_COMMAND_OPTIONS\fP
+\fI\%CTest\fP module variable: \fBDRMEMORY_COMMAND_OPTIONS\fP
 .UNINDENT
 .TP
 .B \fBCudaSanitizerCommand\fP
@@ -1941,7 +1962,7 @@ compatible with cuda\-memcheck or compute\-sanitizer.
 .IP \(bu 2
 \fI\%CTest Script\fP variable: none
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBCUDA_SANITIZER_COMMAND\fP
+\fI\%CTest\fP module variable: \fBCUDA_SANITIZER_COMMAND\fP
 .UNINDENT
 .TP
 .B \fBCudaSanitizerCommandOptions\fP
@@ -1951,12 +1972,12 @@ They will be placed prior to the test command line.
 .IP \(bu 2
 \fI\%CTest Script\fP variable: none
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBCUDA_SANITIZER_COMMAND_OPTIONS\fP
+\fI\%CTest\fP module variable: \fBCUDA_SANITIZER_COMMAND_OPTIONS\fP
 .UNINDENT
 .UNINDENT
 .SS CTest Submit Step
 .sp
-In a \fI\%CTest Script\fP, the \X'tty: link #command:ctest_submit'\fI\%ctest_submit()\fP\X'tty: link' command runs this step.
+In a \fI\%CTest Script\fP, the \fI\%ctest_submit()\fP command runs this step.
 Arguments to the command may specify some of the step settings.
 .sp
 Configuration settings include:
@@ -1967,9 +1988,9 @@ Describe the dashboard client platform with a short string.
 (Operating system, compiler, etc.)
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_BUILD_NAME'\fI\%CTEST_BUILD_NAME\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_BUILD_NAME\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBBUILDNAME\fP
+\fI\%CTest\fP module variable: \fBBUILDNAME\fP
 .UNINDENT
 .TP
 .B \fBCDashVersion\fP
@@ -1978,7 +1999,7 @@ Legacy option.  Not used.
 .IP \(bu 2
 \fI\%CTest Script\fP variable: none, detected from server
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBCTEST_CDASH_VERSION\fP
+\fI\%CTest\fP module variable: \fBCTEST_CDASH_VERSION\fP
 .UNINDENT
 .TP
 .B \fBCTestSubmitRetryCount\fP
@@ -1986,9 +2007,9 @@ Specify a number of attempts to retry submission on network failure.
 .INDENT 7.0
 .IP \(bu 2
 \fI\%CTest Script\fP variable: none,
-use the \X'tty: link #command:ctest_submit'\fI\%ctest_submit()\fP\X'tty: link' \fBRETRY_COUNT\fP option.
+use the \fI\%ctest_submit()\fP \fBRETRY_COUNT\fP option.
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBCTEST_SUBMIT_RETRY_COUNT\fP
+\fI\%CTest\fP module variable: \fBCTEST_SUBMIT_RETRY_COUNT\fP
 .UNINDENT
 .TP
 .B \fBCTestSubmitRetryDelay\fP
@@ -1996,9 +2017,9 @@ Specify a delay before retrying submission on network failure.
 .INDENT 7.0
 .IP \(bu 2
 \fI\%CTest Script\fP variable: none,
-use the \X'tty: link #command:ctest_submit'\fI\%ctest_submit()\fP\X'tty: link' \fBRETRY_DELAY\fP option.
+use the \fI\%ctest_submit()\fP \fBRETRY_DELAY\fP option.
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBCTEST_SUBMIT_RETRY_DELAY\fP
+\fI\%CTest\fP module variable: \fBCTEST_SUBMIT_RETRY_DELAY\fP
 .UNINDENT
 .TP
 .B \fBCurlOptions\fP
@@ -2010,9 +2031,9 @@ Curl library that CTest uses internally to connect to the
 server.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_CURL_OPTIONS'\fI\%CTEST_CURL_OPTIONS\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_CURL_OPTIONS\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBCTEST_CURL_OPTIONS\fP
+\fI\%CTest\fP module variable: \fBCTEST_CURL_OPTIONS\fP
 .UNINDENT
 .sp
 Possible options are:
@@ -2031,9 +2052,9 @@ Legacy option.  When \fBSubmitURL\fP is not set, it is constructed from
 \fBDropLocation\fP\&.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_DROP_LOCATION'\fI\%CTEST_DROP_LOCATION\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_DROP_LOCATION\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBDROP_LOCATION\fP if set,
+\fI\%CTest\fP module variable: \fBDROP_LOCATION\fP if set,
 else \fBCTEST_DROP_LOCATION\fP
 .UNINDENT
 .TP
@@ -2043,9 +2064,9 @@ Legacy option.  When \fBSubmitURL\fP is not set, it is constructed from
 \fBDropLocation\fP\&.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_DROP_METHOD'\fI\%CTEST_DROP_METHOD\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_DROP_METHOD\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBDROP_METHOD\fP if set,
+\fI\%CTest\fP module variable: \fBDROP_METHOD\fP if set,
 else \fBCTEST_DROP_METHOD\fP
 .UNINDENT
 .TP
@@ -2055,9 +2076,9 @@ Legacy option.  When \fBSubmitURL\fP is not set, it is constructed from
 \fBDropLocation\fP\&.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_DROP_SITE'\fI\%CTEST_DROP_SITE\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_DROP_SITE\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBDROP_SITE\fP if set,
+\fI\%CTest\fP module variable: \fBDROP_SITE\fP if set,
 else \fBCTEST_DROP_SITE\fP
 .UNINDENT
 .TP
@@ -2067,10 +2088,10 @@ Legacy option.  When \fBSubmitURL\fP is not set, it is constructed from
 \fBDropLocation\fP\&.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_DROP_SITE_PASSWORD'\fI\%CTEST_DROP_SITE_PASSWORD\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_DROP_SITE_PASSWORD\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBDROP_SITE_PASSWORD\fP if set,
-else \fBCTEST_DROP_SITE_PASWORD\fP
+\fI\%CTest\fP module variable: \fBDROP_SITE_PASSWORD\fP if set,
+else \fBCTEST_DROP_SITE_PASSWORD\fP
 .UNINDENT
 .TP
 .B \fBDropSiteUser\fP
@@ -2079,9 +2100,9 @@ Legacy option.  When \fBSubmitURL\fP is not set, it is constructed from
 \fBDropLocation\fP\&.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_DROP_SITE_USER'\fI\%CTEST_DROP_SITE_USER\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_DROP_SITE_USER\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBDROP_SITE_USER\fP if set,
+\fI\%CTest\fP module variable: \fBDROP_SITE_USER\fP if set,
 else \fBCTEST_DROP_SITE_USER\fP
 .UNINDENT
 .TP
@@ -2089,18 +2110,18 @@ else \fBCTEST_DROP_SITE_USER\fP
 Legacy option.  Not used.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_DROP_SITE_CDASH'\fI\%CTEST_DROP_SITE_CDASH\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_DROP_SITE_CDASH\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBCTEST_DROP_SITE_CDASH\fP
+\fI\%CTest\fP module variable: \fBCTEST_DROP_SITE_CDASH\fP
 .UNINDENT
 .TP
 .B \fBScpCommand\fP
 Legacy option.  Not used.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_SCP_COMMAND'\fI\%CTEST_SCP_COMMAND\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_SCP_COMMAND\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBSCPCOMMAND\fP
+\fI\%CTest\fP module variable: \fBSCPCOMMAND\fP
 .UNINDENT
 .TP
 .B \fBSite\fP
@@ -2108,10 +2129,10 @@ Describe the dashboard client host site with a short string.
 (Hostname, domain, etc.)
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_SITE'\fI\%CTEST_SITE\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_SITE\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBSITE\fP,
-initialized by the \X'tty: link #command:site_name'\fI\%site_name()\fP\X'tty: link' command
+\fI\%CTest\fP module variable: \fBSITE\fP,
+initialized by the \fI\%site_name()\fP command
 .UNINDENT
 .TP
 .B \fBSubmitURL\fP
@@ -2119,9 +2140,9 @@ The \fBhttp\fP or \fBhttps\fP URL of the dashboard server to send the submission
 to.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_SUBMIT_URL'\fI\%CTEST_SUBMIT_URL\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_SUBMIT_URL\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBSUBMIT_URL\fP if set,
+\fI\%CTest\fP module variable: \fBSUBMIT_URL\fP if set,
 else \fBCTEST_SUBMIT_URL\fP
 .UNINDENT
 .TP
@@ -2130,9 +2151,9 @@ The time to wait for the submission after which it is canceled
 if not completed. Specify a zero value to disable timeout.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_SUBMIT_INACTIVITY_TIMEOUT'\fI\%CTEST_SUBMIT_INACTIVITY_TIMEOUT\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_SUBMIT_INACTIVITY_TIMEOUT\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBCTEST_SUBMIT_INACTIVITY_TIMEOUT\fP
+\fI\%CTest\fP module variable: \fBCTEST_SUBMIT_INACTIVITY_TIMEOUT\fP
 .UNINDENT
 .TP
 .B \fBTLSVersion\fP
@@ -2143,9 +2164,9 @@ Specify a minimum TLS version allowed when submitting to a dashboard
 via \fBhttps://\fP URLs.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_TLS_VERSION'\fI\%CTEST_TLS_VERSION\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_TLS_VERSION\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBCTEST_TLS_VERSION\fP
+\fI\%CTest\fP module variable: \fBCTEST_TLS_VERSION\fP
 .UNINDENT
 .sp
 Changed in version 3.31: The default is TLS 1.2.
@@ -2160,13 +2181,13 @@ Specify a boolean value indicating whether to verify the server
 certificate when submitting to a dashboard via \fBhttps://\fP URLs.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_TLS_VERIFY'\fI\%CTEST_TLS_VERIFY\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_TLS_VERIFY\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBCTEST_TLS_VERIFY\fP
+\fI\%CTest\fP module variable: \fBCTEST_TLS_VERIFY\fP
 .UNINDENT
 .sp
 Changed in version 3.31: The default is on.  Previously, the default was off.
-Users may set the \X'tty: link #envvar:CMAKE_TLS_VERIFY'\fI\%CMAKE_TLS_VERIFY\fP\X'tty: link' environment
+Users may set the \fI\%CMAKE_TLS_VERIFY\fP environment
 variable to \fB0\fP to restore the old default.
 
 .TP
@@ -2174,9 +2195,9 @@ variable to \fB0\fP to restore the old default.
 Legacy option.  Not used.
 .INDENT 7.0
 .IP \(bu 2
-\fI\%CTest Script\fP variable: \X'tty: link #variable:CTEST_TRIGGER_SITE'\fI\%CTEST_TRIGGER_SITE\fP\X'tty: link'
+\fI\%CTest Script\fP variable: \fI\%CTEST_TRIGGER_SITE\fP
 .IP \(bu 2
-\X'tty: link #module:CTest'\fI\%CTest\fP\X'tty: link' module variable: \fBTRIGGER_SITE\fP if set,
+\fI\%CTest\fP module variable: \fBTRIGGER_SITE\fP if set,
 else \fBCTEST_TRIGGER_SITE\fP
 .UNINDENT
 .UNINDENT
@@ -2194,14 +2215,16 @@ model is defined as follows:
 The string \(dqctestInfo\(dq.
 .TP
 .B \fBversion\fP
-A JSON object specifying the version components.  Its members are
+A JSON object specifying the version components.  Its members are:
 .INDENT 7.0
 .TP
 .B \fBmajor\fP
-A non\-negative integer specifying the major version component.
+A positive integer specifying the major version component
+of the JSON object model.
 .TP
 .B \fBminor\fP
-A non\-negative integer specifying the minor version component.
+A non\-negative integer specifying the minor version component
+of the JSON object model.
 .UNINDENT
 .TP
 .B \fBbacktraceGraph\fP
@@ -2220,17 +2243,24 @@ List of node JSON objects with members:
 .INDENT 7.0
 .TP
 .B \fBcommand\fP
-Index into the \fBcommands\fP member of the \fBbacktraceGraph\fP\&.
+An optional member present when the node represents a command
+invocation within the file.  The value is an unsigned integer 0\-based
+index into the \fBcommands\fP member of the \fBbacktraceGraph\fP\&.
 .TP
 .B \fBfile\fP
-Index into the \fBfiles\fP member of the \fBbacktraceGraph\fP\&.
+An unsigned integer 0\-based index into the \fBfiles\fP member of the
+\fBbacktraceGraph\fP\&.
 .TP
 .B \fBline\fP
-Line number in the file where the backtrace was added.
+An optional member present when the node represents a line within
+the file.  The value is an unsigned integer 1\-based line number
+in the file where the backtrace was added.
 .TP
 .B \fBparent\fP
-Index into the \fBnodes\fP member of the \fBbacktraceGraph\fP
-representing the parent in the graph.
+An optional member present when the node is not the bottom of the
+call stack.  The value is an unsigned integer 0\-based index into the
+\fBnodes\fP member of the \fBbacktraceGraph\fP representing the parent
+in the graph.
 .UNINDENT
 .UNINDENT
 .TP
@@ -2240,24 +2270,42 @@ is a JSON object with members:
 .INDENT 7.0
 .TP
 .B \fBname\fP
-Test name.
+Test name. This cannot be empty.
 .TP
 .B \fBconfig\fP
-Configuration that the test can run on.
-Empty string means any config.
+Optional field specifying the configuration for which the test will run.
+This will always match the \fI\%\-C\fP option specified on the
+\fBctest\fP command line.  If no such option was given, this field will not
+be present.
 .TP
 .B \fBcommand\fP
-List where the first element is the test command and the
-remaining elements are the command arguments.
+Optional array where the first element is the test command and the
+remaining elements are the command arguments.  Normally, this field should
+be present and non\-empty, but in certain corner cases involving generator
+expressions, it is possible for a test to have no command and therefore
+this field can be missing.
 .TP
 .B \fBbacktrace\fP
 Index into the \fBnodes\fP member of the \fBbacktraceGraph\fP\&.
 .TP
 .B \fBproperties\fP
-Test properties.
-Can contain keys for each of the supported test properties.
+Optional array of test properties.
+Each array item will be a JSON object with the following members:
+.INDENT 7.0
+.TP
+.B \fBname\fP
+The name of the test property. This cannot be empty.
+.TP
+.B \fBvalue\fP
+The property value, which can be a string, a number, a boolean, or an
+array of strings.
 .UNINDENT
 .UNINDENT
+.UNINDENT
+.sp
+Added in version 4.1: The JSON output format is described in machine\-readable form by
+\fBthis JSON schema\fP\&.
+
 .SH RESOURCE ALLOCATION
 .sp
 CTest provides a mechanism for tests to specify the resources that they need
@@ -2304,7 +2352,7 @@ The CTest resource allocation feature consists of at least two inputs:
 The \fI\%resource specification file\fP,
 described below, which describes the resources available on the system.
 .IP \(bu 2
-The \X'tty: link #prop_test:RESOURCE_GROUPS'\fI\%RESOURCE_GROUPS\fP\X'tty: link' property of tests, which describes the
+The \fI\%RESOURCE_GROUPS\fP property of tests, which describes the
 resources required by the test.
 .UNINDENT
 .sp
@@ -2326,7 +2374,7 @@ the corresponding
 \fI\%environment variables\fP)
 if the user does not pass a resource specification file. Passing this file,
 either through the \fB\-\-resource\-spec\-file\fP command\-line argument or the
-\fBRESOURCE_SPEC_FILE\fP argument to \X'tty: link #command:ctest_test'\fI\%ctest_test()\fP\X'tty: link', is what activates the
+\fBRESOURCE_SPEC_FILE\fP argument to \fI\%ctest_test()\fP, is what activates the
 resource allocation feature. Tests should check the
 \fBCTEST_RESOURCE_GROUP_COUNT\fP environment variable to find out whether or not
 resource allocation is activated. This variable will always (and only) be
@@ -2334,23 +2382,23 @@ defined if resource allocation is activated. If resource allocation is not
 activated, then the \fBCTEST_RESOURCE_GROUP_COUNT\fP variable will not exist,
 even if it exists for the parent \fBctest\fP process. If a test absolutely must
 have resource allocation, then it can return a failing exit code or use the
-\X'tty: link #prop_test:SKIP_RETURN_CODE'\fI\%SKIP_RETURN_CODE\fP\X'tty: link' or \X'tty: link #prop_test:SKIP_REGULAR_EXPRESSION'\fI\%SKIP_REGULAR_EXPRESSION\fP\X'tty: link'
+\fI\%SKIP_RETURN_CODE\fP or \fI\%SKIP_REGULAR_EXPRESSION\fP
 properties to indicate a skipped test.
 .SS Resource Specification File
 .sp
 The resource specification file is a JSON file which is passed to CTest in one
 of a number of ways. It can be specified on the command line with the
 \fI\%ctest \-\-resource\-spec\-file\fP option, it can be given using the
-\fBRESOURCE_SPEC_FILE\fP argument of \X'tty: link #command:ctest_test'\fI\%ctest_test()\fP\X'tty: link', or it can be
+\fBRESOURCE_SPEC_FILE\fP argument of \fI\%ctest_test()\fP, or it can be
 generated dynamically as part of test execution (see
 \fI\%Dynamically\-Generated Resource Specification File\fP).
 .sp
 If a dashboard script is used and \fBRESOURCE_SPEC_FILE\fP is not specified, the
-value of \X'tty: link #variable:CTEST_RESOURCE_SPEC_FILE'\fI\%CTEST_RESOURCE_SPEC_FILE\fP\X'tty: link' in the dashboard script is used
+value of \fI\%CTEST_RESOURCE_SPEC_FILE\fP in the dashboard script is used
 instead.  If \fI\%\-\-resource\-spec\-file\fP,
-\fBRESOURCE_SPEC_FILE\fP, and \X'tty: link #variable:CTEST_RESOURCE_SPEC_FILE'\fI\%CTEST_RESOURCE_SPEC_FILE\fP\X'tty: link' in the
+\fBRESOURCE_SPEC_FILE\fP, and \fI\%CTEST_RESOURCE_SPEC_FILE\fP in the
 dashboard script are not specified, the value of
-\X'tty: link #variable:CTEST_RESOURCE_SPEC_FILE'\fI\%CTEST_RESOURCE_SPEC_FILE\fP\X'tty: link' in the CMake build is used instead.
+\fI\%CTEST_RESOURCE_SPEC_FILE\fP in the CMake build is used instead.
 If none of these are specified, no resource spec file is used.
 .sp
 The resource specification file must be a JSON object. All examples in this
@@ -2358,8 +2406,7 @@ document assume the following resource specification file:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 {
   \(dqversion\(dq: {
     \(dqmajor\(dq: 1,
@@ -2393,8 +2440,7 @@ document assume the following resource specification file:
     }
   ]
 }
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -2456,20 +2502,20 @@ In the example file above, there are four GPUs with ID\(aqs 0 through 3. GPU 0 h
 also one cryptography chip with 4 slots.
 .SS \fBRESOURCE_GROUPS\fP Property
 .sp
-See \X'tty: link #prop_test:RESOURCE_GROUPS'\fI\%RESOURCE_GROUPS\fP\X'tty: link' for a description of this property.
+See \fI\%RESOURCE_GROUPS\fP for a description of this property.
 .SS Environment Variables
 .sp
 Once CTest has decided which resources to allocate to a test, it passes this
 information to the test executable as a series of environment variables. For
 each example below, we will assume that the test in question has a
-\X'tty: link #prop_test:RESOURCE_GROUPS'\fI\%RESOURCE_GROUPS\fP\X'tty: link' property of
+\fI\%RESOURCE_GROUPS\fP property of
 \fB2,gpus:2;gpus:4,gpus:1,crypto_chips:2\fP\&.
 .sp
 The following variables are passed to the test process:
 .INDENT 0.0
 .TP
 .B CTEST_RESOURCE_GROUP_COUNT
-The total number of groups specified by the \X'tty: link #prop_test:RESOURCE_GROUPS'\fI\%RESOURCE_GROUPS\fP\X'tty: link'
+The total number of groups specified by the \fI\%RESOURCE_GROUPS\fP
 property. For example:
 .INDENT 7.0
 .IP \(bu 2
@@ -2477,7 +2523,7 @@ property. For example:
 .UNINDENT
 .sp
 This variable will only be defined if \fI\%ctest(1)\fP has been given a
-\fB\-\-resource\-spec\-file\fP, or if \X'tty: link #command:ctest_test'\fI\%ctest_test()\fP\X'tty: link' has been given a
+\fB\-\-resource\-spec\-file\fP, or if \fI\%ctest_test()\fP has been given a
 \fBRESOURCE_SPEC_FILE\fP\&. If no resource specification file has been given,
 this variable will not be defined.
 .UNINDENT
@@ -2533,7 +2579,7 @@ the names of resource types may not clash in a case\-insensitive environment.
 Because of this, for the sake of simplicity, all resource types must be
 listed in all lowercase in the
 \fI\%resource specification file\fP and
-in the \X'tty: link #prop_test:RESOURCE_GROUPS'\fI\%RESOURCE_GROUPS\fP\X'tty: link' property, and they are converted to all
+in the \fI\%RESOURCE_GROUPS\fP property, and they are converted to all
 uppercase in the \fBCTEST_RESOURCE_GROUP_<num>_<resource\-type>\fP environment
 variable.
 .UNINDENT
@@ -2545,21 +2591,21 @@ Added in version 3.28.
 A project may optionally specify a single test which will be used to
 dynamically generate the resource specification file that CTest will use for
 scheduling tests that use resources. The test that generates the file must
-have the \X'tty: link #prop_test:GENERATED_RESOURCE_SPEC_FILE'\fI\%GENERATED_RESOURCE_SPEC_FILE\fP\X'tty: link' property set, and must have
-exactly one fixture in its \X'tty: link #prop_test:FIXTURES_SETUP'\fI\%FIXTURES_SETUP\fP\X'tty: link' property. This fixture
+have the \fI\%GENERATED_RESOURCE_SPEC_FILE\fP property set, and must have
+exactly one fixture in its \fI\%FIXTURES_SETUP\fP property. This fixture
 is considered by CTest to have special meaning: it\(aqs the fixture that generates
 the resource spec file. The fixture may have any name. If such a fixture
-exists, all tests that have \X'tty: link #prop_test:RESOURCE_GROUPS'\fI\%RESOURCE_GROUPS\fP\X'tty: link' set must have the
-fixture in their \X'tty: link #prop_test:FIXTURES_REQUIRED'\fI\%FIXTURES_REQUIRED\fP\X'tty: link', and a resource spec file may
+exists, all tests that have \fI\%RESOURCE_GROUPS\fP set must have the
+fixture in their \fI\%FIXTURES_REQUIRED\fP, and a resource spec file may
 not be specified with the \fB\-\-resource\-spec\-file\fP argument or the
-\X'tty: link #variable:CTEST_RESOURCE_SPEC_FILE'\fI\%CTEST_RESOURCE_SPEC_FILE\fP\X'tty: link' variable.
+\fI\%CTEST_RESOURCE_SPEC_FILE\fP variable.
 .SH JOB SERVER INTEGRATION
 .sp
 Added in version 3.29.
 
 .sp
 On POSIX systems, when running under the context of a \X'tty: link https://www.gnu.org/software/make/manual/html_node/Job-Slots.html'\fI\%Job Server\fP\X'tty: link',
-CTest shares its job slots.  This is independent of the \X'tty: link #prop_test:PROCESSORS'\fI\%PROCESSORS\fP\X'tty: link'
+CTest shares its job slots.  This is independent of the \fI\%PROCESSORS\fP
 test property, which still counts against CTest\(aqs \fI\%\-j\fP
 parallel level.  CTest acquires exactly one token from the job server before
 running each test, and returns it when the test finishes.
@@ -2568,13 +2614,11 @@ For example, consider the \fBMakefile\fP:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 test:
 	+ctest \-j 8
 
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -2604,6 +2648,6 @@ found on this web page.
 The Discourse Forum hosts discussion and questions about CMake.
 .UNINDENT
 .SH COPYRIGHT
-2000-2024 Kitware, Inc. and Contributors
+2000-2026 Kitware, Inc. and Contributors
 .\" Generated by docutils manpage writer.
 .

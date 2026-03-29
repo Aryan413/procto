@@ -5,13 +5,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <title>FetchContent &mdash; CMake 3.31.11 Documentation</title>
+  <title>FetchContent &mdash; CMake 4.3.0 Documentation</title>
 
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a2c47e09" />
-    <link rel="stylesheet" type="text/css" href="../_static/cmake.css?v=3e562cf9" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a3862c66" />
+    <link rel="stylesheet" type="text/css" href="../_static/cmake.css?v=d27bb136" />
     
-    <script src="../_static/documentation_options.js?v=5746678a"></script>
-    <script src="../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../_static/documentation_options.js?v=a17b270f"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     
     <link rel="icon" href="../_static/cmake-favicon.ico"/>
@@ -22,8 +22,12 @@
  
 
   </head><body>
+    <input id="sidebar-check" type="checkbox" />
+    <label id="sidebar-overlay" for="sidebar-check"></label>
 
-    <div class="related" role="navigation" aria-label="related navigation">
+
+
+    <div class="related relbar1" role="navigation" aria-label="Related">
       <h3>Navigation</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
@@ -36,14 +40,15 @@
           <a href="FeatureSummary.html" title="FeatureSummary"
              accesskey="P">previous</a> |</li>
   <li>
-    <img src="../_static/cmake-logo-16.png" alt=""
-         style="vertical-align: middle; margin-top: -2px" />
+    <label class="sidebar-toggle" for="sidebar-check"></label>
+  </li>
+  <li class="rootlink">
+    <img src="../_static/cmake-logo-16.png" width="16" height="16" alt=""/>
+    <a href="https://cmake.org/">CMake 4.3.0</a>
+    <span class="reldelim1"> &#187;</span>
   </li>
   <li>
-    <a href="https://cmake.org/">CMake</a> &#187;
-  </li>
-  <li>
-    <a href="../index.html">3.31.11 Documentation</a> &#187;
+    <a href="../index.html">Documentation</a> &#187;
   </li>
 
           <li class="nav-item nav-item-1"><a href="../manual/cmake-modules.7.html" accesskey="U">cmake-modules(7)</a> &#187;</li>
@@ -83,6 +88,12 @@
 </li>
 </ul>
 </nav>
+<p>This module provides commands to populate content at configure time or as
+part of the calling script.</p>
+<p>Load this module in CMake with:</p>
+<div class="highlight-cmake notranslate"><div class="highlight"><pre><span></span><span class="nf">include(</span><span class="nb">FetchContent</span><span class="nf">)</span>
+</pre></div>
+</div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>The <span class="target" id="index-0-guide:Using Dependencies Guide"></span><a class="reference internal" href="../guide/using-dependencies/index.html#guide:Using Dependencies Guide" title="Using Dependencies Guide"><code class="xref cmake cmake-guide docutils literal notranslate"><span class="pre">Using</span> <span class="pre">Dependencies</span> <span class="pre">Guide</span></code></a> provides a high-level
@@ -175,9 +186,10 @@ the content being populated multiple times.</p>
 <p>The <code class="docutils literal notranslate"><span class="pre">&lt;contentOptions&gt;</span></code> can be any of the download, update, or patch options
 that the <span class="target" id="index-1-command:externalproject_add"></span><a class="reference internal" href="ExternalProject.html#command:externalproject_add" title="externalproject_add"><code class="xref cmake cmake-command docutils literal notranslate"><span class="pre">ExternalProject_Add()</span></code></a> command understands.  The configure,
 build, install, and test steps are explicitly disabled, so options related
-to those steps will be ignored.  The <code class="docutils literal notranslate"><span class="pre">SOURCE_SUBDIR</span></code> option is an
-exception, see <span class="target" id="index-1-command:fetchcontent_makeavailable"></span><a class="reference internal" href="#command:fetchcontent_makeavailable" title="fetchcontent_makeavailable"><code class="xref cmake cmake-command docutils literal notranslate"><span class="pre">FetchContent_MakeAvailable()</span></code></a> for details on how that
-affects behavior.</p>
+to those steps are prohibited and will be discarded if given.
+The <code class="docutils literal notranslate"><span class="pre">SOURCE_SUBDIR</span></code> option is an exception, see
+<span class="target" id="index-1-command:fetchcontent_makeavailable"></span><a class="reference internal" href="#command:fetchcontent_makeavailable" title="fetchcontent_makeavailable"><code class="xref cmake cmake-command docutils literal notranslate"><span class="pre">FetchContent_MakeAvailable()</span></code></a> for details on how that affects
+behavior.</p>
 <div class="versionchanged">
 <p><span class="versionmodified changed">Changed in version 3.30: </span>When policy <span class="target" id="index-0-policy:CMP0168"></span><a class="reference internal" href="../policy/CMP0168.html#policy:CMP0168" title="CMP0168"><code class="xref cmake cmake-policy docutils literal notranslate"><span class="pre">CMP0168</span></code></a> is set to <code class="docutils literal notranslate"><span class="pre">NEW</span></code>, some output-related and
 directory-related options are ignored.  See the policy documentation for
@@ -446,17 +458,20 @@ dependency internally:</p>
 <span class="nf">FetchContent_MakeAvailable(</span><span class="nb">uses_other</span><span class="w"> </span><span class="nb">other</span><span class="nf">)</span>
 </pre></div>
 </div>
-<p>Note that <span class="target" id="index-0-variable:CMAKE_VERIFY_INTERFACE_HEADER_SETS"></span><a class="reference internal" href="../variable/CMAKE_VERIFY_INTERFACE_HEADER_SETS.html#variable:CMAKE_VERIFY_INTERFACE_HEADER_SETS" title="CMAKE_VERIFY_INTERFACE_HEADER_SETS"><code class="xref cmake cmake-variable docutils literal notranslate"><span class="pre">CMAKE_VERIFY_INTERFACE_HEADER_SETS</span></code></a> is explicitly set
-to false upon entry to <code class="docutils literal notranslate"><span class="pre">FetchContent_MakeAvailable()</span></code>, and is restored to
-its original value before the command returns.  Developers typically only
+<p>Note that <span class="target" id="index-0-variable:CMAKE_VERIFY_INTERFACE_HEADER_SETS"></span><a class="reference internal" href="../variable/CMAKE_VERIFY_INTERFACE_HEADER_SETS.html#variable:CMAKE_VERIFY_INTERFACE_HEADER_SETS" title="CMAKE_VERIFY_INTERFACE_HEADER_SETS"><code class="xref cmake cmake-variable docutils literal notranslate"><span class="pre">CMAKE_VERIFY_INTERFACE_HEADER_SETS</span></code></a> and
+<span class="target" id="index-0-variable:CMAKE_VERIFY_PRIVATE_HEADER_SETS"></span><a class="reference internal" href="../variable/CMAKE_VERIFY_PRIVATE_HEADER_SETS.html#variable:CMAKE_VERIFY_PRIVATE_HEADER_SETS" title="CMAKE_VERIFY_PRIVATE_HEADER_SETS"><code class="xref cmake cmake-variable docutils literal notranslate"><span class="pre">CMAKE_VERIFY_PRIVATE_HEADER_SETS</span></code></a> are explicitly set to false
+upon entry to <code class="docutils literal notranslate"><span class="pre">FetchContent_MakeAvailable()</span></code>, and are restored to their
+original values before the command returns.  Developers typically only
 want to verify header sets from the main project, not those from any
 dependencies.  This local manipulation of the
-<span class="target" id="index-1-variable:CMAKE_VERIFY_INTERFACE_HEADER_SETS"></span><a class="reference internal" href="../variable/CMAKE_VERIFY_INTERFACE_HEADER_SETS.html#variable:CMAKE_VERIFY_INTERFACE_HEADER_SETS" title="CMAKE_VERIFY_INTERFACE_HEADER_SETS"><code class="xref cmake cmake-variable docutils literal notranslate"><span class="pre">CMAKE_VERIFY_INTERFACE_HEADER_SETS</span></code></a> variable provides that
+<span class="target" id="index-1-variable:CMAKE_VERIFY_INTERFACE_HEADER_SETS"></span><a class="reference internal" href="../variable/CMAKE_VERIFY_INTERFACE_HEADER_SETS.html#variable:CMAKE_VERIFY_INTERFACE_HEADER_SETS" title="CMAKE_VERIFY_INTERFACE_HEADER_SETS"><code class="xref cmake cmake-variable docutils literal notranslate"><span class="pre">CMAKE_VERIFY_INTERFACE_HEADER_SETS</span></code></a> and
+<span class="target" id="index-1-variable:CMAKE_VERIFY_PRIVATE_HEADER_SETS"></span><a class="reference internal" href="../variable/CMAKE_VERIFY_PRIVATE_HEADER_SETS.html#variable:CMAKE_VERIFY_PRIVATE_HEADER_SETS" title="CMAKE_VERIFY_PRIVATE_HEADER_SETS"><code class="xref cmake cmake-variable docutils literal notranslate"><span class="pre">CMAKE_VERIFY_PRIVATE_HEADER_SETS</span></code></a> variables provides that
 intuitive behavior.  You can use variables like
 <span class="target" id="index-0-variable:CMAKE_PROJECT_INCLUDE"></span><a class="reference internal" href="../variable/CMAKE_PROJECT_INCLUDE.html#variable:CMAKE_PROJECT_INCLUDE" title="CMAKE_PROJECT_INCLUDE"><code class="xref cmake cmake-variable docutils literal notranslate"><span class="pre">CMAKE_PROJECT_INCLUDE</span></code></a> or
 <span class="target" id="index-0-variable:CMAKE_PROJECT_&lt;PROJECT-NAME&gt;_INCLUDE"></span><a class="reference internal" href="../variable/CMAKE_PROJECT_PROJECT-NAME_INCLUDE.html#variable:CMAKE_PROJECT_&lt;PROJECT-NAME&gt;_INCLUDE" title="CMAKE_PROJECT_&lt;PROJECT-NAME&gt;_INCLUDE"><code class="xref cmake cmake-variable docutils literal notranslate"><span class="pre">CMAKE_PROJECT_&lt;PROJECT-NAME&gt;_INCLUDE</span></code></a> to turn verification back
 on for all or some dependencies.  You can also set the
-<span class="target" id="index-0-prop_tgt:VERIFY_INTERFACE_HEADER_SETS"></span><a class="reference internal" href="../prop_tgt/VERIFY_INTERFACE_HEADER_SETS.html#prop_tgt:VERIFY_INTERFACE_HEADER_SETS" title="VERIFY_INTERFACE_HEADER_SETS"><code class="xref cmake cmake-prop_tgt docutils literal notranslate"><span class="pre">VERIFY_INTERFACE_HEADER_SETS</span></code></a> property of individual targets.</p>
+<span class="target" id="index-0-prop_tgt:VERIFY_INTERFACE_HEADER_SETS"></span><a class="reference internal" href="../prop_tgt/VERIFY_INTERFACE_HEADER_SETS.html#prop_tgt:VERIFY_INTERFACE_HEADER_SETS" title="VERIFY_INTERFACE_HEADER_SETS"><code class="xref cmake cmake-prop_tgt docutils literal notranslate"><span class="pre">VERIFY_INTERFACE_HEADER_SETS</span></code></a> and
+<span class="target" id="index-0-prop_tgt:VERIFY_PRIVATE_HEADER_SETS"></span><a class="reference internal" href="../prop_tgt/VERIFY_PRIVATE_HEADER_SETS.html#prop_tgt:VERIFY_PRIVATE_HEADER_SETS" title="VERIFY_PRIVATE_HEADER_SETS"><code class="xref cmake cmake-prop_tgt docutils literal notranslate"><span class="pre">VERIFY_PRIVATE_HEADER_SETS</span></code></a> properties of individual targets.</p>
 </dd></dl>
 
 <dl class="cmake command">
@@ -948,17 +963,17 @@ that file if something else hasn't already done so.</p>
 <span class="nf">if(</span><span class="no">NOT</span><span class="w"> </span><span class="no">EXISTS</span><span class="w"> </span><span class="o">${</span><span class="nt">CMAKE_FIND_PACKAGE_REDIRECTS_DIR</span><span class="o">}</span><span class="na">/googletest-extra.cmake</span><span class="w"> </span><span class="no">AND</span>
 <span class="w">   </span><span class="no">NOT</span><span class="w"> </span><span class="no">EXISTS</span><span class="w"> </span><span class="o">${</span><span class="nt">CMAKE_FIND_PACKAGE_REDIRECTS_DIR</span><span class="o">}</span><span class="na">/googletestExtra.cmake</span><span class="nf">)</span>
 <span class="w">  </span><span class="nf">file(</span><span class="no">WRITE</span><span class="w"> </span><span class="o">${</span><span class="nt">CMAKE_FIND_PACKAGE_REDIRECTS_DIR</span><span class="o">}</span><span class="na">/googletest-extra.cmake</span>
-<span class="p">[=[</span>
-<span class="nf">if(</span><span class="s">&quot;${GTEST_LIBRARIES}&quot;</span><span class="w"> </span><span class="no">STREQUAL</span><span class="w"> </span><span class="s">&quot;&quot;</span><span class="w"> </span><span class="no">AND</span><span class="w"> </span><span class="no">TARGET</span><span class="w"> </span><span class="nb">GTest</span><span class="o">::</span><span class="nb">gtest</span><span class="nf">)</span>
-<span class="w">  </span><span class="nf">set(</span><span class="no">GTEST_LIBRARIES</span><span class="w"> </span><span class="nb">GTest</span><span class="o">::</span><span class="nb">gtest</span><span class="nf">)</span>
-<span class="nf">endif()</span>
-<span class="nf">if(</span><span class="s">&quot;${GTEST_MAIN_LIBRARIES}&quot;</span><span class="w"> </span><span class="no">STREQUAL</span><span class="w"> </span><span class="s">&quot;&quot;</span><span class="w"> </span><span class="no">AND</span><span class="w"> </span><span class="no">TARGET</span><span class="w"> </span><span class="nb">GTest</span><span class="o">::</span><span class="nb">gtest_main</span><span class="nf">)</span>
-<span class="w">  </span><span class="nf">set(</span><span class="no">GTEST_MAIN_LIBRARIES</span><span class="w"> </span><span class="nb">GTest</span><span class="o">::</span><span class="nb">gtest_main</span><span class="nf">)</span>
-<span class="nf">endif()</span>
-<span class="nf">if(</span><span class="s">&quot;${GTEST_BOTH_LIBRARIES}&quot;</span><span class="w"> </span><span class="no">STREQUAL</span><span class="w"> </span><span class="s">&quot;&quot;</span><span class="nf">)</span>
-<span class="w">  </span><span class="nf">set(</span><span class="no">GTEST_BOTH_LIBRARIES</span><span class="w"> </span><span class="o">${</span><span class="nt">GTEST_LIBRARIES</span><span class="o">}</span><span class="w"> </span><span class="o">${</span><span class="nt">GTEST_MAIN_LIBRARIES</span><span class="o">}</span><span class="nf">)</span>
-<span class="nf">endif()</span>
-<span class="p">]=]</span><span class="nf">)</span>
+<span class="s s-Multiline">[=[</span>
+<span class="s s-Multiline">if(&quot;${GTEST_LIBRARIES}&quot; STREQUAL &quot;&quot; AND TARGET GTest::gtest)</span>
+<span class="s s-Multiline">  set(GTEST_LIBRARIES GTest::gtest)</span>
+<span class="s s-Multiline">endif()</span>
+<span class="s s-Multiline">if(&quot;${GTEST_MAIN_LIBRARIES}&quot; STREQUAL &quot;&quot; AND TARGET GTest::gtest_main)</span>
+<span class="s s-Multiline">  set(GTEST_MAIN_LIBRARIES GTest::gtest_main)</span>
+<span class="s s-Multiline">endif()</span>
+<span class="s s-Multiline">if(&quot;${GTEST_BOTH_LIBRARIES}&quot; STREQUAL &quot;&quot;)</span>
+<span class="s s-Multiline">  set(GTEST_BOTH_LIBRARIES ${GTEST_LIBRARIES} ${GTEST_MAIN_LIBRARIES})</span>
+<span class="s s-Multiline">endif()</span>
+<span class="s s-Multiline">]=]</span><span class="nf">)</span>
 <span class="nf">endif()</span>
 </pre></div>
 </div>
@@ -972,21 +987,21 @@ a typical <code class="docutils literal notranslate"><span class="pre">find_pack
 <span class="nf">if(</span><span class="no">NOT</span><span class="w"> </span><span class="no">EXISTS</span><span class="w"> </span><span class="o">${</span><span class="nt">CMAKE_FIND_PACKAGE_REDIRECTS_DIR</span><span class="o">}</span><span class="na">/gtest-config.cmake</span><span class="w"> </span><span class="no">AND</span>
 <span class="w">   </span><span class="no">NOT</span><span class="w"> </span><span class="no">EXISTS</span><span class="w"> </span><span class="o">${</span><span class="nt">CMAKE_FIND_PACKAGE_REDIRECTS_DIR</span><span class="o">}</span><span class="na">/GTestConfig.cmake</span><span class="nf">)</span>
 <span class="w">  </span><span class="nf">file(</span><span class="no">WRITE</span><span class="w"> </span><span class="o">${</span><span class="nt">CMAKE_FIND_PACKAGE_REDIRECTS_DIR</span><span class="o">}</span><span class="na">/gtest-config.cmake</span>
-<span class="p">[=[</span>
-<span class="nf">include(</span><span class="nb">CMakeFindDependencyMacro</span><span class="nf">)</span>
-<span class="nf">find_dependency(</span><span class="nb">googletest</span><span class="nf">)</span>
-<span class="p">]=]</span><span class="nf">)</span>
+<span class="s s-Multiline">[=[</span>
+<span class="s s-Multiline">include(CMakeFindDependencyMacro)</span>
+<span class="s s-Multiline">find_dependency(googletest)</span>
+<span class="s s-Multiline">]=]</span><span class="nf">)</span>
 <span class="nf">endif()</span>
 
 <span class="nf">if(</span><span class="no">NOT</span><span class="w"> </span><span class="no">EXISTS</span><span class="w"> </span><span class="o">${</span><span class="nt">CMAKE_FIND_PACKAGE_REDIRECTS_DIR</span><span class="o">}</span><span class="na">/gtest-config-version.cmake</span><span class="w"> </span><span class="no">AND</span>
 <span class="w">   </span><span class="no">NOT</span><span class="w"> </span><span class="no">EXISTS</span><span class="w"> </span><span class="o">${</span><span class="nt">CMAKE_FIND_PACKAGE_REDIRECTS_DIR</span><span class="o">}</span><span class="na">/GTestConfigVersion.cmake</span><span class="nf">)</span>
 <span class="w">  </span><span class="nf">file(</span><span class="no">WRITE</span><span class="w"> </span><span class="o">${</span><span class="nt">CMAKE_FIND_PACKAGE_REDIRECTS_DIR</span><span class="o">}</span><span class="na">/gtest-config-version.cmake</span>
-<span class="p">[=[</span>
-<span class="nf">include(</span><span class="o">${</span><span class="nt">CMAKE_FIND_PACKAGE_REDIRECTS_DIR</span><span class="o">}</span><span class="na">/googletest-config-version.cmake</span><span class="w"> </span><span class="no">OPTIONAL</span><span class="nf">)</span>
-<span class="nf">if(</span><span class="no">NOT</span><span class="w"> </span><span class="no">PACKAGE_VERSION_COMPATIBLE</span><span class="nf">)</span>
-<span class="w">  </span><span class="nf">include(</span><span class="o">${</span><span class="nt">CMAKE_FIND_PACKAGE_REDIRECTS_DIR</span><span class="o">}</span><span class="na">/googletestConfigVersion.cmake</span><span class="w"> </span><span class="no">OPTIONAL</span><span class="nf">)</span>
-<span class="nf">endif()</span>
-<span class="p">]=]</span><span class="nf">)</span>
+<span class="s s-Multiline">[=[</span>
+<span class="s s-Multiline">include(${CMAKE_FIND_PACKAGE_REDIRECTS_DIR}/googletest-config-version.cmake OPTIONAL)</span>
+<span class="s s-Multiline">if(NOT PACKAGE_VERSION_COMPATIBLE)</span>
+<span class="s s-Multiline">  include(${CMAKE_FIND_PACKAGE_REDIRECTS_DIR}/googletestConfigVersion.cmake OPTIONAL)</span>
+<span class="s s-Multiline">endif()</span>
+<span class="s s-Multiline">]=]</span><span class="nf">)</span>
 <span class="nf">endif()</span>
 </pre></div>
 </div>
@@ -1167,10 +1182,10 @@ current working directory.</p>
           </div>
         </div>
       </div>
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
         <div class="sphinxsidebarwrapper">
   <div>
-    <h3><a href="../index.html">Table of Contents</a></h3>
+    <h3>Table of Contents</h3>
     <ul>
 <li><a class="reference internal" href="#">FetchContent</a><ul>
 <li><a class="reference internal" href="#overview">Overview</a></li>
@@ -1221,7 +1236,7 @@ current working directory.</p>
       </div>
       <div class="clearer"></div>
     </div>
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>Navigation</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
@@ -1234,14 +1249,15 @@ current working directory.</p>
           <a href="FeatureSummary.html" title="FeatureSummary"
              >previous</a> |</li>
   <li>
-    <img src="../_static/cmake-logo-16.png" alt=""
-         style="vertical-align: middle; margin-top: -2px" />
+    <label class="sidebar-toggle" for="sidebar-check"></label>
+  </li>
+  <li class="rootlink">
+    <img src="../_static/cmake-logo-16.png" width="16" height="16" alt=""/>
+    <a href="https://cmake.org/">CMake 4.3.0</a>
+    <span class="reldelim1"> &#187;</span>
   </li>
   <li>
-    <a href="https://cmake.org/">CMake</a> &#187;
-  </li>
-  <li>
-    <a href="../index.html">3.31.11 Documentation</a> &#187;
+    <a href="../index.html">Documentation</a> &#187;
   </li>
 
           <li class="nav-item nav-item-1"><a href="../manual/cmake-modules.7.html" >cmake-modules(7)</a> &#187;</li>
@@ -1250,8 +1266,17 @@ current working directory.</p>
     </div>
 
     <div class="footer" role="contentinfo">
-    &#169; Copyright 2000-2024 Kitware, Inc. and Contributors.
-      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.3.7.
+    &#169; Copyright 2000-2026 Kitware, Inc. and Contributors.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3.
     </div>
+<script type="text/javascript">
+(function() {
+  "use strict";
+  const hide = () => document.getElementById("sidebar-check").checked = false;
+  addEventListener("keydown", e => (e.key === "Escape") && hide());
+  addEventListener("click", e => (e.target.tagName === "A") && hide());
+  addEventListener("hashchange", hide)
+})();
+</script>
   </body>
 </html>

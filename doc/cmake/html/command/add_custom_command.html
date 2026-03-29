@@ -5,13 +5,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <title>add_custom_command &mdash; CMake 3.31.11 Documentation</title>
+  <title>add_custom_command &mdash; CMake 4.3.0 Documentation</title>
 
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a2c47e09" />
-    <link rel="stylesheet" type="text/css" href="../_static/cmake.css?v=3e562cf9" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a3862c66" />
+    <link rel="stylesheet" type="text/css" href="../_static/cmake.css?v=d27bb136" />
     
-    <script src="../_static/documentation_options.js?v=5746678a"></script>
-    <script src="../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../_static/documentation_options.js?v=a17b270f"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     
     <link rel="icon" href="../_static/cmake-favicon.ico"/>
@@ -22,8 +22,12 @@
  
 
   </head><body>
+    <input id="sidebar-check" type="checkbox" />
+    <label id="sidebar-overlay" for="sidebar-check"></label>
 
-    <div class="related" role="navigation" aria-label="related navigation">
+
+
+    <div class="related relbar1" role="navigation" aria-label="Related">
       <h3>Navigation</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
@@ -36,14 +40,15 @@
           <a href="add_compile_options.html" title="add_compile_options"
              accesskey="P">previous</a> |</li>
   <li>
-    <img src="../_static/cmake-logo-16.png" alt=""
-         style="vertical-align: middle; margin-top: -2px" />
+    <label class="sidebar-toggle" for="sidebar-check"></label>
+  </li>
+  <li class="rootlink">
+    <img src="../_static/cmake-logo-16.png" width="16" height="16" alt=""/>
+    <a href="https://cmake.org/">CMake 4.3.0</a>
+    <span class="reldelim1"> &#187;</span>
   </li>
   <li>
-    <a href="https://cmake.org/">CMake</a> &#187;
-  </li>
-  <li>
-    <a href="../index.html">3.31.11 Documentation</a> &#187;
+    <a href="../index.html">Documentation</a> &#187;
   </li>
 
           <li class="nav-item nav-item-1"><a href="../manual/cmake-commands.7.html" accesskey="U">cmake-commands(7)</a> &#187;</li>
@@ -59,22 +64,36 @@
   <section id="add-custom-command">
 <span id="command:add_custom_command"></span><h1>add_custom_command<a class="headerlink" href="#add-custom-command" title="Link to this heading">¶</a></h1>
 <p>Add a custom build rule to the generated build system.</p>
-<p>There are two main signatures for <code class="docutils literal notranslate"><span class="pre">add_custom_command</span></code>.</p>
+<section id="synopsis">
+<h2>Synopsis<a class="headerlink" href="#synopsis" title="Link to this heading">¶</a></h2>
+<pre class="literal-block"><a class="reference internal" href="#generating-files">Generating Files</a>
+  add_custom_command(<a class="reference internal" href="#output">OUTPUT</a> &lt;output1&gt; [&lt;output2&gt; ...]
+                     COMMAND &lt;command1&gt; [ARGS] [&lt;args1&gt;...]
+                     [...])
+
+<a class="reference internal" href="#build-events">Build Events</a>
+  add_custom_command(<a class="reference internal" href="#target">TARGET</a> &lt;target&gt;
+                     PRE_BUILD | PRE_LINK | POST_BUILD
+                     [...])</pre>
+</section>
 <section id="generating-files">
-<span id="add-custom-command-output"></span><h2>Generating Files<a class="headerlink" href="#generating-files" title="Link to this heading">¶</a></h2>
-<p>The first signature is for adding a custom command to produce an output:</p>
-<div class="highlight-cmake notranslate"><div class="highlight"><pre><span></span><span class="nf">add_custom_command(</span><span class="no">OUTPUT</span><span class="w"> </span><span class="nb">output1</span><span class="w"> </span><span class="p">[</span><span class="nb">output2</span><span class="w"> </span><span class="p">...]</span>
-<span class="w">                   </span><span class="no">COMMAND</span><span class="w"> </span><span class="nb">command1</span><span class="w"> </span><span class="p">[</span><span class="no">ARGS</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="nb">args1...</span><span class="p">]</span>
-<span class="w">                   </span><span class="p">[</span><span class="no">COMMAND</span><span class="w"> </span><span class="nb">command2</span><span class="w"> </span><span class="p">[</span><span class="no">ARGS</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="nb">args2...</span><span class="p">]</span><span class="w"> </span><span class="p">...]</span>
+<h2>Generating Files<a class="headerlink" href="#generating-files" title="Link to this heading">¶</a></h2>
+<dl class="cmake signature">
+<dt class="sig sig-object cmake" id="output">
+<span class="code cmake highlight sig-name descname"><span class="nf"><span class="pre">add_custom_command(</span></span><span class="no"><span class="pre">OUTPUT</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;output1&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">[</span></span><span class="nv"><span class="pre">&lt;output2&gt;</span></span><span class="nbsp"> </span><span class="p"><span class="pre">...]</span></span><span class="w"> </span><span class="no"><span class="pre">COMMAND</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;command1&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">[</span></span><span class="no"><span class="pre">ARGS</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">[</span></span><span class="nv"><span class="pre">&lt;args1&gt;...</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">[...]</span></span><span class="nf"><span class="pre">)</span></span></span><a class="headerlink" href="#output" title="Link to this definition">¶</a></dt>
+<dd><p>Add a custom command to produce an output:</p>
+<div class="highlight-cmake notranslate"><div class="highlight"><pre><span></span><span class="nf">add_custom_command(</span><span class="no">OUTPUT</span><span class="w"> </span><span class="nv">&lt;output1&gt;</span><span class="w"> </span><span class="p">[</span><span class="nv">&lt;output2&gt;</span><span class="w"> </span><span class="p">...]</span>
+<span class="w">                   </span><span class="no">COMMAND</span><span class="w"> </span><span class="nv">&lt;command1&gt;</span><span class="w"> </span><span class="p">[</span><span class="no">ARGS</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="nv">&lt;args1&gt;...</span><span class="p">]</span>
+<span class="w">                   </span><span class="p">[</span><span class="no">COMMAND</span><span class="w"> </span><span class="nv">&lt;command2&gt;</span><span class="w"> </span><span class="p">[</span><span class="no">ARGS</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="nv">&lt;args2&gt;...</span><span class="p">]]</span><span class="w"> </span><span class="p">...</span>
 <span class="w">                   </span><span class="p">[</span><span class="no">MAIN_DEPENDENCY</span><span class="w"> </span><span class="nb">depend</span><span class="p">]</span>
-<span class="w">                   </span><span class="p">[</span><span class="no">DEPENDS</span><span class="w"> </span><span class="p">[</span><span class="nb">depends...</span><span class="p">]]</span>
-<span class="w">                   </span><span class="p">[</span><span class="no">BYPRODUCTS</span><span class="w"> </span><span class="p">[</span><span class="nb">files...</span><span class="p">]]</span>
-<span class="w">                   </span><span class="p">[</span><span class="no">IMPLICIT_DEPENDS</span><span class="w"> </span><span class="nv">&lt;lang1&gt;</span><span class="w"> </span><span class="nb">depend1</span>
-<span class="w">                                    </span><span class="p">[</span><span class="nv">&lt;lang2&gt;</span><span class="w"> </span><span class="nb">depend2</span><span class="p">]</span><span class="w"> </span><span class="p">...]</span>
-<span class="w">                   </span><span class="p">[</span><span class="no">WORKING_DIRECTORY</span><span class="w"> </span><span class="nb">dir</span><span class="p">]</span>
-<span class="w">                   </span><span class="p">[</span><span class="no">COMMENT</span><span class="w"> </span><span class="nb">comment</span><span class="p">]</span>
-<span class="w">                   </span><span class="p">[</span><span class="no">DEPFILE</span><span class="w"> </span><span class="nb">depfile</span><span class="p">]</span>
-<span class="w">                   </span><span class="p">[</span><span class="no">JOB_POOL</span><span class="w"> </span><span class="nb">job_pool</span><span class="p">]</span>
+<span class="w">                   </span><span class="p">[</span><span class="no">DEPENDS</span><span class="w"> </span><span class="nv">&lt;depends&gt;...</span><span class="p">]</span>
+<span class="w">                   </span><span class="p">[</span><span class="no">BYPRODUCTS</span><span class="w"> </span><span class="nv">&lt;files&gt;...</span><span class="p">]</span>
+<span class="w">                   </span><span class="p">[</span><span class="no">IMPLICIT_DEPENDS</span><span class="w"> </span><span class="nv">&lt;lang1&gt;</span><span class="w"> </span><span class="nv">&lt;depend1&gt;</span>
+<span class="w">                                    </span><span class="p">[</span><span class="nv">&lt;lang2&gt;</span><span class="w"> </span><span class="nv">&lt;depend2&gt;</span><span class="p">]</span><span class="w"> </span><span class="p">...]</span>
+<span class="w">                   </span><span class="p">[</span><span class="no">WORKING_DIRECTORY</span><span class="w"> </span><span class="nv">&lt;dir&gt;</span><span class="p">]</span>
+<span class="w">                   </span><span class="p">[</span><span class="no">COMMENT</span><span class="w"> </span><span class="nv">&lt;comment&gt;</span><span class="p">]</span>
+<span class="w">                   </span><span class="p">[</span><span class="no">DEPFILE</span><span class="w"> </span><span class="nv">&lt;depfile&gt;</span><span class="p">]</span>
+<span class="w">                   </span><span class="p">[</span><span class="no">JOB_POOL</span><span class="w"> </span><span class="nv">&lt;job_pool&gt;</span><span class="p">]</span>
 <span class="w">                   </span><span class="p">[</span><span class="no">JOB_SERVER_AWARE</span><span class="w"> </span><span class="nv">&lt;bool&gt;</span><span class="p">]</span>
 <span class="w">                   </span><span class="p">[</span><span class="no">VERBATIM</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="no">APPEND</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="no">USES_TERMINAL</span><span class="p">]</span>
 <span class="w">                   </span><span class="p">[</span><span class="no">CODEGEN</span><span class="p">]</span>
@@ -142,7 +161,7 @@ See policy <span class="target" id="index-0-policy:CMP0154"></span><a class="ref
 </dd>
 <dt><code class="docutils literal notranslate"><span class="pre">COMMAND</span></code></dt><dd><p>Specify the command-line(s) to execute at build time.
 At least one <code class="docutils literal notranslate"><span class="pre">COMMAND</span></code> would normally be given, but certain patterns
-may omit it, such as adding commands in separate calls using <cite>APPEND</cite>.</p>
+may omit it, such as adding commands in separate calls using <code class="docutils literal notranslate"><span class="pre">APPEND</span></code>.</p>
 <p>If more than one <code class="docutils literal notranslate"><span class="pre">COMMAND</span></code> is specified, they will be executed in order,
 but <em>not</em> necessarily composed into a stateful shell or batch script.
 To run a full script, use the <span class="target" id="index-0-command:configure_file"></span><a class="reference internal" href="configure_file.html#command:configure_file" title="configure_file"><code class="xref cmake cmake-command docutils literal notranslate"><span class="pre">configure_file()</span></code></a> command or the
@@ -177,14 +196,12 @@ a command to execute or is mentioned in a command argument, a target-level
 dependency will be added automatically so that the mentioned target will be
 built before any target using this custom command
 (see policy <span class="target" id="index-0-policy:CMP0112"></span><a class="reference internal" href="../policy/CMP0112.html#policy:CMP0112" title="CMP0112"><code class="xref cmake cmake-policy docutils literal notranslate"><span class="pre">CMP0112</span></code></a>).</p>
-<blockquote>
-<div><ul class="simple">
+<ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">TARGET_FILE</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">TARGET_LINKER_FILE</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">TARGET_SONAME_FILE</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">TARGET_PDB_FILE</span></code></p></li>
 </ul>
-</div></blockquote>
 <p>This target-level dependency does NOT add a file-level dependency that would
 cause the custom command to re-run whenever the executable is recompiled.
 List target names with the <code class="docutils literal notranslate"><span class="pre">DEPENDS</span></code> option to add such file-level
@@ -305,7 +322,7 @@ Job server awareness can only be specified in the first call to
 <dl>
 <dt><code class="docutils literal notranslate"><span class="pre">MAIN_DEPENDENCY</span></code></dt><dd><p>Specify the primary input source file to the command.  This is
 treated just like any value given to the <code class="docutils literal notranslate"><span class="pre">DEPENDS</span></code> option
-but also suggests to Visual Studio generators where to hang
+but also suggests to <a class="reference internal" href="../manual/cmake-generators.7.html#visual-studio-generators"><span class="std std-ref">Visual Studio Generators</span></a> where to hang
 the custom command. Each source file may have at most one command
 specifying it as its main dependency. A compile command (i.e. for a
 library or an executable) counts as an implicit main dependency which
@@ -370,7 +387,8 @@ on the first call to <code class="docutils literal notranslate"><span class="pre
 </dd>
 <dt><code class="docutils literal notranslate"><span class="pre">WORKING_DIRECTORY</span></code></dt><dd><p>Execute the command with the given current working directory.
 If it is a relative path, it will be interpreted relative to the
-build tree directory corresponding to the current source directory.</p>
+build tree directory corresponding to the current source directory.
+If not specified, set to <span class="target" id="index-1-variable:CMAKE_CURRENT_BINARY_DIR"></span><a class="reference internal" href="../variable/CMAKE_CURRENT_BINARY_DIR.html#variable:CMAKE_CURRENT_BINARY_DIR" title="CMAKE_CURRENT_BINARY_DIR"><code class="xref cmake cmake-variable docutils literal notranslate"><span class="pre">CMAKE_CURRENT_BINARY_DIR</span></code></a>.</p>
 <p>This option is currently ignored if <code class="docutils literal notranslate"><span class="pre">APPEND</span></code> is given, but a future
 version may use it.</p>
 <div class="versionadded">
@@ -390,22 +408,22 @@ option <code class="docutils literal notranslate"><span class="pre">-M</span></c
 <a class="reference external" href="https://en.wikipedia.org/wiki/Backus%E2%80%93Naur_form">BNF</a> notation with
 the regular extensions, is the following:</p>
 <pre>
-<strong id="grammar-token-depfile-depfile">depfile      </strong> ::=  <a class="reference internal" href="#grammar-token-depfile-rule"><code class="xref docutils literal notranslate"><span class="pre">rule</span></code></a>*
-<strong id="grammar-token-depfile-rule">rule         </strong> ::=  <a class="reference internal" href="#grammar-token-depfile-targets"><code class="xref docutils literal notranslate"><span class="pre">targets</span></code></a> (':' (<a class="reference internal" href="#grammar-token-depfile-separator"><code class="xref docutils literal notranslate"><span class="pre">separator</span></code></a> <a class="reference internal" href="#grammar-token-depfile-dependencies"><code class="xref docutils literal notranslate"><span class="pre">dependencies</span></code></a>?)?)? <a class="reference internal" href="#grammar-token-depfile-eol"><code class="xref docutils literal notranslate"><span class="pre">eol</span></code></a>
-<strong id="grammar-token-depfile-targets">targets      </strong> ::=  <a class="reference internal" href="#grammar-token-depfile-target"><code class="xref docutils literal notranslate"><span class="pre">target</span></code></a> (<a class="reference internal" href="#grammar-token-depfile-separator"><code class="xref docutils literal notranslate"><span class="pre">separator</span></code></a> <a class="reference internal" href="#grammar-token-depfile-target"><code class="xref docutils literal notranslate"><span class="pre">target</span></code></a>)* <a class="reference internal" href="#grammar-token-depfile-separator"><code class="xref docutils literal notranslate"><span class="pre">separator</span></code></a>*
-<strong id="grammar-token-depfile-target">target       </strong> ::=  <a class="reference internal" href="#grammar-token-depfile-pathname"><code class="xref docutils literal notranslate"><span class="pre">pathname</span></code></a>
-<strong id="grammar-token-depfile-dependencies">dependencies </strong> ::=  <a class="reference internal" href="#grammar-token-depfile-dependency"><code class="xref docutils literal notranslate"><span class="pre">dependency</span></code></a> (<a class="reference internal" href="#grammar-token-depfile-separator"><code class="xref docutils literal notranslate"><span class="pre">separator</span></code></a> <a class="reference internal" href="#grammar-token-depfile-dependency"><code class="xref docutils literal notranslate"><span class="pre">dependency</span></code></a>)* <a class="reference internal" href="#grammar-token-depfile-separator"><code class="xref docutils literal notranslate"><span class="pre">separator</span></code></a>*
-<strong id="grammar-token-depfile-dependency">dependency   </strong> ::=  <a class="reference internal" href="#grammar-token-depfile-pathname"><code class="xref docutils literal notranslate"><span class="pre">pathname</span></code></a>
-<strong id="grammar-token-depfile-separator">separator    </strong> ::=  (<a class="reference internal" href="#grammar-token-depfile-space"><code class="xref docutils literal notranslate"><span class="pre">space</span></code></a> | <a class="reference internal" href="#grammar-token-depfile-line_continue"><code class="xref docutils literal notranslate"><span class="pre">line_continue</span></code></a>)+
-<strong id="grammar-token-depfile-line_continue">line_continue</strong> ::=  '\' <a class="reference internal" href="#grammar-token-depfile-eol"><code class="xref docutils literal notranslate"><span class="pre">eol</span></code></a>
-<strong id="grammar-token-depfile-space">space        </strong> ::=  ' ' | '\t'
-<strong id="grammar-token-depfile-pathname">pathname     </strong> ::=  <a class="reference internal" href="#grammar-token-depfile-character"><code class="xref docutils literal notranslate"><span class="pre">character</span></code></a>+
-<strong id="grammar-token-depfile-character">character    </strong> ::=  <a class="reference internal" href="#grammar-token-depfile-std_character"><code class="xref docutils literal notranslate"><span class="pre">std_character</span></code></a> | <a class="reference internal" href="#grammar-token-depfile-dollar"><code class="xref docutils literal notranslate"><span class="pre">dollar</span></code></a> | <a class="reference internal" href="#grammar-token-depfile-hash"><code class="xref docutils literal notranslate"><span class="pre">hash</span></code></a> | <a class="reference internal" href="#grammar-token-depfile-whitespace"><code class="xref docutils literal notranslate"><span class="pre">whitespace</span></code></a>
-<strong id="grammar-token-depfile-std_character">std_character</strong> ::=  &lt;any character except '$', '#' or ' '&gt;
-<strong id="grammar-token-depfile-dollar">dollar       </strong> ::=  '$$'
-<strong id="grammar-token-depfile-hash">hash         </strong> ::=  '\#'
-<strong id="grammar-token-depfile-whitespace">whitespace   </strong> ::=  '\ '
-<strong id="grammar-token-depfile-eol">eol          </strong> ::=  '\r'? '\n'
+<strong id="grammar-token-depfile-depfile">depfile</strong>       ::= <a class="reference internal" href="#grammar-token-depfile-rule"><code class="xref docutils literal notranslate"><span class="pre">rule</span></code></a>*
+<strong id="grammar-token-depfile-rule">rule</strong>          ::= <a class="reference internal" href="#grammar-token-depfile-targets"><code class="xref docutils literal notranslate"><span class="pre">targets</span></code></a> (':' (<a class="reference internal" href="#grammar-token-depfile-separator"><code class="xref docutils literal notranslate"><span class="pre">separator</span></code></a> <a class="reference internal" href="#grammar-token-depfile-dependencies"><code class="xref docutils literal notranslate"><span class="pre">dependencies</span></code></a>?)?)? <a class="reference internal" href="#grammar-token-depfile-eol"><code class="xref docutils literal notranslate"><span class="pre">eol</span></code></a>
+<strong id="grammar-token-depfile-targets">targets</strong>       ::= <a class="reference internal" href="#grammar-token-depfile-target"><code class="xref docutils literal notranslate"><span class="pre">target</span></code></a> (<a class="reference internal" href="#grammar-token-depfile-separator"><code class="xref docutils literal notranslate"><span class="pre">separator</span></code></a> <a class="reference internal" href="#grammar-token-depfile-target"><code class="xref docutils literal notranslate"><span class="pre">target</span></code></a>)* <a class="reference internal" href="#grammar-token-depfile-separator"><code class="xref docutils literal notranslate"><span class="pre">separator</span></code></a>*
+<strong id="grammar-token-depfile-target">target</strong>        ::= <a class="reference internal" href="#grammar-token-depfile-pathname"><code class="xref docutils literal notranslate"><span class="pre">pathname</span></code></a>
+<strong id="grammar-token-depfile-dependencies">dependencies</strong>  ::= <a class="reference internal" href="#grammar-token-depfile-dependency"><code class="xref docutils literal notranslate"><span class="pre">dependency</span></code></a> (<a class="reference internal" href="#grammar-token-depfile-separator"><code class="xref docutils literal notranslate"><span class="pre">separator</span></code></a> <a class="reference internal" href="#grammar-token-depfile-dependency"><code class="xref docutils literal notranslate"><span class="pre">dependency</span></code></a>)* <a class="reference internal" href="#grammar-token-depfile-separator"><code class="xref docutils literal notranslate"><span class="pre">separator</span></code></a>*
+<strong id="grammar-token-depfile-dependency">dependency</strong>    ::= <a class="reference internal" href="#grammar-token-depfile-pathname"><code class="xref docutils literal notranslate"><span class="pre">pathname</span></code></a>
+<strong id="grammar-token-depfile-separator">separator</strong>     ::= (<a class="reference internal" href="#grammar-token-depfile-space"><code class="xref docutils literal notranslate"><span class="pre">space</span></code></a> | <a class="reference internal" href="#grammar-token-depfile-line_continue"><code class="xref docutils literal notranslate"><span class="pre">line_continue</span></code></a>)+
+<strong id="grammar-token-depfile-line_continue">line_continue</strong> ::= '\' <a class="reference internal" href="#grammar-token-depfile-eol"><code class="xref docutils literal notranslate"><span class="pre">eol</span></code></a>
+<strong id="grammar-token-depfile-space">space</strong>         ::= ' ' | '\t'
+<strong id="grammar-token-depfile-pathname">pathname</strong>      ::= <a class="reference internal" href="#grammar-token-depfile-character"><code class="xref docutils literal notranslate"><span class="pre">character</span></code></a>+
+<strong id="grammar-token-depfile-character">character</strong>     ::= <a class="reference internal" href="#grammar-token-depfile-std_character"><code class="xref docutils literal notranslate"><span class="pre">std_character</span></code></a> | <a class="reference internal" href="#grammar-token-depfile-dollar"><code class="xref docutils literal notranslate"><span class="pre">dollar</span></code></a> | <a class="reference internal" href="#grammar-token-depfile-hash"><code class="xref docutils literal notranslate"><span class="pre">hash</span></code></a> | <a class="reference internal" href="#grammar-token-depfile-whitespace"><code class="xref docutils literal notranslate"><span class="pre">whitespace</span></code></a>
+<strong id="grammar-token-depfile-std_character">std_character</strong> ::= &lt;any character except '$', '#' or ' '&gt;
+<strong id="grammar-token-depfile-dollar">dollar</strong>        ::= '$$'
+<strong id="grammar-token-depfile-hash">hash</strong>          ::= '\#'
+<strong id="grammar-token-depfile-whitespace">whitespace</strong>    ::= '\ '
+<strong id="grammar-token-depfile-eol">eol</strong>           ::= '\r'? '\n'
 </pre>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
@@ -441,8 +459,8 @@ added.</p>
 </div>
 <p>Using <code class="docutils literal notranslate"><span class="pre">DEPFILE</span></code> with generators other than those listed above is an error.</p>
 <p>If the <code class="docutils literal notranslate"><span class="pre">DEPFILE</span></code> argument is relative, it should be relative to
-<span class="target" id="index-1-variable:CMAKE_CURRENT_BINARY_DIR"></span><a class="reference internal" href="../variable/CMAKE_CURRENT_BINARY_DIR.html#variable:CMAKE_CURRENT_BINARY_DIR" title="CMAKE_CURRENT_BINARY_DIR"><code class="xref cmake cmake-variable docutils literal notranslate"><span class="pre">CMAKE_CURRENT_BINARY_DIR</span></code></a>, and any relative paths inside the
-<code class="docutils literal notranslate"><span class="pre">DEPFILE</span></code> should also be relative to <span class="target" id="index-2-variable:CMAKE_CURRENT_BINARY_DIR"></span><a class="reference internal" href="../variable/CMAKE_CURRENT_BINARY_DIR.html#variable:CMAKE_CURRENT_BINARY_DIR" title="CMAKE_CURRENT_BINARY_DIR"><code class="xref cmake cmake-variable docutils literal notranslate"><span class="pre">CMAKE_CURRENT_BINARY_DIR</span></code></a>.
+<span class="target" id="index-2-variable:CMAKE_CURRENT_BINARY_DIR"></span><a class="reference internal" href="../variable/CMAKE_CURRENT_BINARY_DIR.html#variable:CMAKE_CURRENT_BINARY_DIR" title="CMAKE_CURRENT_BINARY_DIR"><code class="xref cmake cmake-variable docutils literal notranslate"><span class="pre">CMAKE_CURRENT_BINARY_DIR</span></code></a>, and any relative paths inside the
+<code class="docutils literal notranslate"><span class="pre">DEPFILE</span></code> should also be relative to <span class="target" id="index-3-variable:CMAKE_CURRENT_BINARY_DIR"></span><a class="reference internal" href="../variable/CMAKE_CURRENT_BINARY_DIR.html#variable:CMAKE_CURRENT_BINARY_DIR" title="CMAKE_CURRENT_BINARY_DIR"><code class="xref cmake cmake-variable docutils literal notranslate"><span class="pre">CMAKE_CURRENT_BINARY_DIR</span></code></a>.
 See policy <span class="target" id="index-0-policy:CMP0116"></span><a class="reference internal" href="../policy/CMP0116.html#policy:CMP0116" title="CMP0116"><code class="xref cmake cmake-policy docutils literal notranslate"><span class="pre">CMP0116</span></code></a>, which is always <code class="docutils literal notranslate"><span class="pre">NEW</span></code> for
 <a class="reference internal" href="../manual/cmake-generators.7.html#makefile-generators"><span class="std std-ref">Makefile Generators</span></a>, <a class="reference internal" href="../manual/cmake-generators.7.html#visual-studio-generators"><span class="std std-ref">Visual Studio Generators</span></a>,
 and the <span class="target" id="index-1-generator:Xcode"></span><a class="reference internal" href="../generator/Xcode.html#generator:Xcode" title="Xcode"><code class="xref cmake cmake-generator docutils literal notranslate"><span class="pre">Xcode</span></code></a> generator.</p>
@@ -473,6 +491,8 @@ unnecessary implicit dependencies.</p>
 provide another way for reducing the impact of target dependencies in some
 scenarios.</p>
 </div></blockquote>
+</dd></dl>
+
 </section>
 <section id="examples-generating-files">
 <h2>Examples: Generating Files<a class="headerlink" href="#examples-generating-files" title="Link to this heading">¶</a></h2>
@@ -566,19 +586,22 @@ is built.</p>
 </section>
 </section>
 <section id="build-events">
-<span id="add-custom-command-target"></span><h2>Build Events<a class="headerlink" href="#build-events" title="Link to this heading">¶</a></h2>
-<p>The second signature adds a custom command to a target such as a
+<h2>Build Events<a class="headerlink" href="#build-events" title="Link to this heading">¶</a></h2>
+<dl class="cmake signature">
+<dt class="sig sig-object cmake" id="target">
+<span class="code cmake highlight sig-name descname"><span class="nf"><span class="pre">add_custom_command(</span></span><span class="no"><span class="pre">TARGET</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;target&gt;</span></span><span class="w"> </span><span class="no"><span class="pre">PRE_BUILD</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="no"><span class="pre">PRE_LINK</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="no"><span class="pre">POST_BUILD</span></span><span class="w"> </span><span class="p"><span class="pre">[...]</span></span><span class="nf"><span class="pre">)</span></span></span><a class="headerlink" href="#target" title="Link to this definition">¶</a></dt>
+<dd><p>Add a build event to a target such as a
 library or executable.  This is useful for performing an operation
 before or after building the target.  The command becomes part of the
 target and will only execute when the target itself is built.  If the
 target is already built, the command will not execute.</p>
 <div class="highlight-cmake notranslate"><div class="highlight"><pre><span></span><span class="nf">add_custom_command(</span><span class="no">TARGET</span><span class="w"> </span><span class="nv">&lt;target&gt;</span>
 <span class="w">                   </span><span class="no">PRE_BUILD</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="no">PRE_LINK</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="no">POST_BUILD</span>
-<span class="w">                   </span><span class="no">COMMAND</span><span class="w"> </span><span class="nb">command1</span><span class="w"> </span><span class="p">[</span><span class="no">ARGS</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="nb">args1...</span><span class="p">]</span>
-<span class="w">                   </span><span class="p">[</span><span class="no">COMMAND</span><span class="w"> </span><span class="nb">command2</span><span class="w"> </span><span class="p">[</span><span class="no">ARGS</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="nb">args2...</span><span class="p">]</span><span class="w"> </span><span class="p">...]</span>
-<span class="w">                   </span><span class="p">[</span><span class="no">BYPRODUCTS</span><span class="w"> </span><span class="p">[</span><span class="nb">files...</span><span class="p">]]</span>
-<span class="w">                   </span><span class="p">[</span><span class="no">WORKING_DIRECTORY</span><span class="w"> </span><span class="nb">dir</span><span class="p">]</span>
-<span class="w">                   </span><span class="p">[</span><span class="no">COMMENT</span><span class="w"> </span><span class="nb">comment</span><span class="p">]</span>
+<span class="w">                   </span><span class="no">COMMAND</span><span class="w"> </span><span class="nv">&lt;command1&gt;</span><span class="w"> </span><span class="p">[</span><span class="no">ARGS</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="nv">&lt;args1&gt;...</span><span class="p">]</span>
+<span class="w">                   </span><span class="p">[</span><span class="no">COMMAND</span><span class="w"> </span><span class="nv">&lt;command2&gt;</span><span class="w"> </span><span class="p">[</span><span class="no">ARGS</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="nv">&lt;args2&gt;...</span><span class="p">]]</span><span class="w"> </span><span class="p">...</span>
+<span class="w">                   </span><span class="p">[</span><span class="no">BYPRODUCTS</span><span class="w"> </span><span class="nv">&lt;files&gt;...</span><span class="p">]</span>
+<span class="w">                   </span><span class="p">[</span><span class="no">WORKING_DIRECTORY</span><span class="w"> </span><span class="nv">&lt;dir&gt;</span><span class="p">]</span>
+<span class="w">                   </span><span class="p">[</span><span class="no">COMMENT</span><span class="w"> </span><span class="nv">&lt;comment&gt;</span><span class="p">]</span>
 <span class="w">                   </span><span class="p">[</span><span class="no">VERBATIM</span><span class="p">]</span>
 <span class="w">                   </span><span class="p">[</span><span class="no">COMMAND_EXPAND_LISTS</span><span class="p">]</span>
 <span class="w">                   </span><span class="p">[</span><span class="no">USES_TERMINAL</span><span class="p">]</span><span class="nf">)</span>
@@ -608,8 +631,10 @@ This is not defined for targets created by the
 <p>Projects should always specify one of the above three keywords when using
 the <code class="docutils literal notranslate"><span class="pre">TARGET</span></code> form.  See policy <span class="target" id="index-9-policy:CMP0175"></span><a class="reference internal" href="../policy/CMP0175.html#policy:CMP0175" title="CMP0175"><code class="xref cmake cmake-policy docutils literal notranslate"><span class="pre">CMP0175</span></code></a>.</p>
 <p>All other keywords shown in the signature above have the same meaning as they
-do for the <span class="target" id="index-0-command:add_custom_command"></span><a class="reference internal" href="#command:add_custom_command" title="add_custom_command(output)"><code class="xref cmake cmake-command docutils literal notranslate"><span class="pre">add_custom_command(OUTPUT)</span></code></a> form of the command.
+do for the <span class="target" id="index-0-command:add_custom_command"></span><a class="reference internal" href="#output" title="add_custom_command(output)"><code class="xref cmake cmake-command docutils literal notranslate"><span class="pre">add_custom_command(OUTPUT)</span></code></a> form of the command.
 At least one <code class="docutils literal notranslate"><span class="pre">COMMAND</span></code> must be given, see policy <span class="target" id="index-10-policy:CMP0175"></span><a class="reference internal" href="../policy/CMP0175.html#policy:CMP0175" title="CMP0175"><code class="xref cmake cmake-policy docutils literal notranslate"><span class="pre">CMP0175</span></code></a>.</p>
+</dd></dl>
+
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>Because generator expressions can be used in custom commands,
@@ -680,12 +705,13 @@ for more information.</p>
           </div>
         </div>
       </div>
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
         <div class="sphinxsidebarwrapper">
   <div>
-    <h3><a href="../index.html">Table of Contents</a></h3>
+    <h3>Table of Contents</h3>
     <ul>
 <li><a class="reference internal" href="#">add_custom_command</a><ul>
+<li><a class="reference internal" href="#synopsis">Synopsis</a></li>
 <li><a class="reference internal" href="#generating-files">Generating Files</a></li>
 <li><a class="reference internal" href="#examples-generating-files">Examples: Generating Files</a><ul>
 <li><a class="reference internal" href="#example-generating-files-for-multiple-targets">Example: Generating Files for Multiple Targets</a></li>
@@ -731,7 +757,7 @@ for more information.</p>
       </div>
       <div class="clearer"></div>
     </div>
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>Navigation</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
@@ -744,14 +770,15 @@ for more information.</p>
           <a href="add_compile_options.html" title="add_compile_options"
              >previous</a> |</li>
   <li>
-    <img src="../_static/cmake-logo-16.png" alt=""
-         style="vertical-align: middle; margin-top: -2px" />
+    <label class="sidebar-toggle" for="sidebar-check"></label>
+  </li>
+  <li class="rootlink">
+    <img src="../_static/cmake-logo-16.png" width="16" height="16" alt=""/>
+    <a href="https://cmake.org/">CMake 4.3.0</a>
+    <span class="reldelim1"> &#187;</span>
   </li>
   <li>
-    <a href="https://cmake.org/">CMake</a> &#187;
-  </li>
-  <li>
-    <a href="../index.html">3.31.11 Documentation</a> &#187;
+    <a href="../index.html">Documentation</a> &#187;
   </li>
 
           <li class="nav-item nav-item-1"><a href="../manual/cmake-commands.7.html" >cmake-commands(7)</a> &#187;</li>
@@ -760,8 +787,17 @@ for more information.</p>
     </div>
 
     <div class="footer" role="contentinfo">
-    &#169; Copyright 2000-2024 Kitware, Inc. and Contributors.
-      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.3.7.
+    &#169; Copyright 2000-2026 Kitware, Inc. and Contributors.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3.
     </div>
+<script type="text/javascript">
+(function() {
+  "use strict";
+  const hide = () => document.getElementById("sidebar-check").checked = false;
+  addEventListener("keydown", e => (e.key === "Escape") && hide());
+  addEventListener("click", e => (e.target.tagName === "A") && hide());
+  addEventListener("hashchange", hide)
+})();
+</script>
   </body>
 </html>

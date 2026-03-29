@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "CMAKE-BUILDSYSTEM" "7" "Jan 26, 2026" "3.31.11" "CMake"
+.TH "CMAKE-BUILDSYSTEM" "7" "Mar 17, 2026" "4.3.0" "CMake"
 .SH NAME
 cmake-buildsystem \- CMake Buildsystem Reference
 .SH INTRODUCTION
@@ -39,21 +39,19 @@ targets are expressed in the buildsystem to determine the build order
 and the rules for regeneration in response to change.
 .SH BINARY TARGETS
 .sp
-Executables and libraries are defined using the \X'tty: link #command:add_executable'\fI\%add_executable()\fP\X'tty: link'
-and \X'tty: link #command:add_library'\fI\%add_library()\fP\X'tty: link' commands.  The resulting binary files have
-appropriate \X'tty: link #prop_tgt:PREFIX'\fI\%PREFIX\fP\X'tty: link', \X'tty: link #prop_tgt:SUFFIX'\fI\%SUFFIX\fP\X'tty: link' and extensions for the
+Executables and libraries are defined using the \fI\%add_executable()\fP
+and \fI\%add_library()\fP commands.  The resulting binary files have
+appropriate \fI\%PREFIX\fP, \fI\%SUFFIX\fP and extensions for the
 platform targeted. Dependencies between binary targets are expressed using
-the \X'tty: link #command:target_link_libraries'\fI\%target_link_libraries()\fP\X'tty: link' command:
+the \fI\%target_link_libraries()\fP command:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 add_library(archive archive.cpp zip.cpp lzma.cpp)
 add_executable(zipapp zipapp.cpp)
 target_link_libraries(zipapp archive)
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -62,152 +60,229 @@ compiled from \fBarchive.cpp\fP, \fBzip.cpp\fP, and \fBlzma.cpp\fP\&.  \fBzipapp
 is defined as an executable formed by compiling and linking \fBzipapp.cpp\fP\&.
 When linking the \fBzipapp\fP executable, the \fBarchive\fP static library is
 linked in.
-.SS Binary Executables
+.SS Executables
 .sp
-The \X'tty: link #command:add_executable'\fI\%add_executable()\fP\X'tty: link' command defines an executable target:
+Executables are binaries created by linking object files together,
+one of which contains a program entry point, e.g., \fBmain\fP\&.
+.sp
+The \fI\%add_executable()\fP command defines an executable target:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 add_executable(mytool mytool.cpp)
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
-Commands such as \X'tty: link #command:add_custom_command'\fI\%add_custom_command()\fP\X'tty: link', which generates rules to be
-run at build time can transparently use an \X'tty: link #prop_tgt:TYPE'\fI\%EXECUTABLE\fP\X'tty: link'
+CMake generates build rules to compile the source files into object
+files and link them into an executable.
+.sp
+Link dependencies of executables may be specified using the
+\fI\%target_link_libraries()\fP command.  Linkers start with the
+object files compiled from the executable\(aqs own source files, and
+then resolve remaining symbol dependencies by searching linked libraries.
+.sp
+Commands such as \fI\%add_custom_command()\fP, which generates rules to be
+run at build time can transparently use an \fI\%EXECUTABLE\fP
 target as a \fBCOMMAND\fP executable.  The buildsystem rules will ensure that
 the executable is built before attempting to run the command.
-.SS Binary Library Types
-.SS Normal Libraries
+.SS Static Libraries
 .sp
-By default, the \X'tty: link #command:add_library'\fI\%add_library()\fP\X'tty: link' command defines a \fBSTATIC\fP library,
-unless a type is specified.  A type may be specified when using the command:
+Static libraries are archives of object files.  They are produced by an
+archiver, not a linker.  \fI\%Executables\fP, \fI\%Shared Libraries\fP, and
+\fI\%Module Libraries\fP may link to static libraries as dependencies.
+Linkers select subsets of object files from static libraries as needed
+to resolve symbols and link them into consuming binaries.  Each binary
+that links to a static library gets its own copy of the symbols, and
+the static library itself is not needed at runtime.
+.sp
+The \fI\%add_library()\fP command defines a static library target
+when called with the \fBSTATIC\fP library type:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
-add_library(archive SHARED archive.cpp zip.cpp lzma.cpp)
-.ft P
-.fi
-.UNINDENT
-.UNINDENT
-.INDENT 0.0
-.INDENT 3.5
-.sp
-.nf
-.ft C
+.EX
 add_library(archive STATIC archive.cpp zip.cpp lzma.cpp)
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
-The \X'tty: link #variable:BUILD_SHARED_LIBS'\fI\%BUILD_SHARED_LIBS\fP\X'tty: link' variable may be enabled to change the
-behavior of \X'tty: link #command:add_library'\fI\%add_library()\fP\X'tty: link' to build shared libraries by default.
-.sp
-In the context of the buildsystem definition as a whole, it is largely
-irrelevant whether particular libraries are \fBSHARED\fP or \fBSTATIC\fP \-\-
-the commands, dependency specifications and other APIs work similarly
-regardless of the library type.  The \fBMODULE\fP library type is
-dissimilar in that it is generally not linked to \-\- it is not used in
-the right\-hand\-side of the \X'tty: link #command:target_link_libraries'\fI\%target_link_libraries()\fP\X'tty: link' command.
-It is a type which is loaded as a plugin using runtime techniques.
-If the library does not export any unmanaged symbols (e.g. Windows
-resource DLL, C++/CLI DLL), it is required that the library not be a
-\fBSHARED\fP library because CMake expects \fBSHARED\fP libraries to export
-at least one symbol.
+or, when the \fI\%BUILD_SHARED_LIBS\fP variable is false, with no type:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
-add_library(archive MODULE 7z.cpp)
-.ft P
-.fi
+.EX
+add_library(archive archive.cpp zip.cpp lzma.cpp)
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+CMake generates build rules to compile the source files into object
+files and archive them into a static library.
+.sp
+Link dependencies of static libraries may be specified using the
+\fI\%target_link_libraries()\fP command.  Since static libraries are
+archives rather than linked binaries, object files from their link
+dependencies are not included in the libraries themselves (except for
+\fI\%Object Libraries\fP specified as \fIdirect\fP link dependencies).
+Instead, CMake records static libraries\(aq link dependencies for
+transitive use when linking consuming binaries.
+.SS Shared Libraries
+.sp
+Shared libraries are binaries created by linking object files together.
+\fI\%Executables\fP, other shared libraries, and \fI\%Module Libraries\fP may link
+to shared libraries as dependencies.  Linkers record references to shared
+libraries in consuming binaries.  At runtime, a dynamic loader searches
+for referenced shared libraries on disk and loads their symbols.
+.sp
+The \fI\%add_library()\fP command defines a shared library target
+when called with the \fBSHARED\fP library type:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+add_library(archive SHARED archive.cpp zip.cpp lzma.cpp)
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+or, when the \fI\%BUILD_SHARED_LIBS\fP variable is true, with no type:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+add_library(archive archive.cpp zip.cpp lzma.cpp)
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+CMake generates build rules to compile the source files into object
+files and link them into a shared library.
+.sp
+Link dependencies of shared libraries may be specified using the
+\fI\%target_link_libraries()\fP command.  Linkers start with the
+object files compiled from the shared library\(aqs own source files, and
+then resolve remaining symbol dependencies by searching linked libraries.
+.sp
+\fBNOTE:\fP
+.INDENT 0.0
+.INDENT 3.5
+CMake expects shared libraries to export at least one symbol.  If a library
+does not export any unmanaged symbols, e.g., a Windows resource DLL or
+C++/CLI DLL, make it a \fI\%Module Library\fP instead.
 .UNINDENT
 .UNINDENT
 .SS Apple Frameworks
 .sp
-A \fBSHARED\fP library may be marked with the \X'tty: link #prop_tgt:FRAMEWORK'\fI\%FRAMEWORK\fP\X'tty: link'
-target property to create an macOS or iOS Framework Bundle.
+\fI\%Shared Libraries\fP and \fI\%Static Libraries\fP may be marked with the
+\fI\%FRAMEWORK\fP target property to create a macOS or iOS Framework.
 A library with the \fBFRAMEWORK\fP target property should also set the
-\X'tty: link #prop_tgt:FRAMEWORK_VERSION'\fI\%FRAMEWORK_VERSION\fP\X'tty: link' target property.  This property is typically
+\fI\%FRAMEWORK_VERSION\fP target property.  This property is typically
 set to the value of \(dqA\(dq by macOS conventions.
 The \fBMACOSX_FRAMEWORK_IDENTIFIER\fP sets the \fBCFBundleIdentifier\fP key
 and it uniquely identifies the bundle.
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 add_library(MyFramework SHARED MyFramework.cpp)
 set_target_properties(MyFramework PROPERTIES
   FRAMEWORK TRUE
   FRAMEWORK_VERSION A # Version \(dqA\(dq is macOS convention
   MACOSX_FRAMEWORK_IDENTIFIER org.cmake.MyFramework
 )
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
+.SS Module Libraries
+.sp
+Module libraries are binaries created by linking object files together.
+Unlike \fI\%Shared Libraries\fP, module libraries may not be linked by other
+binaries as dependencies \-\- do not name them in the right\-hand side of
+the \fI\%target_link_libraries()\fP command.  Instead, module libraries
+are plugins that an application can dynamically load on\-demand at runtime,
+e.g., by \fBdlopen\fP\&.
+.sp
+The \fI\%add_library()\fP command defines a module library target
+when called with the \fBMODULE\fP library type:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+add_library(archivePlugin MODULE 7z.cpp)
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+CMake generates build rules to compile the source files into object
+files and link them into a module library.
+.sp
+Link dependencies of module libraries may be specified using the
+\fI\%target_link_libraries()\fP command.  Linkers start with the
+object files compiled from the module library\(aqs own source files, and
+then resolve remaining symbol dependencies by searching linked libraries.
 .SS Object Libraries
 .sp
-The \fBOBJECT\fP library type defines a non\-archival collection of object files
-resulting from compiling the given source files.  The object files collection
-may be used as source inputs to other targets by using the syntax
-\X'tty: link #genex:TARGET_OBJECTS'\fI\%$<TARGET_OBJECTS:name>\fP\X'tty: link'\&.  This is a
-\X'tty: link #manual:cmake-generator-expressions(7)'\fI\%generator expression\fP\X'tty: link' that can be
-used to supply the \fBOBJECT\fP library content to other targets:
+Object libraries are collections of object files created by compiling
+source files without any archiving or linking.  The object files may be
+used when linking \fI\%Executables\fP, \fI\%Shared Libraries\fP, and
+\fI\%Module Libraries\fP, or when archiving \fI\%Static Libraries\fP\&.
+.sp
+The \fI\%add_library()\fP command defines an object library target
+when called with the \fBOBJECT\fP library type:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
-add_library(archive OBJECT archive.cpp zip.cpp lzma.cpp)
-
-add_library(archiveExtras STATIC $<TARGET_OBJECTS:archive> extras.cpp)
-
-add_executable(test_exe $<TARGET_OBJECTS:archive> test.cpp)
-.ft P
-.fi
+.EX
+add_library(archiveObjs OBJECT archive.cpp zip.cpp lzma.cpp)
+.EE
 .UNINDENT
 .UNINDENT
 .sp
-The link (or archiving) step of those other targets will use the object
-files collection in addition to those from their own sources.
+CMake generates build rules to compile the source files into object files.
 .sp
-Alternatively, object libraries may be linked into other targets:
+Other targets may specify the object files as source inputs by using the
+\fI\%generator expression\fP syntax
+\fI\%$<TARGET_OBJECTS:name>\fP:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
-add_library(archive OBJECT archive.cpp zip.cpp lzma.cpp)
+.EX
+add_library(archiveExtras STATIC $<TARGET_OBJECTS:archiveObjs> extras.cpp)
 
+add_executable(test_exe $<TARGET_OBJECTS:archiveObjs> test.cpp)
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+The consuming targets are linked (or archived) using object files
+both from their own sources and from the named object libraries.
+.sp
+Alternatively, object libraries may be specified as link dependencies
+of other targets:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
 add_library(archiveExtras STATIC extras.cpp)
-target_link_libraries(archiveExtras PUBLIC archive)
+target_link_libraries(archiveExtras PUBLIC archiveObjs)
 
 add_executable(test_exe test.cpp)
-target_link_libraries(test_exe archive)
-.ft P
-.fi
+target_link_libraries(test_exe archiveObjs)
+.EE
 .UNINDENT
 .UNINDENT
 .sp
-The link (or archiving) step of those other targets will use the object
-files from \fBOBJECT\fP libraries that are \fIdirectly\fP linked.  Additionally,
-usage requirements of the \fBOBJECT\fP libraries will be honored when compiling
-sources in those other targets.  Furthermore, those usage requirements
-will propagate transitively to dependents of those other targets.
+The consuming targets are linked (or archived) using object files
+both from their own sources and from object libraries specified as
+\fIdirect\fP link dependencies by \fI\%target_link_libraries()\fP\&.
+See \fI\%Linking Object Libraries\fP\&.
 .sp
 Object libraries may not be used as the \fBTARGET\fP in a use of the
-\X'tty: link #command:add_custom_command'\fI\%add_custom_command(TARGET)\fP\X'tty: link' command signature.  However,
-the list of objects can be used by \X'tty: link #command:add_custom_command'\fI\%add_custom_command(OUTPUT)\fP\X'tty: link'
-or \X'tty: link #generate'\fI\%file(GENERATE)\fP\X'tty: link' by using \fB$<TARGET_OBJECTS:objlib>\fP\&.
+\fI\%add_custom_command(TARGET)\fP command signature.  However,
+the list of objects can be used by \fI\%add_custom_command(OUTPUT)\fP
+or \fI\%file(GENERATE)\fP by using \fB$<TARGET_OBJECTS:objlib>\fP\&.
 .SH BUILD SPECIFICATION AND USAGE REQUIREMENTS
 .sp
 Targets build according to their own
@@ -220,8 +295,7 @@ For example:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 add_library(archive SHARED archive.cpp zip.cpp)
 
 if (LZMA_FOUND)
@@ -239,8 +313,7 @@ add_executable(consumer consumer.cpp)
 # Link \(aqconsumer\(aq to \(aqarchive\(aq.  This also consumes its usage requirements,
 # so \(aqconsumer.cpp\(aq is compiled with \(aq\-DUSING_ARCHIVE_LIB\(aq.
 target_link_libraries(consumer archive)
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .SS Target Commands
@@ -270,22 +343,20 @@ a target.
 The commands are:
 .INDENT 0.0
 .TP
-.B \X'tty: link #command:target_compile_definitions'\fI\%target_compile_definitions()\fP\X'tty: link'
-Populates the \X'tty: link #prop_tgt:COMPILE_DEFINITIONS'\fI\%COMPILE_DEFINITIONS\fP\X'tty: link' build specification and
-\X'tty: link #prop_tgt:INTERFACE_COMPILE_DEFINITIONS'\fI\%INTERFACE_COMPILE_DEFINITIONS\fP\X'tty: link' usage requirement properties.
+.B \fI\%target_compile_definitions()\fP
+Populates the \fI\%COMPILE_DEFINITIONS\fP build specification and
+\fI\%INTERFACE_COMPILE_DEFINITIONS\fP usage requirement properties.
 .sp
 For example, the call
 .INDENT 7.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 target_compile_definitions(archive
   PRIVATE   BUILDING_WITH_LZMA
   INTERFACE USING_ARCHIVE_LIB
 )
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -293,71 +364,71 @@ appends \fBBUILDING_WITH_LZMA\fP to the target\(aqs \fBCOMPILE_DEFINITIONS\fP
 property and appends \fBUSING_ARCHIVE_LIB\fP to the target\(aqs
 \fBINTERFACE_COMPILE_DEFINITIONS\fP property.
 .TP
-.B \X'tty: link #command:target_compile_options'\fI\%target_compile_options()\fP\X'tty: link'
-Populates the \X'tty: link #prop_tgt:COMPILE_OPTIONS'\fI\%COMPILE_OPTIONS\fP\X'tty: link' build specification and
-\X'tty: link #prop_tgt:INTERFACE_COMPILE_OPTIONS'\fI\%INTERFACE_COMPILE_OPTIONS\fP\X'tty: link' usage requirement properties.
+.B \fI\%target_compile_options()\fP
+Populates the \fI\%COMPILE_OPTIONS\fP build specification and
+\fI\%INTERFACE_COMPILE_OPTIONS\fP usage requirement properties.
 .TP
-.B \X'tty: link #command:target_compile_features'\fI\%target_compile_features()\fP\X'tty: link'
+.B \fI\%target_compile_features()\fP
 Added in version 3.1.
 
 .sp
-Populates the \X'tty: link #prop_tgt:COMPILE_FEATURES'\fI\%COMPILE_FEATURES\fP\X'tty: link' build specification and
-\X'tty: link #prop_tgt:INTERFACE_COMPILE_FEATURES'\fI\%INTERFACE_COMPILE_FEATURES\fP\X'tty: link' usage requirement properties.
+Populates the \fI\%COMPILE_FEATURES\fP build specification and
+\fI\%INTERFACE_COMPILE_FEATURES\fP usage requirement properties.
 .TP
-.B \X'tty: link #command:target_include_directories'\fI\%target_include_directories()\fP\X'tty: link'
-Populates the \X'tty: link #prop_tgt:INCLUDE_DIRECTORIES'\fI\%INCLUDE_DIRECTORIES\fP\X'tty: link' build specification
-and \X'tty: link #prop_tgt:INTERFACE_INCLUDE_DIRECTORIES'\fI\%INTERFACE_INCLUDE_DIRECTORIES\fP\X'tty: link' usage requirement
+.B \fI\%target_include_directories()\fP
+Populates the \fI\%INCLUDE_DIRECTORIES\fP build specification
+and \fI\%INTERFACE_INCLUDE_DIRECTORIES\fP usage requirement
 properties.  With the \fBSYSTEM\fP option, it also populates the
-\X'tty: link #prop_tgt:INTERFACE_SYSTEM_INCLUDE_DIRECTORIES'\fI\%INTERFACE_SYSTEM_INCLUDE_DIRECTORIES\fP\X'tty: link' usage requirement.
+\fI\%INTERFACE_SYSTEM_INCLUDE_DIRECTORIES\fP usage requirement.
 .sp
-For convenience, the \X'tty: link #variable:CMAKE_INCLUDE_CURRENT_DIR'\fI\%CMAKE_INCLUDE_CURRENT_DIR\fP\X'tty: link' variable
+For convenience, the \fI\%CMAKE_INCLUDE_CURRENT_DIR\fP variable
 may be enabled to add the source directory and corresponding build
 directory as \fBINCLUDE_DIRECTORIES\fP on all targets.  Similarly,
-the \X'tty: link #variable:CMAKE_INCLUDE_CURRENT_DIR_IN_INTERFACE'\fI\%CMAKE_INCLUDE_CURRENT_DIR_IN_INTERFACE\fP\X'tty: link' variable may
+the \fI\%CMAKE_INCLUDE_CURRENT_DIR_IN_INTERFACE\fP variable may
 be enabled to add them as \fBINTERFACE_INCLUDE_DIRECTORIES\fP on all
 targets.
 .TP
-.B \X'tty: link #command:target_sources'\fI\%target_sources()\fP\X'tty: link'
+.B \fI\%target_sources()\fP
 Added in version 3.1.
 
 .sp
-Populates the \X'tty: link #prop_tgt:SOURCES'\fI\%SOURCES\fP\X'tty: link' build specification and
-\X'tty: link #prop_tgt:INTERFACE_SOURCES'\fI\%INTERFACE_SOURCES\fP\X'tty: link' usage requirement properties.
+Populates the \fI\%SOURCES\fP build specification and
+\fI\%INTERFACE_SOURCES\fP usage requirement properties.
 .sp
-It also supports specifying \X'tty: link #file-sets'\fI\%File Sets\fP\X'tty: link', which can add C++ module
+It also supports specifying \fI\%File Sets\fP, which can add C++ module
 sources and headers not listed in the \fBSOURCES\fP and \fBINTERFACE_SOURCES\fP
-properties.  File sets may also populate the \X'tty: link #prop_tgt:INCLUDE_DIRECTORIES'\fI\%INCLUDE_DIRECTORIES\fP\X'tty: link'
-build specification and \X'tty: link #prop_tgt:INTERFACE_INCLUDE_DIRECTORIES'\fI\%INTERFACE_INCLUDE_DIRECTORIES\fP\X'tty: link' usage
+properties.  File sets may also populate the \fI\%INCLUDE_DIRECTORIES\fP
+build specification and \fI\%INTERFACE_INCLUDE_DIRECTORIES\fP usage
 requirement properties with the include directories containing the headers.
 .TP
-.B \X'tty: link #command:target_precompile_headers'\fI\%target_precompile_headers()\fP\X'tty: link'
+.B \fI\%target_precompile_headers()\fP
 Added in version 3.16.
 
 .sp
-Populates the \X'tty: link #prop_tgt:PRECOMPILE_HEADERS'\fI\%PRECOMPILE_HEADERS\fP\X'tty: link' build specification and
-\X'tty: link #prop_tgt:INTERFACE_PRECOMPILE_HEADERS'\fI\%INTERFACE_PRECOMPILE_HEADERS\fP\X'tty: link' usage requirement properties.
+Populates the \fI\%PRECOMPILE_HEADERS\fP build specification and
+\fI\%INTERFACE_PRECOMPILE_HEADERS\fP usage requirement properties.
 .TP
-.B \X'tty: link #command:target_link_libraries'\fI\%target_link_libraries()\fP\X'tty: link'
-Populates the \X'tty: link #prop_tgt:LINK_LIBRARIES'\fI\%LINK_LIBRARIES\fP\X'tty: link' build specification
-and \X'tty: link #prop_tgt:INTERFACE_LINK_LIBRARIES'\fI\%INTERFACE_LINK_LIBRARIES\fP\X'tty: link' usage requirement properties.
+.B \fI\%target_link_libraries()\fP
+Populates the \fI\%LINK_LIBRARIES\fP build specification
+and \fI\%INTERFACE_LINK_LIBRARIES\fP usage requirement properties.
 .sp
 This is the primary mechanism by which link dependencies and their
 \fI\%usage requirements\fP are transitively
 propagated to affect compilation and linking of a target.
 .TP
-.B \X'tty: link #command:target_link_directories'\fI\%target_link_directories()\fP\X'tty: link'
+.B \fI\%target_link_directories()\fP
 Added in version 3.13.
 
 .sp
-Populates the \X'tty: link #prop_tgt:LINK_DIRECTORIES'\fI\%LINK_DIRECTORIES\fP\X'tty: link' build specification and
-\X'tty: link #prop_tgt:INTERFACE_LINK_DIRECTORIES'\fI\%INTERFACE_LINK_DIRECTORIES\fP\X'tty: link' usage requirement properties.
+Populates the \fI\%LINK_DIRECTORIES\fP build specification and
+\fI\%INTERFACE_LINK_DIRECTORIES\fP usage requirement properties.
 .TP
-.B \X'tty: link #command:target_link_options'\fI\%target_link_options()\fP\X'tty: link'
+.B \fI\%target_link_options()\fP
 Added in version 3.13.
 
 .sp
-Populates the \X'tty: link #prop_tgt:LINK_OPTIONS'\fI\%LINK_OPTIONS\fP\X'tty: link' build specification and
-\X'tty: link #prop_tgt:INTERFACE_LINK_OPTIONS'\fI\%INTERFACE_LINK_OPTIONS\fP\X'tty: link' usage requirement properties.
+Populates the \fI\%LINK_OPTIONS\fP build specification and
+\fI\%INTERFACE_LINK_OPTIONS\fP usage requirement properties.
 .UNINDENT
 .SS Target Build Specification
 .sp
@@ -374,67 +445,72 @@ These represent the \fI\%build specification\fP
 for compiling a target.
 .INDENT 0.0
 .TP
-.B \X'tty: link #prop_tgt:COMPILE_DEFINITIONS'\fI\%COMPILE_DEFINITIONS\fP\X'tty: link'
+.B \fI\%COMPILE_DEFINITIONS\fP
 List of compile definitions for compiling sources in the target.
 These are passed to the compiler with \fB\-D\fP flags, or equivalent,
 in an unspecified order.
 .sp
-The \X'tty: link #prop_tgt:DEFINE_SYMBOL'\fI\%DEFINE_SYMBOL\fP\X'tty: link' target property is also used
-as a compile definition as a special convenience case for
-\fBSHARED\fP and \fBMODULE\fP library targets.
+When compiling sources of a \fBSHARED\fP library, a \fBMODULE\fP library,
+or an \fBEXECUTABLE\fP with \fI\%ENABLE_EXPORTS\fP enabled, CMake
+automatically defines a target\-specific preprocessor symbol.
+By default the definition is of the form \fB<target>_EXPORTS\fP, but it
+can be overridden by the \fI\%DEFINE_SYMBOL\fP target property.
+This allows headers to detect whether they are included from inside
+their implementation sources, and to correctly set up export/import
+annotations or visibility of symbols.
 .TP
-.B \X'tty: link #prop_tgt:COMPILE_OPTIONS'\fI\%COMPILE_OPTIONS\fP\X'tty: link'
+.B \fI\%COMPILE_OPTIONS\fP
 List of compile options for compiling sources in the target.
 These are passed to the compiler as flags, in the order of appearance.
 .sp
 Compile options are automatically escaped for the shell.
 .sp
 Some compile options are best specified via dedicated settings,
-such as the \X'tty: link #prop_tgt:POSITION_INDEPENDENT_CODE'\fI\%POSITION_INDEPENDENT_CODE\fP\X'tty: link' target property.
+such as the \fI\%POSITION_INDEPENDENT_CODE\fP target property.
 .TP
-.B \X'tty: link #prop_tgt:COMPILE_FEATURES'\fI\%COMPILE_FEATURES\fP\X'tty: link'
+.B \fI\%COMPILE_FEATURES\fP
 Added in version 3.1.
 
 .sp
-List of \X'tty: link #manual:cmake-compile-features(7)'\fI\%compile features\fP\X'tty: link' needed
+List of \fI\%compile features\fP needed
 for compiling sources in the target.  Typically these ensure the
 target\(aqs sources are compiled using a sufficient language standard level.
 .TP
-.B \X'tty: link #prop_tgt:INCLUDE_DIRECTORIES'\fI\%INCLUDE_DIRECTORIES\fP\X'tty: link'
+.B \fI\%INCLUDE_DIRECTORIES\fP
 List of include directories for compiling sources in the target.
 These are passed to the compiler with \fB\-I\fP or \fB\-isystem\fP flags,
 or equivalent, in the order of appearance.
 .sp
-For convenience, the \X'tty: link #variable:CMAKE_INCLUDE_CURRENT_DIR'\fI\%CMAKE_INCLUDE_CURRENT_DIR\fP\X'tty: link' variable
+For convenience, the \fI\%CMAKE_INCLUDE_CURRENT_DIR\fP variable
 may be enabled to add the source directory and corresponding build
 directory as \fBINCLUDE_DIRECTORIES\fP on all targets.
 .TP
-.B \X'tty: link #prop_tgt:SOURCES'\fI\%SOURCES\fP\X'tty: link'
+.B \fI\%SOURCES\fP
 List of source files associated with the target.  This includes sources
-specified when the target was created by the \X'tty: link #command:add_executable'\fI\%add_executable()\fP\X'tty: link',
-\X'tty: link #command:add_library'\fI\%add_library()\fP\X'tty: link', or \X'tty: link #command:add_custom_target'\fI\%add_custom_target()\fP\X'tty: link' command.
-It also includes sources added by the \X'tty: link #command:target_sources'\fI\%target_sources()\fP\X'tty: link' command,
-but does not include \X'tty: link #file-sets'\fI\%File Sets\fP\X'tty: link'\&.
+specified when the target was created by the \fI\%add_executable()\fP,
+\fI\%add_library()\fP, or \fI\%add_custom_target()\fP command.
+It also includes sources added by the \fI\%target_sources()\fP command,
+but does not include \fI\%File Sets\fP\&.
 .TP
-.B \X'tty: link #prop_tgt:PRECOMPILE_HEADERS'\fI\%PRECOMPILE_HEADERS\fP\X'tty: link'
+.B \fI\%PRECOMPILE_HEADERS\fP
 Added in version 3.16.
 
 .sp
 List of header files to precompile and include when compiling
 sources in the target.
 .TP
-.B \X'tty: link #prop_tgt:AUTOMOC_MACRO_NAMES'\fI\%AUTOMOC_MACRO_NAMES\fP\X'tty: link'
+.B \fI\%AUTOMOC_MACRO_NAMES\fP
 Added in version 3.10.
 
 .sp
-List of macro names used by \X'tty: link #prop_tgt:AUTOMOC'\fI\%AUTOMOC\fP\X'tty: link' to determine if a
+List of macro names used by \fI\%AUTOMOC\fP to determine if a
 C++ source in the target needs to be processed by \fBmoc\fP\&.
 .TP
-.B \X'tty: link #prop_tgt:AUTOUIC_OPTIONS'\fI\%AUTOUIC_OPTIONS\fP\X'tty: link'
+.B \fI\%AUTOUIC_OPTIONS\fP
 Added in version 3.0.
 
 .sp
-List of options used by \X'tty: link #prop_tgt:AUTOUIC'\fI\%AUTOUIC\fP\X'tty: link' when invoking \fBuic\fP
+List of options used by \fI\%AUTOUIC\fP when invoking \fBuic\fP
 for the target.
 .UNINDENT
 .SS Target Link Properties
@@ -443,21 +519,22 @@ These represent the \fI\%build specification\fP
 for linking a target.
 .INDENT 0.0
 .TP
-.B \X'tty: link #prop_tgt:LINK_LIBRARIES'\fI\%LINK_LIBRARIES\fP\X'tty: link'
+.B \fI\%LINK_LIBRARIES\fP
 List of link libraries for linking the target, if it is an executable,
-shared library, or module library.  Entries for \fI\%Normal Libraries\fP are
-passed to the linker either via paths to their link artifacts, or
-with \fB\-l\fP flags or equivalent.  Entries for \fI\%Object Libraries\fP are
-passed to the linker via paths to their object files.
+shared library, or module library.  Entries for \fI\%Static Libraries\fP
+and \fI\%Shared Libraries\fP are passed to the linker either via paths to
+their link artifacts, or with \fB\-l\fP flags or equivalent.  Entries for
+\fI\%Object Libraries\fP are passed to the linker via paths to their object
+files.
 .sp
 Additionally, for compiling and linking the target itself,
 \fI\%usage requirements\fP are propagated from
-\fBLINK_LIBRARIES\fP entries naming \fI\%Normal Libraries\fP,
+\fBLINK_LIBRARIES\fP entries naming \fI\%Static Libraries\fP, \fI\%Shared Libraries\fP,
 \fI\%Interface Libraries\fP, \fI\%Object Libraries\fP, and \fI\%Imported Targets\fP,
 collected over the transitive closure of their
-\X'tty: link #prop_tgt:INTERFACE_LINK_LIBRARIES'\fI\%INTERFACE_LINK_LIBRARIES\fP\X'tty: link' properties.
+\fI\%INTERFACE_LINK_LIBRARIES\fP properties.
 .TP
-.B \X'tty: link #prop_tgt:LINK_DIRECTORIES'\fI\%LINK_DIRECTORIES\fP\X'tty: link'
+.B \fI\%LINK_DIRECTORIES\fP
 Added in version 3.13.
 
 .sp
@@ -465,7 +542,7 @@ List of link directories for linking the target, if it is an executable,
 shared library, or module library.  The directories are passed to the
 linker with \fB\-L\fP flags, or equivalent.
 .TP
-.B \X'tty: link #prop_tgt:LINK_OPTIONS'\fI\%LINK_OPTIONS\fP\X'tty: link'
+.B \fI\%LINK_OPTIONS\fP
 Added in version 3.13.
 
 .sp
@@ -475,38 +552,37 @@ linker as flags, in the order of appearance.
 .sp
 Link options are automatically escaped for the shell.
 .TP
-.B \X'tty: link #prop_tgt:LINK_DEPENDS'\fI\%LINK_DEPENDS\fP\X'tty: link'
+.B \fI\%LINK_DEPENDS\fP
 List of files on which linking the target depends, if it is an executable,
 shared library, or module library.  For example, linker scripts specified
-via \X'tty: link #prop_tgt:LINK_OPTIONS'\fI\%LINK_OPTIONS\fP\X'tty: link' may be listed here such that changing them
+via \fI\%LINK_OPTIONS\fP may be listed here such that changing them
 causes binaries to be linked again.
 .UNINDENT
 .SS Target Usage Requirements
 .sp
 The \fIusage requirements\fP of a target are settings that propagate to consumers,
-which link to the target via \X'tty: link #command:target_link_libraries'\fI\%target_link_libraries()\fP\X'tty: link', in order to
+which link to the target via \fI\%target_link_libraries()\fP, in order to
 correctly compile and link with it.  They are represented by transitive
 \fI\%compile\fP and
 \fI\%link\fP properties.
 .sp
 Note that usage requirements are not designed as a way to make downstreams
-use particular \X'tty: link #prop_tgt:COMPILE_OPTIONS'\fI\%COMPILE_OPTIONS\fP\X'tty: link', \X'tty: link #prop_tgt:COMPILE_DEFINITIONS'\fI\%COMPILE_DEFINITIONS\fP\X'tty: link',
+use particular \fI\%COMPILE_OPTIONS\fP, \fI\%COMPILE_DEFINITIONS\fP,
 etc. for convenience only.  The contents of the properties must be
 \fBrequirements\fP, not merely recommendations.
 .sp
-See the \X'tty: link #creating-relocatable-packages'\fI\%Creating Relocatable Packages\fP\X'tty: link' section of the
-\X'tty: link #manual:cmake-packages(7)'\fI\%cmake\-packages(7)\fP\X'tty: link' manual for discussion of additional care
+See the \fI\%Creating Relocatable Packages\fP section of the
+\fI\%cmake\-packages(7)\fP manual for discussion of additional care
 that must be taken when specifying usage requirements while creating
 packages for redistribution.
 .sp
 The usage requirements of a target can transitively propagate to the dependents.
-The \X'tty: link #command:target_link_libraries'\fI\%target_link_libraries()\fP\X'tty: link' command has \fBPRIVATE\fP,
+The \fI\%target_link_libraries()\fP command has \fBPRIVATE\fP,
 \fBINTERFACE\fP and \fBPUBLIC\fP keywords to control the propagation.
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 add_library(archive archive.cpp)
 target_compile_definitions(archive INTERFACE USING_ARCHIVE_LIB)
 
@@ -522,8 +598,7 @@ target_link_libraries(archiveExtras PRIVATE serialization)
 add_executable(consumer consumer.cpp)
 # consumer is compiled with \-DUSING_ARCHIVE_LIB
 target_link_libraries(consumer archiveExtras)
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -535,35 +610,33 @@ Because
 requirements of it are not propagated to \fBconsumer\fP\&.
 .sp
 Generally, a dependency should be specified in a use of
-\X'tty: link #command:target_link_libraries'\fI\%target_link_libraries()\fP\X'tty: link' with the \fBPRIVATE\fP keyword if it is used by
+\fI\%target_link_libraries()\fP with the \fBPRIVATE\fP keyword if it is used by
 only the implementation of a library, and not in the header files.  If a
 dependency is additionally used in the header files of a library (e.g. for
 class inheritance), then it should be specified as a \fBPUBLIC\fP dependency.
 A dependency which is not used by the implementation of a library, but only by
 its headers should be specified as an \fBINTERFACE\fP dependency.  The
-\X'tty: link #command:target_link_libraries'\fI\%target_link_libraries()\fP\X'tty: link' command may be invoked with multiple uses of
+\fI\%target_link_libraries()\fP command may be invoked with multiple uses of
 each keyword:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 target_link_libraries(archiveExtras
   PUBLIC archive
   PRIVATE serialization
 )
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
 Usage requirements are propagated by reading the \fBINTERFACE_\fP variants
 of target properties from dependencies and appending the values to the
 non\-\fBINTERFACE_\fP variants of the operand.  For example, the
-\X'tty: link #prop_tgt:INTERFACE_INCLUDE_DIRECTORIES'\fI\%INTERFACE_INCLUDE_DIRECTORIES\fP\X'tty: link' of dependencies is read and
-appended to the \X'tty: link #prop_tgt:INCLUDE_DIRECTORIES'\fI\%INCLUDE_DIRECTORIES\fP\X'tty: link' of the operand.  In cases
+\fI\%INTERFACE_INCLUDE_DIRECTORIES\fP of dependencies is read and
+appended to the \fI\%INCLUDE_DIRECTORIES\fP of the operand.  In cases
 where order is relevant and maintained, and the order resulting from the
-\X'tty: link #command:target_link_libraries'\fI\%target_link_libraries()\fP\X'tty: link' calls does not allow correct compilation,
+\fI\%target_link_libraries()\fP calls does not allow correct compilation,
 use of an appropriate command to set the property directly may update the
 order.
 .sp
@@ -573,73 +646,71 @@ be specified in the order \fBlib3\fP \fBlib1\fP \fBlib2\fP:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 target_link_libraries(myExe lib1 lib2 lib3)
 target_include_directories(myExe
   PRIVATE $<TARGET_PROPERTY:lib3,INTERFACE_INCLUDE_DIRECTORIES>)
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
 Note that care must be taken when specifying usage requirements for targets
-which will be exported for installation using the \X'tty: link #export'\fI\%install(EXPORT)\fP\X'tty: link'
-command.  See \X'tty: link #creating-packages'\fI\%Creating Packages\fP\X'tty: link' for more.
+which will be exported for installation using the \fI\%install(EXPORT)\fP
+command.  See \fI\%Creating Packages\fP for more.
 .SS Transitive Compile Properties
 .sp
 These represent \fI\%usage requirements\fP for
 compiling consumers.
 .INDENT 0.0
 .TP
-.B \X'tty: link #prop_tgt:INTERFACE_COMPILE_DEFINITIONS'\fI\%INTERFACE_COMPILE_DEFINITIONS\fP\X'tty: link'
+.B \fI\%INTERFACE_COMPILE_DEFINITIONS\fP
 List of compile definitions for compiling sources in the target\(aqs consumers.
 Typically these are used by the target\(aqs header files.
 .TP
-.B \X'tty: link #prop_tgt:INTERFACE_COMPILE_OPTIONS'\fI\%INTERFACE_COMPILE_OPTIONS\fP\X'tty: link'
+.B \fI\%INTERFACE_COMPILE_OPTIONS\fP
 List of compile options for compiling sources in the target\(aqs consumers.
 .TP
-.B \X'tty: link #prop_tgt:INTERFACE_COMPILE_FEATURES'\fI\%INTERFACE_COMPILE_FEATURES\fP\X'tty: link'
+.B \fI\%INTERFACE_COMPILE_FEATURES\fP
 Added in version 3.1.
 
 .sp
-List of \X'tty: link #manual:cmake-compile-features(7)'\fI\%compile features\fP\X'tty: link' needed
+List of \fI\%compile features\fP needed
 for compiling sources in the target\(aqs consumers.  Typically these
 ensure the target\(aqs header files are processed when compiling consumers
 using a sufficient language standard level.
 .TP
-.B \X'tty: link #prop_tgt:INTERFACE_INCLUDE_DIRECTORIES'\fI\%INTERFACE_INCLUDE_DIRECTORIES\fP\X'tty: link'
+.B \fI\%INTERFACE_INCLUDE_DIRECTORIES\fP
 List of include directories for compiling sources in the target\(aqs consumers.
 Typically these are the locations of the target\(aqs header files.
 .TP
-.B \X'tty: link #prop_tgt:INTERFACE_SYSTEM_INCLUDE_DIRECTORIES'\fI\%INTERFACE_SYSTEM_INCLUDE_DIRECTORIES\fP\X'tty: link'
+.B \fI\%INTERFACE_SYSTEM_INCLUDE_DIRECTORIES\fP
 List of directories that, when specified as include directories, e.g., by
-\X'tty: link #prop_tgt:INCLUDE_DIRECTORIES'\fI\%INCLUDE_DIRECTORIES\fP\X'tty: link' or \X'tty: link #prop_tgt:INTERFACE_INCLUDE_DIRECTORIES'\fI\%INTERFACE_INCLUDE_DIRECTORIES\fP\X'tty: link',
+\fI\%INCLUDE_DIRECTORIES\fP or \fI\%INTERFACE_INCLUDE_DIRECTORIES\fP,
 should be treated as \(dqsystem\(dq include directories when compiling sources
 in the target\(aqs consumers.
 .TP
-.B \X'tty: link #prop_tgt:INTERFACE_SOURCES'\fI\%INTERFACE_SOURCES\fP\X'tty: link'
+.B \fI\%INTERFACE_SOURCES\fP
 List of source files to associate with the target\(aqs consumers.
 .TP
-.B \X'tty: link #prop_tgt:INTERFACE_PRECOMPILE_HEADERS'\fI\%INTERFACE_PRECOMPILE_HEADERS\fP\X'tty: link'
+.B \fI\%INTERFACE_PRECOMPILE_HEADERS\fP
 Added in version 3.16.
 
 .sp
 List of header files to precompile and include when compiling
 sources in the target\(aqs consumers.
 .TP
-.B \X'tty: link #prop_tgt:INTERFACE_AUTOMOC_MACRO_NAMES'\fI\%INTERFACE_AUTOMOC_MACRO_NAMES\fP\X'tty: link'
+.B \fI\%INTERFACE_AUTOMOC_MACRO_NAMES\fP
 Added in version 3.27.
 
 .sp
-List of macro names used by \X'tty: link #prop_tgt:AUTOMOC'\fI\%AUTOMOC\fP\X'tty: link' to determine if a
+List of macro names used by \fI\%AUTOMOC\fP to determine if a
 C++ source in the target\(aqs consumers needs to be processed by \fBmoc\fP\&.
 .TP
-.B \X'tty: link #prop_tgt:INTERFACE_AUTOUIC_OPTIONS'\fI\%INTERFACE_AUTOUIC_OPTIONS\fP\X'tty: link'
+.B \fI\%INTERFACE_AUTOUIC_OPTIONS\fP
 Added in version 3.0.
 
 .sp
-List of options used by \X'tty: link #prop_tgt:AUTOUIC'\fI\%AUTOUIC\fP\X'tty: link' when invoking \fBuic\fP
+List of options used by \fI\%AUTOUIC\fP when invoking \fBuic\fP
 for the target\(aqs consumers.
 .UNINDENT
 .SS Transitive Link Properties
@@ -648,7 +719,7 @@ These represent \fI\%usage requirements\fP for
 linking consumers.
 .INDENT 0.0
 .TP
-.B \X'tty: link #prop_tgt:INTERFACE_LINK_LIBRARIES'\fI\%INTERFACE_LINK_LIBRARIES\fP\X'tty: link'
+.B \fI\%INTERFACE_LINK_LIBRARIES\fP
 List of link libraries for linking the target\(aqs consumers, for
 those that are executables, shared libraries, or module libraries.
 These are the transitive dependencies of the target.
@@ -656,24 +727,24 @@ These are the transitive dependencies of the target.
 Additionally, for compiling and linking the target\(aqs consumers,
 \fI\%usage requirements\fP are collected from
 the transitive closure of \fBINTERFACE_LINK_LIBRARIES\fP entries naming
-\fI\%Normal Libraries\fP, \fI\%Interface Libraries\fP, \fI\%Object Libraries\fP,
-and \fI\%Imported Targets\fP,
+\fI\%Static Libraries\fP, \fI\%Shared Libraries\fP, \fI\%Interface Libraries\fP,
+\fI\%Object Libraries\fP, and \fI\%Imported Targets\fP,
 .TP
-.B \X'tty: link #prop_tgt:INTERFACE_LINK_DIRECTORIES'\fI\%INTERFACE_LINK_DIRECTORIES\fP\X'tty: link'
+.B \fI\%INTERFACE_LINK_DIRECTORIES\fP
 Added in version 3.13.
 
 .sp
 List of link directories for linking the target\(aqs consumers, for
 those that are executables, shared libraries, or module libraries.
 .TP
-.B \X'tty: link #prop_tgt:INTERFACE_LINK_OPTIONS'\fI\%INTERFACE_LINK_OPTIONS\fP\X'tty: link'
+.B \fI\%INTERFACE_LINK_OPTIONS\fP
 Added in version 3.13.
 
 .sp
 List of link options for linking the target\(aqs consumers, for
 those that are executables, shared libraries, or module libraries.
 .TP
-.B \X'tty: link #prop_tgt:INTERFACE_LINK_DEPENDS'\fI\%INTERFACE_LINK_DEPENDS\fP\X'tty: link'
+.B \fI\%INTERFACE_LINK_DEPENDS\fP
 Added in version 3.13.
 
 .sp
@@ -685,20 +756,19 @@ those that are executables, shared libraries, or module libraries.
 Added in version 3.30.
 
 .sp
-The \X'tty: link #genex:TARGET_PROPERTY'\fI\%TARGET_PROPERTY\fP\X'tty: link' generator expression evaluates the above
+The \fI\%TARGET_PROPERTY\fP generator expression evaluates the above
 \fI\%build specification\fP and
 \fI\%usage requirement\fP properties
 as builtin transitive properties.  It also supports custom transitive
-properties defined by the \X'tty: link #prop_tgt:TRANSITIVE_COMPILE_PROPERTIES'\fI\%TRANSITIVE_COMPILE_PROPERTIES\fP\X'tty: link'
-and \X'tty: link #prop_tgt:TRANSITIVE_LINK_PROPERTIES'\fI\%TRANSITIVE_LINK_PROPERTIES\fP\X'tty: link' properties on the target
+properties defined by the \fI\%TRANSITIVE_COMPILE_PROPERTIES\fP
+and \fI\%TRANSITIVE_LINK_PROPERTIES\fP properties on the target
 and its link dependencies.
 .sp
 For example:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 add_library(example INTERFACE)
 set_target_properties(example PROPERTIES
   TRANSITIVE_COMPILE_PROPERTIES \(dqCUSTOM_C\(dq
@@ -738,25 +808,23 @@ add_custom_target(print ALL VERBATIM
     # Prints \(dqMYEXE_CUSTOM_L;MYLIB_IFACE_CUSTOM_L;EXAMPLE_CUSTOM_L\(dq
     \(dq$<TARGET_PROPERTY:myexe,CUSTOM_L>\(dq
   )
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .SS Compatible Interface Properties
 .sp
 Some target properties are required to be compatible between a target and
 the interface of each dependency.  For example, the
-\X'tty: link #prop_tgt:POSITION_INDEPENDENT_CODE'\fI\%POSITION_INDEPENDENT_CODE\fP\X'tty: link' target property may specify a
+\fI\%POSITION_INDEPENDENT_CODE\fP target property may specify a
 boolean value of whether a target should be compiled as
 position\-independent\-code, which has platform\-specific consequences.
 A target may also specify the usage requirement
-\X'tty: link #prop_tgt:INTERFACE_POSITION_INDEPENDENT_CODE'\fI\%INTERFACE_POSITION_INDEPENDENT_CODE\fP\X'tty: link' to communicate that
+\fI\%INTERFACE_POSITION_INDEPENDENT_CODE\fP to communicate that
 consumers must be compiled as position\-independent\-code.
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 add_executable(exe1 exe1.cpp)
 set_property(TARGET exe1 PROPERTY POSITION_INDEPENDENT_CODE ON)
 
@@ -765,20 +833,18 @@ set_property(TARGET lib1 PROPERTY INTERFACE_POSITION_INDEPENDENT_CODE ON)
 
 add_executable(exe2 exe2.cpp)
 target_link_libraries(exe2 lib1)
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
 Here, both \fBexe1\fP and \fBexe2\fP will be compiled as position\-independent\-code.
 \fBlib1\fP will also be compiled as position\-independent\-code because that is the
 default setting for \fBSHARED\fP libraries.  If dependencies have conflicting,
-non\-compatible requirements \X'tty: link #manual:cmake(1)'\fI\%cmake(1)\fP\X'tty: link' issues a diagnostic:
+non\-compatible requirements \fI\%cmake(1)\fP issues a diagnostic:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 add_library(lib1 SHARED lib1.cpp)
 set_property(TARGET lib1 PROPERTY INTERFACE_POSITION_INDEPENDENT_CODE ON)
 
@@ -791,13 +857,12 @@ set_property(TARGET exe1 PROPERTY POSITION_INDEPENDENT_CODE OFF)
 
 add_executable(exe2 exe2.cpp)
 target_link_libraries(exe2 lib1 lib2)
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
 The \fBlib1\fP requirement \fBINTERFACE_POSITION_INDEPENDENT_CODE\fP is not
-\(dqcompatible\(dq with the \X'tty: link #prop_tgt:POSITION_INDEPENDENT_CODE'\fI\%POSITION_INDEPENDENT_CODE\fP\X'tty: link' property of
+\(dqcompatible\(dq with the \fI\%POSITION_INDEPENDENT_CODE\fP property of
 the \fBexe1\fP target.  The library requires that consumers are built as
 position\-independent\-code, while the executable specifies to not built as
 position\-independent\-code, so a diagnostic is issued.
@@ -810,31 +875,28 @@ is issued:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 CMake Error: The INTERFACE_POSITION_INDEPENDENT_CODE property of \(dqlib2\(dq does
 not agree with the value of POSITION_INDEPENDENT_CODE already determined
 for \(dqexe2\(dq.
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
-To be \(dqcompatible\(dq, the \X'tty: link #prop_tgt:POSITION_INDEPENDENT_CODE'\fI\%POSITION_INDEPENDENT_CODE\fP\X'tty: link' property,
+To be \(dqcompatible\(dq, the \fI\%POSITION_INDEPENDENT_CODE\fP property,
 if set must be either the same, in a boolean sense, as the
-\X'tty: link #prop_tgt:INTERFACE_POSITION_INDEPENDENT_CODE'\fI\%INTERFACE_POSITION_INDEPENDENT_CODE\fP\X'tty: link' property of all transitively
+\fI\%INTERFACE_POSITION_INDEPENDENT_CODE\fP property of all transitively
 specified dependencies on which that property is set.
 .sp
 This property of \(dqcompatible interface requirement\(dq may be extended to other
 properties by specifying the property in the content of the
-\X'tty: link #prop_tgt:COMPATIBLE_INTERFACE_BOOL'\fI\%COMPATIBLE_INTERFACE_BOOL\fP\X'tty: link' target property.  Each specified property
+\fI\%COMPATIBLE_INTERFACE_BOOL\fP target property.  Each specified property
 must be compatible between the consuming target and the corresponding property
 with an \fBINTERFACE_\fP prefix from each dependency:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 add_library(lib1Version2 SHARED lib1_v2.cpp)
 set_property(TARGET lib1Version2 PROPERTY INTERFACE_CUSTOM_PROP ON)
 set_property(TARGET lib1Version2 APPEND PROPERTY
@@ -849,14 +911,13 @@ target_link_libraries(exe1 lib1Version2) # CUSTOM_PROP will be ON
 
 add_executable(exe2 exe2.cpp)
 target_link_libraries(exe2 lib1Version2 lib1Version3) # Diagnostic
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
 Non\-boolean properties may also participate in \(dqcompatible interface\(dq
 computations.  Properties specified in the
-\X'tty: link #prop_tgt:COMPATIBLE_INTERFACE_STRING'\fI\%COMPATIBLE_INTERFACE_STRING\fP\X'tty: link'
+\fI\%COMPATIBLE_INTERFACE_STRING\fP
 property must be either unspecified or compare to the same string among
 all transitively specified dependencies. This can be useful to ensure
 that multiple incompatible versions of a library are not linked together
@@ -864,8 +925,7 @@ through transitive requirements of a target:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 add_library(lib1Version2 SHARED lib1_v2.cpp)
 set_property(TARGET lib1Version2 PROPERTY INTERFACE_LIB_VERSION 2)
 set_property(TARGET lib1Version2 APPEND PROPERTY
@@ -880,19 +940,17 @@ target_link_libraries(exe1 lib1Version2) # LIB_VERSION will be \(dq2\(dq
 
 add_executable(exe2 exe2.cpp)
 target_link_libraries(exe2 lib1Version2 lib1Version3) # Diagnostic
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
-The \X'tty: link #prop_tgt:COMPATIBLE_INTERFACE_NUMBER_MAX'\fI\%COMPATIBLE_INTERFACE_NUMBER_MAX\fP\X'tty: link' target property specifies
+The \fI\%COMPATIBLE_INTERFACE_NUMBER_MAX\fP target property specifies
 that content will be evaluated numerically and the maximum number among all
 specified will be calculated:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 add_library(lib1Version2 SHARED lib1_v2.cpp)
 set_property(TARGET lib1Version2 PROPERTY INTERFACE_CONTAINER_SIZE_REQUIRED 200)
 set_property(TARGET lib1Version2 APPEND PROPERTY
@@ -909,12 +967,11 @@ target_link_libraries(exe1 lib1Version2)
 add_executable(exe2 exe2.cpp)
 # CONTAINER_SIZE_REQUIRED will be \(dq1000\(dq
 target_link_libraries(exe2 lib1Version2 lib1Version3)
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
-Similarly, the \X'tty: link #prop_tgt:COMPATIBLE_INTERFACE_NUMBER_MIN'\fI\%COMPATIBLE_INTERFACE_NUMBER_MIN\fP\X'tty: link' may be used to
+Similarly, the \fI\%COMPATIBLE_INTERFACE_NUMBER_MIN\fP may be used to
 calculate the numeric minimum value for a property from dependencies.
 .sp
 Each calculated \(dqcompatible\(dq property value may be read in the consumer at
@@ -928,15 +985,14 @@ any of the other properties.
 Because build specifications can be determined by dependencies, the lack of
 locality of code which creates a target and code which is responsible for
 setting build specifications may make the code more difficult to reason about.
-\X'tty: link #manual:cmake(1)'\fI\%cmake(1)\fP\X'tty: link' provides a debugging facility to print the origin of the
+\fI\%cmake(1)\fP provides a debugging facility to print the origin of the
 contents of properties which may be determined by dependencies.  The properties
 which can be debugged are listed in the
-\X'tty: link #variable:CMAKE_DEBUG_TARGET_PROPERTIES'\fI\%CMAKE_DEBUG_TARGET_PROPERTIES\fP\X'tty: link' variable documentation:
+\fI\%CMAKE_DEBUG_TARGET_PROPERTIES\fP variable documentation:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 set(CMAKE_DEBUG_TARGET_PROPERTIES
   INCLUDE_DIRECTORIES
   COMPILE_DEFINITIONS
@@ -945,31 +1001,29 @@ set(CMAKE_DEBUG_TARGET_PROPERTIES
   LIB_VERSION
 )
 add_executable(exe1 exe1.cpp)
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
-In the case of properties listed in \X'tty: link #prop_tgt:COMPATIBLE_INTERFACE_BOOL'\fI\%COMPATIBLE_INTERFACE_BOOL\fP\X'tty: link' or
-\X'tty: link #prop_tgt:COMPATIBLE_INTERFACE_STRING'\fI\%COMPATIBLE_INTERFACE_STRING\fP\X'tty: link', the debug output shows which target
+In the case of properties listed in \fI\%COMPATIBLE_INTERFACE_BOOL\fP or
+\fI\%COMPATIBLE_INTERFACE_STRING\fP, the debug output shows which target
 was responsible for setting the property, and which other dependencies also
 defined the property.  In the case of
-\X'tty: link #prop_tgt:COMPATIBLE_INTERFACE_NUMBER_MAX'\fI\%COMPATIBLE_INTERFACE_NUMBER_MAX\fP\X'tty: link' and
-\X'tty: link #prop_tgt:COMPATIBLE_INTERFACE_NUMBER_MIN'\fI\%COMPATIBLE_INTERFACE_NUMBER_MIN\fP\X'tty: link', the debug output shows the
+\fI\%COMPATIBLE_INTERFACE_NUMBER_MAX\fP and
+\fI\%COMPATIBLE_INTERFACE_NUMBER_MIN\fP, the debug output shows the
 value of the property from each dependency, and whether the value determines
 the new extreme.
 .SS Build Specification with Generator Expressions
 .sp
 Build specifications may use
-\X'tty: link #manual:cmake-generator-expressions(7)'\fI\%generator expressions\fP\X'tty: link' containing
+\fI\%generator expressions\fP containing
 content which may be conditional or known only at generate\-time.  For example,
 the calculated \(dqcompatible\(dq value of a property may be read with the
 \fBTARGET_PROPERTY\fP expression:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 add_library(lib1Version2 SHARED lib1_v2.cpp)
 set_property(TARGET lib1Version2 PROPERTY
   INTERFACE_CONTAINER_SIZE_REQUIRED 200)
@@ -982,8 +1036,7 @@ target_link_libraries(exe1 lib1Version2)
 target_compile_definitions(exe1 PRIVATE
     CONTAINER_SIZE=$<TARGET_PROPERTY:CONTAINER_SIZE_REQUIRED>
 )
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -997,43 +1050,40 @@ on the consumer:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 add_library(lib1 lib1.cpp)
 target_compile_definitions(lib1 INTERFACE
   $<$<STREQUAL:$<TARGET_PROPERTY:TYPE>,EXECUTABLE>:LIB1_WITH_EXE>
   $<$<STREQUAL:$<TARGET_PROPERTY:TYPE>,SHARED_LIBRARY>:LIB1_WITH_SHARED_LIB>
-  $<$<TARGET_POLICY:CMP0041>:CONSUMER_CMP0041_NEW>
+  $<$<TARGET_POLICY:CMP0182>:CONSUMER_CMP0182_NEW>
 )
 
 add_executable(exe1 exe1.cpp)
 target_link_libraries(exe1 lib1)
 
-cmake_policy(SET CMP0041 NEW)
+cmake_policy(SET CMP0182 NEW)
 
 add_library(shared_lib shared_lib.cpp)
 target_link_libraries(shared_lib lib1)
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
 The \fBexe1\fP executable will be compiled with \fB\-DLIB1_WITH_EXE\fP, while the
 \fBshared_lib\fP shared library will be compiled with \fB\-DLIB1_WITH_SHARED_LIB\fP
-and \fB\-DCONSUMER_CMP0041_NEW\fP, because policy \X'tty: link #policy:CMP0041'\fI\%CMP0041\fP\X'tty: link' is
+and \fB\-DCONSUMER_CMP0182_NEW\fP, because policy \fI\%CMP0182\fP is
 \fBNEW\fP at the point where the \fBshared_lib\fP target is created.
 .sp
 The \fBBUILD_INTERFACE\fP expression wraps requirements which are only used when
 consumed from a target in the same buildsystem, or when consumed from a target
-exported to the build directory using the \X'tty: link #command:export'\fI\%export()\fP\X'tty: link' command.  The
+exported to the build directory using the \fI\%export()\fP command.  The
 \fBINSTALL_INTERFACE\fP expression wraps requirements which are only used when
 consumed from a target which has been installed and exported with the
-\X'tty: link #export'\fI\%install(EXPORT)\fP\X'tty: link' command:
+\fI\%install(EXPORT)\fP command:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 add_library(ClimbingStats climbingstats.cpp)
 target_compile_definitions(ClimbingStats INTERFACE
   $<BUILD_INTERFACE:ClimbingStats_FROM_BUILD_LOCATION>
@@ -1046,27 +1096,24 @@ export(EXPORT libExport NAMESPACE Upstream::)
 
 add_executable(exe1 exe1.cpp)
 target_link_libraries(exe1 ClimbingStats)
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
 In this case, the \fBexe1\fP executable will be compiled with
 \fB\-DClimbingStats_FROM_BUILD_LOCATION\fP\&.  The exporting commands generate
-\X'tty: link #prop_tgt:IMPORTED'\fI\%IMPORTED\fP\X'tty: link' targets with either the \fBINSTALL_INTERFACE\fP or the
+\fI\%IMPORTED\fP targets with either the \fBINSTALL_INTERFACE\fP or the
 \fBBUILD_INTERFACE\fP omitted, and the \fB*_INTERFACE\fP marker stripped away.
 A separate project consuming the \fBClimbingStats\fP package would contain:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 find_package(ClimbingStats REQUIRED)
 
 add_executable(Downstream main.cpp)
 target_link_libraries(Downstream Upstream::ClimbingStats)
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -1074,31 +1121,29 @@ Depending on whether the \fBClimbingStats\fP package was used from the build
 location or the install location, the \fBDownstream\fP target would be compiled
 with either \fB\-DClimbingStats_FROM_BUILD_LOCATION\fP or
 \fB\-DClimbingStats_FROM_INSTALL_LOCATION\fP\&.  For more about packages and
-exporting see the \X'tty: link #manual:cmake-packages(7)'\fI\%cmake\-packages(7)\fP\X'tty: link' manual.
+exporting see the \fI\%cmake\-packages(7)\fP manual.
 .SS Include Directories and Usage Requirements
 .sp
 Include directories require some special consideration when specified as usage
 requirements and when used with generator expressions.  The
-\X'tty: link #command:target_include_directories'\fI\%target_include_directories()\fP\X'tty: link' command accepts both relative and
+\fI\%target_include_directories()\fP command accepts both relative and
 absolute include directories:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 add_library(lib1 lib1.cpp)
 target_include_directories(lib1 PRIVATE
   /absolute/path
   relative/path
 )
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
 Relative paths are interpreted relative to the source directory where the
 command appears.  Relative paths are not allowed in the
-\X'tty: link #prop_tgt:INTERFACE_INCLUDE_DIRECTORIES'\fI\%INTERFACE_INCLUDE_DIRECTORIES\fP\X'tty: link' of \X'tty: link #prop_tgt:IMPORTED'\fI\%IMPORTED\fP\X'tty: link' targets.
+\fI\%INTERFACE_INCLUDE_DIRECTORIES\fP of \fI\%IMPORTED\fP targets.
 .sp
 In cases where a non\-trivial generator expression is used, the
 \fBINSTALL_PREFIX\fP expression may be used within the argument of an
@@ -1114,8 +1159,7 @@ installation prefix.  For example:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 add_library(ClimbingStats climbingstats.cpp)
 target_include_directories(ClimbingStats INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated>
@@ -1123,67 +1167,62 @@ target_include_directories(ClimbingStats INTERFACE
   $<INSTALL_INTERFACE:relative/path>
   $<INSTALL_INTERFACE:$<INSTALL_PREFIX>/$<CONFIG>/generated>
 )
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
 Two convenience APIs are provided relating to include directories usage
-requirements.  The \X'tty: link #variable:CMAKE_INCLUDE_CURRENT_DIR_IN_INTERFACE'\fI\%CMAKE_INCLUDE_CURRENT_DIR_IN_INTERFACE\fP\X'tty: link' variable
+requirements.  The \fI\%CMAKE_INCLUDE_CURRENT_DIR_IN_INTERFACE\fP variable
 may be enabled, with an equivalent effect to:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 set_property(TARGET tgt APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR};${CMAKE_CURRENT_BINARY_DIR}>
 )
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
 for each target affected.  The convenience for installed targets is
-an \fBINCLUDES DESTINATION\fP component with the \X'tty: link #targets'\fI\%install(TARGETS)\fP\X'tty: link'
+an \fBINCLUDES DESTINATION\fP component with the \fI\%install(TARGETS)\fP
 command:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 install(TARGETS foo bar bat EXPORT tgts ${dest_args}
   INCLUDES DESTINATION include
 )
 install(EXPORT tgts ${other_args})
 install(FILES ${headers} DESTINATION include)
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
 This is equivalent to appending \fB${CMAKE_INSTALL_PREFIX}/include\fP to the
-\X'tty: link #prop_tgt:INTERFACE_INCLUDE_DIRECTORIES'\fI\%INTERFACE_INCLUDE_DIRECTORIES\fP\X'tty: link' of each of the installed
-\X'tty: link #prop_tgt:IMPORTED'\fI\%IMPORTED\fP\X'tty: link' targets when generated by \X'tty: link #export'\fI\%install(EXPORT)\fP\X'tty: link'\&.
+\fI\%INTERFACE_INCLUDE_DIRECTORIES\fP of each of the installed
+\fI\%IMPORTED\fP targets when generated by \fI\%install(EXPORT)\fP\&.
 .sp
-When the \X'tty: link #prop_tgt:INTERFACE_INCLUDE_DIRECTORIES'\fI\%INTERFACE_INCLUDE_DIRECTORIES\fP\X'tty: link' of an
+When the \fI\%INTERFACE_INCLUDE_DIRECTORIES\fP of an
 \fI\%imported target\fP is consumed, the entries in the
 property may be treated as system include directories.  The effects of that
 are toolchain\-dependent, but one common effect is to omit compiler warnings
-for headers found in those directories.  The \X'tty: link #prop_tgt:SYSTEM'\fI\%SYSTEM\fP\X'tty: link' property of
+for headers found in those directories.  The \fI\%SYSTEM\fP property of
 the installed target determines this behavior (see the
-\X'tty: link #prop_tgt:EXPORT_NO_SYSTEM'\fI\%EXPORT_NO_SYSTEM\fP\X'tty: link' property for how to modify the installed value
+\fI\%EXPORT_NO_SYSTEM\fP property for how to modify the installed value
 for a target).  It is also possible to change how consumers interpret the
 system behavior of consumed imported targets by setting the
-\X'tty: link #prop_tgt:NO_SYSTEM_FROM_IMPORTED'\fI\%NO_SYSTEM_FROM_IMPORTED\fP\X'tty: link' target property on the \fIconsumer\fP\&.
+\fI\%NO_SYSTEM_FROM_IMPORTED\fP target property on the \fIconsumer\fP\&.
 .sp
-If a binary target is linked transitively to a macOS \X'tty: link #prop_tgt:FRAMEWORK'\fI\%FRAMEWORK\fP\X'tty: link', the
+If a binary target is linked transitively to a macOS \fI\%FRAMEWORK\fP, the
 \fBHeaders\fP directory of the framework is also treated as a usage requirement.
 This has the same effect as passing the framework directory as an include
 directory.
 .SS Link Libraries and Generator Expressions
 .sp
-Like build specifications, \X'tty: link #prop_tgt:LINK_LIBRARIES'\fI\%link libraries\fP\X'tty: link' may be
+Like build specifications, \fI\%link libraries\fP may be
 specified with generator expression conditions.  However, as consumption of
 usage requirements is based on collection from linked dependencies, there is
 an additional limitation that the link dependencies must form a \(dqdirected
@@ -1193,8 +1232,7 @@ dependencies:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 add_library(lib1 lib1.cpp)
 add_library(lib2 lib2.cpp)
 target_link_libraries(lib1 PUBLIC
@@ -1205,20 +1243,19 @@ set_property(TARGET lib3 PROPERTY INTERFACE_POSITION_INDEPENDENT_CODE ON)
 
 add_executable(exe1 exe1.cpp)
 target_link_libraries(exe1 lib1 lib3)
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
-As the value of the \X'tty: link #prop_tgt:POSITION_INDEPENDENT_CODE'\fI\%POSITION_INDEPENDENT_CODE\fP\X'tty: link' property of
+As the value of the \fI\%POSITION_INDEPENDENT_CODE\fP property of
 the \fBexe1\fP target is dependent on the linked libraries (\fBlib3\fP), and the
 edge of linking \fBexe1\fP is determined by the same
-\X'tty: link #prop_tgt:POSITION_INDEPENDENT_CODE'\fI\%POSITION_INDEPENDENT_CODE\fP\X'tty: link' property, the dependency graph above
-contains a cycle.  \X'tty: link #manual:cmake(1)'\fI\%cmake(1)\fP\X'tty: link' issues an error message.
+\fI\%POSITION_INDEPENDENT_CODE\fP property, the dependency graph above
+contains a cycle.  \fI\%cmake(1)\fP issues an error message.
 .SS Output Artifacts
 .sp
-The buildsystem targets created by the \X'tty: link #command:add_library'\fI\%add_library()\fP\X'tty: link' and
-\X'tty: link #command:add_executable'\fI\%add_executable()\fP\X'tty: link' commands create rules to create binary outputs.
+The buildsystem targets created by the \fI\%add_library()\fP and
+\fI\%add_executable()\fP commands create rules to create binary outputs.
 The exact output location of the binaries can only be determined at
 generate\-time because it can depend on the build\-configuration and the
 link\-language of linked dependencies etc.  \fBTARGET_FILE\fP,
@@ -1237,14 +1274,14 @@ A \fIruntime\fP output artifact of a buildsystem target may be:
 .INDENT 0.0
 .IP \(bu 2
 The executable file (e.g. \fB\&.exe\fP) of an executable target
-created by the \X'tty: link #command:add_executable'\fI\%add_executable()\fP\X'tty: link' command.
+created by the \fI\%add_executable()\fP command.
 .IP \(bu 2
 On DLL platforms: the executable file (e.g. \fB\&.dll\fP) of a shared
-library target created by the \X'tty: link #command:add_library'\fI\%add_library()\fP\X'tty: link' command
+library target created by the \fI\%add_library()\fP command
 with the \fBSHARED\fP option.
 .UNINDENT
 .sp
-The \X'tty: link #prop_tgt:RUNTIME_OUTPUT_DIRECTORY'\fI\%RUNTIME_OUTPUT_DIRECTORY\fP\X'tty: link' and \X'tty: link #prop_tgt:RUNTIME_OUTPUT_NAME'\fI\%RUNTIME_OUTPUT_NAME\fP\X'tty: link'
+The \fI\%RUNTIME_OUTPUT_DIRECTORY\fP and \fI\%RUNTIME_OUTPUT_NAME\fP
 target properties may be used to control runtime output artifact locations
 and names in the build tree.
 .SS Library Output Artifacts
@@ -1253,15 +1290,15 @@ A \fIlibrary\fP output artifact of a buildsystem target may be:
 .INDENT 0.0
 .IP \(bu 2
 The loadable module file (e.g. \fB\&.dll\fP or \fB\&.so\fP) of a module
-library target created by the \X'tty: link #command:add_library'\fI\%add_library()\fP\X'tty: link' command
+library target created by the \fI\%add_library()\fP command
 with the \fBMODULE\fP option.
 .IP \(bu 2
 On non\-DLL platforms: the shared library file (e.g. \fB\&.so\fP or \fB\&.dylib\fP)
-of a shared library target created by the \X'tty: link #command:add_library'\fI\%add_library()\fP\X'tty: link'
+of a shared library target created by the \fI\%add_library()\fP
 command with the \fBSHARED\fP option.
 .UNINDENT
 .sp
-The \X'tty: link #prop_tgt:LIBRARY_OUTPUT_DIRECTORY'\fI\%LIBRARY_OUTPUT_DIRECTORY\fP\X'tty: link' and \X'tty: link #prop_tgt:LIBRARY_OUTPUT_NAME'\fI\%LIBRARY_OUTPUT_NAME\fP\X'tty: link'
+The \fI\%LIBRARY_OUTPUT_DIRECTORY\fP and \fI\%LIBRARY_OUTPUT_NAME\fP
 target properties may be used to control library output artifact locations
 and names in the build tree.
 .SS Archive Output Artifacts
@@ -1270,103 +1307,98 @@ An \fIarchive\fP output artifact of a buildsystem target may be:
 .INDENT 0.0
 .IP \(bu 2
 The static library file (e.g. \fB\&.lib\fP or \fB\&.a\fP) of a static
-library target created by the \X'tty: link #command:add_library'\fI\%add_library()\fP\X'tty: link' command
+library target created by the \fI\%add_library()\fP command
 with the \fBSTATIC\fP option.
 .IP \(bu 2
 On DLL platforms: the import library file (e.g. \fB\&.lib\fP) of a shared
-library target created by the \X'tty: link #command:add_library'\fI\%add_library()\fP\X'tty: link' command
+library target created by the \fI\%add_library()\fP command
 with the \fBSHARED\fP option.  This file is only guaranteed to exist if
 the library exports at least one unmanaged symbol.
 .IP \(bu 2
 On DLL platforms: the import library file (e.g. \fB\&.lib\fP) of an
-executable target created by the \X'tty: link #command:add_executable'\fI\%add_executable()\fP\X'tty: link' command
-when its \X'tty: link #prop_tgt:ENABLE_EXPORTS'\fI\%ENABLE_EXPORTS\fP\X'tty: link' target property is set.
+executable target created by the \fI\%add_executable()\fP command
+when its \fI\%ENABLE_EXPORTS\fP target property is set.
 .IP \(bu 2
 On AIX: the linker import file (e.g. \fB\&.imp\fP) of an executable target
-created by the \X'tty: link #command:add_executable'\fI\%add_executable()\fP\X'tty: link' command when its
-\X'tty: link #prop_tgt:ENABLE_EXPORTS'\fI\%ENABLE_EXPORTS\fP\X'tty: link' target property is set.
+created by the \fI\%add_executable()\fP command when its
+\fI\%ENABLE_EXPORTS\fP target property is set.
 .IP \(bu 2
 On macOS: the linker import file (e.g. \fB\&.tbd\fP) of a shared library target
-created by the \X'tty: link #command:add_library'\fI\%add_library()\fP\X'tty: link' command with the \fBSHARED\fP option and
-when its \X'tty: link #prop_tgt:ENABLE_EXPORTS'\fI\%ENABLE_EXPORTS\fP\X'tty: link' target property is set.
+created by the \fI\%add_library()\fP command with the \fBSHARED\fP option and
+when its \fI\%ENABLE_EXPORTS\fP target property is set.
 .UNINDENT
 .sp
-The \X'tty: link #prop_tgt:ARCHIVE_OUTPUT_DIRECTORY'\fI\%ARCHIVE_OUTPUT_DIRECTORY\fP\X'tty: link' and \X'tty: link #prop_tgt:ARCHIVE_OUTPUT_NAME'\fI\%ARCHIVE_OUTPUT_NAME\fP\X'tty: link'
+The \fI\%ARCHIVE_OUTPUT_DIRECTORY\fP and \fI\%ARCHIVE_OUTPUT_NAME\fP
 target properties may be used to control archive output artifact locations
 and names in the build tree.
 .SS Directory\-Scoped Commands
 .sp
-The \X'tty: link #command:target_include_directories'\fI\%target_include_directories()\fP\X'tty: link',
-\X'tty: link #command:target_compile_definitions'\fI\%target_compile_definitions()\fP\X'tty: link' and
-\X'tty: link #command:target_compile_options'\fI\%target_compile_options()\fP\X'tty: link' commands have an effect on only one
-target at a time.  The commands \X'tty: link #command:add_compile_definitions'\fI\%add_compile_definitions()\fP\X'tty: link',
-\X'tty: link #command:add_compile_options'\fI\%add_compile_options()\fP\X'tty: link' and \X'tty: link #command:include_directories'\fI\%include_directories()\fP\X'tty: link' have
+The \fI\%target_include_directories()\fP,
+\fI\%target_compile_definitions()\fP and
+\fI\%target_compile_options()\fP commands have an effect on only one
+target at a time.  The commands \fI\%add_compile_definitions()\fP,
+\fI\%add_compile_options()\fP and \fI\%include_directories()\fP have
 a similar function, but operate at directory scope instead of target
 scope for convenience.
 .SH BUILD CONFIGURATIONS
 .sp
 Configurations determine specifications for a certain type of build, such
 as \fBRelease\fP or \fBDebug\fP\&.  The way this is specified depends on the type
-of \X'tty: link #manual:cmake-generators(7)'\fI\%generator\fP\X'tty: link' being used.  For single
-configuration generators like  \X'tty: link #makefile-generators'\fI\%Makefile Generators\fP\X'tty: link' and
-\X'tty: link #generator:Ninja'\fI\%Ninja\fP\X'tty: link', the configuration is specified at configure time by the
-\X'tty: link #variable:CMAKE_BUILD_TYPE'\fI\%CMAKE_BUILD_TYPE\fP\X'tty: link' variable. For multi\-configuration generators
-like \X'tty: link #visual-studio-generators'\fI\%Visual Studio\fP\X'tty: link', \X'tty: link #generator:Xcode'\fI\%Xcode\fP\X'tty: link', and
-\X'tty: link #generator:Ninja Multi-Config'\fI\%Ninja Multi\-Config\fP\X'tty: link', the configuration is chosen by the user at
-build time and \X'tty: link #variable:CMAKE_BUILD_TYPE'\fI\%CMAKE_BUILD_TYPE\fP\X'tty: link' is ignored.  In the
+of \fI\%generator\fP being used.  For single
+configuration generators like  \fI\%Makefile Generators\fP and
+\fI\%Ninja\fP, the configuration is specified at configure time by the
+\fI\%CMAKE_BUILD_TYPE\fP variable. For multi\-configuration generators
+like \fI\%Visual Studio\fP, \fI\%Xcode\fP, and
+\fI\%Ninja Multi\-Config\fP, the configuration is chosen by the user at
+build time and \fI\%CMAKE_BUILD_TYPE\fP is ignored.  In the
 multi\-configuration case, the set of \fIavailable\fP configurations is specified
-at configure time by the \X'tty: link #variable:CMAKE_CONFIGURATION_TYPES'\fI\%CMAKE_CONFIGURATION_TYPES\fP\X'tty: link' variable,
+at configure time by the \fI\%CMAKE_CONFIGURATION_TYPES\fP variable,
 but the actual configuration used cannot be known until the build stage.
 This difference is often misunderstood, leading to problematic code like the
 following:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 # WARNING: This is wrong for multi\-config generators because they don\(aqt use
 #          and typically don\(aqt even set CMAKE_BUILD_TYPE
 string(TOLOWER ${CMAKE_BUILD_TYPE} build_type)
 if (build_type STREQUAL debug)
   target_compile_definitions(exe1 PRIVATE DEBUG_BUILD)
 endif()
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
-\X'tty: link #manual:cmake-generator-expressions(7)'\fI\%Generator expressions\fP\X'tty: link' should be
+\fI\%Generator expressions\fP should be
 used instead to handle configuration\-specific logic correctly, regardless of
 the generator used.  For example:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 # Works correctly for both single and multi\-config generators
 target_compile_definitions(exe1 PRIVATE
   $<$<CONFIG:Debug>:DEBUG_BUILD>
 )
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
-In the presence of \X'tty: link #prop_tgt:IMPORTED'\fI\%IMPORTED\fP\X'tty: link' targets, the content of
-\X'tty: link #prop_tgt:MAP_IMPORTED_CONFIG_<CONFIG>'\fI\%MAP_IMPORTED_CONFIG_DEBUG\fP\X'tty: link' is also
-accounted for by the above \X'tty: link #genex:CONFIG'\fI\%$<CONFIG:Debug>\fP\X'tty: link' expression.
+In the presence of \fI\%IMPORTED\fP targets, the content of
+\fI\%MAP_IMPORTED_CONFIG_DEBUG\fP is also
+accounted for by the above \fI\%$<CONFIG:Debug>\fP expression.
 .SS Case Sensitivity
 .sp
-\X'tty: link #variable:CMAKE_BUILD_TYPE'\fI\%CMAKE_BUILD_TYPE\fP\X'tty: link' and \X'tty: link #variable:CMAKE_CONFIGURATION_TYPES'\fI\%CMAKE_CONFIGURATION_TYPES\fP\X'tty: link' are
+\fI\%CMAKE_BUILD_TYPE\fP and \fI\%CMAKE_CONFIGURATION_TYPES\fP are
 just like other variables in that any string comparisons made with their
-values will be case\-sensitive.  The \X'tty: link #genex:CONFIG'\fI\%$<CONFIG>\fP\X'tty: link' generator expression also
+values will be case\-sensitive.  The \fI\%$<CONFIG>\fP generator expression also
 preserves the casing of the configuration as set by the user or CMake defaults.
 For example:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 # NOTE: Don\(aqt use these patterns, they are for illustration purposes only.
 
 set(CMAKE_BUILD_TYPE Debug)
@@ -1383,17 +1415,16 @@ set(CMAKE_CONFIGURATION_TYPES Debug Release)
 if(DEBUG IN_LIST CMAKE_CONFIGURATION_TYPES)
   # ... will never get here, \(dqDebug\(dq != \(dqDEBUG\(dq
 endif()
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
 In contrast, CMake treats the configuration type case\-insensitively when
 using it internally in places that modify behavior based on the configuration.
-For example, the \X'tty: link #genex:CONFIG'\fI\%$<CONFIG:Debug>\fP\X'tty: link' generator expression will evaluate to 1
+For example, the \fI\%$<CONFIG:Debug>\fP generator expression will evaluate to 1
 for a configuration of not only \fBDebug\fP, but also \fBDEBUG\fP, \fBdebug\fP or
 even \fBDeBuG\fP\&.  Therefore, you can specify configuration types in
-\X'tty: link #variable:CMAKE_BUILD_TYPE'\fI\%CMAKE_BUILD_TYPE\fP\X'tty: link' and \X'tty: link #variable:CMAKE_CONFIGURATION_TYPES'\fI\%CMAKE_CONFIGURATION_TYPES\fP\X'tty: link' with
+\fI\%CMAKE_BUILD_TYPE\fP and \fI\%CMAKE_CONFIGURATION_TYPES\fP with
 any mixture of upper and lowercase, although there are strong conventions
 (see the next section).  If you must test the value in string comparisons,
 always convert the value to upper or lowercase first and adjust the test
@@ -1412,13 +1443,13 @@ By default, CMake defines a number of standard configurations:
 \fBMinSizeRel\fP
 .UNINDENT
 .sp
-In multi\-config generators, the \X'tty: link #variable:CMAKE_CONFIGURATION_TYPES'\fI\%CMAKE_CONFIGURATION_TYPES\fP\X'tty: link' variable
+In multi\-config generators, the \fI\%CMAKE_CONFIGURATION_TYPES\fP variable
 will be populated with (potentially a subset of) the above list by default,
 unless overridden by the project or user.  The actual configuration used is
 selected by the user at build time.
 .sp
 For single\-config generators, the configuration is specified with the
-\X'tty: link #variable:CMAKE_BUILD_TYPE'\fI\%CMAKE_BUILD_TYPE\fP\X'tty: link' variable at configure time and cannot be changed
+\fI\%CMAKE_BUILD_TYPE\fP variable at configure time and cannot be changed
 at build time.  The default value will often be none of the above standard
 configurations and will instead be an empty string.  A common misunderstanding
 is that this is the same as \fBDebug\fP, but that is not the case.  Users should
@@ -1427,7 +1458,7 @@ always explicitly specify the build type instead to avoid this common problem.
 The above standard configuration types provide reasonable behavior on most
 platforms, but they can be extended to provide other types.  Each configuration
 defines a set of compiler and linker flag variables for the language in use.
-These variables follow the convention \X'tty: link #variable:CMAKE_<LANG>_FLAGS_<CONFIG>'\fI\%CMAKE_<LANG>_FLAGS_<CONFIG>\fP\X'tty: link',
+These variables follow the convention \fI\%CMAKE_<LANG>_FLAGS_<CONFIG>\fP,
 where \fB<CONFIG>\fP is always the uppercase configuration name.  When defining
 a custom configuration type, make sure these variables are set appropriately,
 typically as cache variables.
@@ -1438,37 +1469,37 @@ such as external dependencies, aliases or other non\-build artifacts.  Pseudo
 targets are not represented in the generated buildsystem.
 .SS Imported Targets
 .sp
-An \X'tty: link #prop_tgt:IMPORTED'\fI\%IMPORTED\fP\X'tty: link' target represents a pre\-existing dependency.  Usually
+An \fI\%IMPORTED\fP target represents a pre\-existing dependency.  Usually
 such targets are defined by an upstream package and should be treated as
-immutable. After declaring an \X'tty: link #prop_tgt:IMPORTED'\fI\%IMPORTED\fP\X'tty: link' target one can adjust its
+immutable. After declaring an \fI\%IMPORTED\fP target one can adjust its
 target properties by using the customary commands such as
-\X'tty: link #command:target_compile_definitions'\fI\%target_compile_definitions()\fP\X'tty: link', \X'tty: link #command:target_include_directories'\fI\%target_include_directories()\fP\X'tty: link',
-\X'tty: link #command:target_compile_options'\fI\%target_compile_options()\fP\X'tty: link' or \X'tty: link #command:target_link_libraries'\fI\%target_link_libraries()\fP\X'tty: link' just like
+\fI\%target_compile_definitions()\fP, \fI\%target_include_directories()\fP,
+\fI\%target_compile_options()\fP or \fI\%target_link_libraries()\fP just like
 with any other regular target.
 .sp
-\X'tty: link #prop_tgt:IMPORTED'\fI\%IMPORTED\fP\X'tty: link' targets may have the same usage requirement properties
+\fI\%IMPORTED\fP targets may have the same usage requirement properties
 populated as binary targets, such as
-\X'tty: link #prop_tgt:INTERFACE_INCLUDE_DIRECTORIES'\fI\%INTERFACE_INCLUDE_DIRECTORIES\fP\X'tty: link',
-\X'tty: link #prop_tgt:INTERFACE_COMPILE_DEFINITIONS'\fI\%INTERFACE_COMPILE_DEFINITIONS\fP\X'tty: link',
-\X'tty: link #prop_tgt:INTERFACE_COMPILE_OPTIONS'\fI\%INTERFACE_COMPILE_OPTIONS\fP\X'tty: link',
-\X'tty: link #prop_tgt:INTERFACE_LINK_LIBRARIES'\fI\%INTERFACE_LINK_LIBRARIES\fP\X'tty: link', and
-\X'tty: link #prop_tgt:INTERFACE_POSITION_INDEPENDENT_CODE'\fI\%INTERFACE_POSITION_INDEPENDENT_CODE\fP\X'tty: link'\&.
+\fI\%INTERFACE_INCLUDE_DIRECTORIES\fP,
+\fI\%INTERFACE_COMPILE_DEFINITIONS\fP,
+\fI\%INTERFACE_COMPILE_OPTIONS\fP,
+\fI\%INTERFACE_LINK_LIBRARIES\fP, and
+\fI\%INTERFACE_POSITION_INDEPENDENT_CODE\fP\&.
 .sp
-The \X'tty: link #prop_tgt:LOCATION'\fI\%LOCATION\fP\X'tty: link' may also be read from an IMPORTED target, though there
-is rarely reason to do so.  Commands such as \X'tty: link #command:add_custom_command'\fI\%add_custom_command()\fP\X'tty: link' can
-transparently use an \X'tty: link #prop_tgt:IMPORTED'\fI\%IMPORTED\fP\X'tty: link' \X'tty: link #prop_tgt:TYPE'\fI\%EXECUTABLE\fP\X'tty: link' target
+The \fI\%LOCATION\fP may also be read from an IMPORTED target, though there
+is rarely reason to do so.  Commands such as \fI\%add_custom_command()\fP can
+transparently use an \fI\%IMPORTED\fP \fI\%EXECUTABLE\fP target
 as a \fBCOMMAND\fP executable.
 .sp
-The scope of the definition of an \X'tty: link #prop_tgt:IMPORTED'\fI\%IMPORTED\fP\X'tty: link' target is the directory
+The scope of the definition of an \fI\%IMPORTED\fP target is the directory
 where it was defined.  It may be accessed and used from subdirectories, but
 not from parent directories or sibling directories.  The scope is similar to
 the scope of a cmake variable.
 .sp
-It is also possible to define a \fBGLOBAL\fP \X'tty: link #prop_tgt:IMPORTED'\fI\%IMPORTED\fP\X'tty: link' target which is
+It is also possible to define a \fBGLOBAL\fP \fI\%IMPORTED\fP target which is
 accessible globally in the buildsystem.
 .sp
-See the \X'tty: link #manual:cmake-packages(7)'\fI\%cmake\-packages(7)\fP\X'tty: link' manual for more on creating packages
-with \X'tty: link #prop_tgt:IMPORTED'\fI\%IMPORTED\fP\X'tty: link' targets.
+See the \fI\%cmake\-packages(7)\fP manual for more on creating packages
+with \fI\%IMPORTED\fP targets.
 .SS Alias Targets
 .sp
 An \fBALIAS\fP target is a name which may be used interchangeably with
@@ -1479,68 +1510,58 @@ configuration.
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 add_library(lib1 lib1.cpp)
 install(TARGETS lib1 EXPORT lib1Export ${dest_args})
 install(EXPORT lib1Export NAMESPACE Upstream:: ${other_args})
 
 add_library(Upstream::lib1 ALIAS lib1)
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
 In another directory, we can link unconditionally to the \fBUpstream::lib1\fP
-target, which may be an \X'tty: link #prop_tgt:IMPORTED'\fI\%IMPORTED\fP\X'tty: link' target from a package, or an
+target, which may be an \fI\%IMPORTED\fP target from a package, or an
 \fBALIAS\fP target if built as part of the same buildsystem.
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 if (NOT TARGET Upstream::lib1)
   find_package(lib1 REQUIRED)
 endif()
 add_executable(exe1 exe1.cpp)
 target_link_libraries(exe1 Upstream::lib1)
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
 \fBALIAS\fP targets are not mutable, installable or exportable.  They are
 entirely local to the buildsystem description.  A name can be tested for
-whether it is an \fBALIAS\fP name by reading the \X'tty: link #prop_tgt:ALIASED_TARGET'\fI\%ALIASED_TARGET\fP\X'tty: link'
+whether it is an \fBALIAS\fP name by reading the \fI\%ALIASED_TARGET\fP
 property from it:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 get_target_property(_aliased Upstream::lib1 ALIASED_TARGET)
 if(_aliased)
   message(STATUS \(dqThe name Upstream::lib1 is an ALIAS for ${_aliased}.\(dq)
 endif()
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .SS Interface Libraries
 .sp
 An \fBINTERFACE\fP library target does not compile sources and does not
-produce a library artifact on disk, so it has no \X'tty: link #prop_tgt:LOCATION'\fI\%LOCATION\fP\X'tty: link'\&.
+produce a library artifact on disk, so it has no \fI\%LOCATION\fP\&.
 .sp
-It may specify usage requirements such as
-\X'tty: link #prop_tgt:INTERFACE_INCLUDE_DIRECTORIES'\fI\%INTERFACE_INCLUDE_DIRECTORIES\fP\X'tty: link',
-\X'tty: link #prop_tgt:INTERFACE_COMPILE_DEFINITIONS'\fI\%INTERFACE_COMPILE_DEFINITIONS\fP\X'tty: link',
-\X'tty: link #prop_tgt:INTERFACE_COMPILE_OPTIONS'\fI\%INTERFACE_COMPILE_OPTIONS\fP\X'tty: link',
-\X'tty: link #prop_tgt:INTERFACE_LINK_LIBRARIES'\fI\%INTERFACE_LINK_LIBRARIES\fP\X'tty: link',
-\X'tty: link #prop_tgt:INTERFACE_SOURCES'\fI\%INTERFACE_SOURCES\fP\X'tty: link',
-and \X'tty: link #prop_tgt:INTERFACE_POSITION_INDEPENDENT_CODE'\fI\%INTERFACE_POSITION_INDEPENDENT_CODE\fP\X'tty: link'\&.
-Only the \fBINTERFACE\fP modes of the \X'tty: link #command:target_include_directories'\fI\%target_include_directories()\fP\X'tty: link',
-\X'tty: link #command:target_compile_definitions'\fI\%target_compile_definitions()\fP\X'tty: link', \X'tty: link #command:target_compile_options'\fI\%target_compile_options()\fP\X'tty: link',
-\X'tty: link #command:target_sources'\fI\%target_sources()\fP\X'tty: link', and \X'tty: link #command:target_link_libraries'\fI\%target_link_libraries()\fP\X'tty: link' commands
+It may specify \fI\%usage requirements\fP,
+\fI\%compatible interface properties\fP, and
+\fI\%custom transitive properties\fP\&.
+Only the \fBINTERFACE\fP modes of the \fI\%target_include_directories()\fP,
+\fI\%target_compile_definitions()\fP, \fI\%target_compile_options()\fP,
+\fI\%target_sources()\fP, and \fI\%target_link_libraries()\fP commands
 may be used with \fBINTERFACE\fP libraries.
 .sp
 Since CMake 3.19, an \fBINTERFACE\fP library target may optionally contain
@@ -1552,12 +1573,11 @@ interactive reading and editing.
 .sp
 A primary use\-case for \fBINTERFACE\fP libraries is header\-only libraries.
 Since CMake 3.23, header files may be associated with a library by adding
-them to a header set using the \X'tty: link #command:target_sources'\fI\%target_sources()\fP\X'tty: link' command:
+them to a header set using the \fI\%target_sources()\fP command:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 add_library(Eigen INTERFACE)
 
 target_sources(Eigen PUBLIC
@@ -1568,8 +1588,7 @@ target_sources(Eigen PUBLIC
 
 add_executable(exe1 exe1.cpp)
 target_link_libraries(exe1 Eigen)
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -1583,8 +1602,7 @@ requirements:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 add_library(pic_on INTERFACE)
 set_property(TARGET pic_on PROPERTY INTERFACE_POSITION_INDEPENDENT_CODE ON)
 add_library(pic_off INTERFACE)
@@ -1597,8 +1615,7 @@ target_compile_options(enable_rtti INTERFACE
 
 add_executable(exe1 exe1.cpp)
 target_link_libraries(exe1 pic_on enable_rtti)
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -1611,11 +1628,10 @@ default header set along with the target:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 add_library(Eigen INTERFACE)
 
-target_sources(Eigen INTERFACE
+target_sources(Eigen PUBLIC
   FILE_SET HEADERS
     BASE_DIRS src
     FILES src/eigen.h src/vector.h src/matrix.h
@@ -1626,15 +1642,38 @@ install(TARGETS Eigen EXPORT eigenExport
 install(EXPORT eigenExport NAMESPACE Upstream::
   DESTINATION lib/cmake/Eigen
 )
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
 Here, the headers defined in the header set are installed to \fBinclude/Eigen\fP\&.
 The install destination automatically becomes an include directory that is a
 usage requirement for consumers.
+.SS Properties Allowed on Interface Libraries
+.sp
+Since CMake 3.19, interface libraries allow setting or reading target
+properties with any name, just like other target kinds always have.
+.sp
+Prior to CMake 3.19, interface libraries only allowed setting or reading
+target properties with a limited set of names:
+.INDENT 0.0
+.IP \(bu 2
+Properties named with an \fBINTERFACE_\fP prefix, either builtin
+\fI\%usage requirements\fP, or custom names.
+.IP \(bu 2
+Built\-in properties named with a \fBCOMPATIBLE_INTERFACE_\fP prefix
+(\fI\%compatible interface properties\fP).
+.IP \(bu 2
+Built\-in properties \fI\%NAME\fP, \fI\%EXPORT_NAME\fP,
+\fI\%EXPORT_PROPERTIES\fP, \fI\%MANUALLY_ADDED_DEPENDENCIES\fP,
+\fI\%IMPORTED\fP, \fI\%IMPORTED_LIBNAME_<CONFIG>\fP, and
+\fI\%MAP_IMPORTED_CONFIG_<CONFIG>\fP\&.
+.IP \(bu 2
+Added in version 3.11: Properties named with a leading underscore (\fB_\fP)
+or lowercase ASCII character.
+
+.UNINDENT
 .SH COPYRIGHT
-2000-2024 Kitware, Inc. and Contributors
+2000-2026 Kitware, Inc. and Contributors
 .\" Generated by docutils manpage writer.
 .

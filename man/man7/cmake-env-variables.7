@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "CMAKE-ENV-VARIABLES" "7" "Jan 26, 2026" "3.31.11" "CMake"
+.TH "CMAKE-ENV-VARIABLES" "7" "Mar 17, 2026" "4.3.0" "CMake"
 .SH NAME
 cmake-env-variables \- CMake Environment Variables Reference
 .sp
@@ -35,83 +35,132 @@ This page lists environment variables that have special
 meaning to CMake.
 .sp
 For general information on environment variables, see the
-\X'tty: link #cmake-language-environment-variables'\fI\%Environment Variables\fP\X'tty: link'
+\fI\%Environment Variables\fP
 section in the cmake\-language manual.
 .SH ENVIRONMENT VARIABLES THAT CHANGE BEHAVIOR
+.SS CLICOLOR
+.sp
+Added in version 3.21.
+
+.sp
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
+the calling process environment.
+.sp
+Set to \fB0\fP to tell command\-line tools not to print color
+messages even if connected to a terminal.
+This is a \X'tty: link https://web.archive.org/web/20250410160803/https://bixense.com/clicolors/'\fI\%common convention\fP\X'tty: link' among command\-line tools in general.
+.sp
+See also the \fI\%NO_COLOR\fP and \fI\%CLICOLOR_FORCE\fP environment
+variables.  If either of them is activated, it takes precedence over
+\fBCLICOLOR\fP\&.
+.sp
+See the \fI\%CMAKE_COLOR_DIAGNOSTICS\fP variable to control
+color in a generated build system.
+.SS CLICOLOR_FORCE
+.sp
+Added in version 3.5.
+
+.sp
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
+the calling process environment.
+.sp
+Set to a non\-empty value, other than \fB0\fP, to tell command\-line
+tools to print color messages even if not connected to a terminal.
+This is a \X'tty: link https://web.archive.org/web/20250410160803/https://bixense.com/clicolors/'\fI\%common convention\fP\X'tty: link' among command\-line tools in general.
+.sp
+See also the \fI\%NO_COLOR\fP and \fI\%CLICOLOR\fP environment variables.
+If \fI\%NO_COLOR\fP is activated, it takes precedence over
+\fBCLICOLOR_FORCE\fP\&.  Otherwise, if \fBCLICOLOR_FORCE\fP is
+activated, it takes precedence over \fI\%CLICOLOR\fP\&.
+.sp
+See the \fI\%CMAKE_COLOR_DIAGNOSTICS\fP variable to control
+color in a generated build system.
 .SS CMAKE_APPBUNDLE_PATH
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 The \fBCMAKE_APPBUNDLE_PATH\fP environment variable may be set to a list of
 directories to be searched for macOS application bundles
-by the \X'tty: link #command:find_program'\fI\%find_program()\fP\X'tty: link' and \X'tty: link #command:find_package'\fI\%find_package()\fP\X'tty: link' commands.
+by the \fI\%find_program()\fP and \fI\%find_package()\fP commands.
 .sp
 This variable may hold a single directory or a list of directories separated
 by \fB:\fP on UNIX or \fB;\fP on Windows (the same as the \fBPATH\fP environment
 variable convention on those platforms).
 .sp
-See also the \X'tty: link #variable:CMAKE_APPBUNDLE_PATH'\fI\%CMAKE_APPBUNDLE_PATH\fP\X'tty: link' CMake variable.
+See also the \fI\%CMAKE_APPBUNDLE_PATH\fP CMake variable.
 .SS CMAKE_FRAMEWORK_PATH
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 The \fBCMAKE_FRAMEWORK_PATH\fP environment variable may be set to a list of
-directories to be searched for macOS frameworks by the \X'tty: link #command:find_library'\fI\%find_library()\fP\X'tty: link',
-\X'tty: link #command:find_package'\fI\%find_package()\fP\X'tty: link', \X'tty: link #command:find_path'\fI\%find_path()\fP\X'tty: link' and \X'tty: link #command:find_file'\fI\%find_file()\fP\X'tty: link' commands.
+directories to be searched for macOS frameworks by the \fI\%find_library()\fP,
+\fI\%find_package()\fP, \fI\%find_path()\fP and \fI\%find_file()\fP commands.
 .sp
 This variable may hold a single directory or a list of directories separated
 by \fB:\fP on UNIX or \fB;\fP on Windows (the same as the \fBPATH\fP environment
 variable convention on those platforms).
 .sp
-See also the \X'tty: link #variable:CMAKE_FRAMEWORK_PATH'\fI\%CMAKE_FRAMEWORK_PATH\fP\X'tty: link' CMake variable.
+See also the \fI\%CMAKE_FRAMEWORK_PATH\fP CMake variable.
 .SS CMAKE_INCLUDE_PATH
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 The \fBCMAKE_INCLUDE_PATH\fP environment variable may be set to a list of
-directories to be searched by the \X'tty: link #command:find_file'\fI\%find_file()\fP\X'tty: link' and \X'tty: link #command:find_path'\fI\%find_path()\fP\X'tty: link' commands.
+directories to be searched by the \fI\%find_file()\fP and \fI\%find_path()\fP commands.
 .sp
 This variable may hold a single directory or a list of directories separated
 by \fB:\fP on UNIX or \fB;\fP on Windows (the same as the \fBPATH\fP environment
 variable convention on those platforms).
 .sp
-See also the \X'tty: link #variable:CMAKE_INCLUDE_PATH'\fI\%CMAKE_INCLUDE_PATH\fP\X'tty: link' CMake variable.
+See also the \fI\%CMAKE_INCLUDE_PATH\fP CMake variable.
 .SS CMAKE_LIBRARY_PATH
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 The \fBCMAKE_LIBRARY_PATH\fP environment variable may be set to a list of
-directories to be searched by the \X'tty: link #command:find_library'\fI\%find_library()\fP\X'tty: link' command.
+directories to be searched by the \fI\%find_library()\fP command.
 .sp
 This variable may hold a single directory or a list of directories separated
 by \fB:\fP on UNIX or \fB;\fP on Windows (the same as the \fBPATH\fP environment
 variable convention on those platforms).
 .sp
-See also the \X'tty: link #variable:CMAKE_LIBRARY_PATH'\fI\%CMAKE_LIBRARY_PATH\fP\X'tty: link' CMake variable.
+See also the \fI\%CMAKE_LIBRARY_PATH\fP CMake variable.
 .SS CMAKE_MAXIMUM_RECURSION_DEPTH
 .sp
 Added in version 3.27.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Maximum recursion depth for CMake scripts.  This environment variable is
-used if the \X'tty: link #variable:CMAKE_MAXIMUM_RECURSION_DEPTH'\fI\%CMAKE_MAXIMUM_RECURSION_DEPTH\fP\X'tty: link' variable is not set.
+used if the \fI\%CMAKE_MAXIMUM_RECURSION_DEPTH\fP variable is not set.
 See that variable\(aqs documentation for details.
+.SS CMAKE_POLICY_VERSION_MINIMUM
+.sp
+Added in version 4.0.
+
+.sp
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
+the calling process environment.
+.sp
+The default value for \fI\%CMAKE_POLICY_VERSION_MINIMUM\fP when there
+is no explicit configuration given on the first run while creating a new
+build tree.  On later runs in an existing build tree the value persists in
+the cache as \fI\%CMAKE_POLICY_VERSION_MINIMUM\fP\&.
 .SS CMAKE_PREFIX_PATH
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 The \fBCMAKE_PREFIX_PATH\fP environment variable may be set to a list of
 directories specifying installation \fIprefixes\fP to be searched by the
-\X'tty: link #command:find_package'\fI\%find_package()\fP\X'tty: link', \X'tty: link #command:find_program'\fI\%find_program()\fP\X'tty: link', \X'tty: link #command:find_library'\fI\%find_library()\fP\X'tty: link',
-\X'tty: link #command:find_file'\fI\%find_file()\fP\X'tty: link', and \X'tty: link #command:find_path'\fI\%find_path()\fP\X'tty: link' commands.  Each command will
+\fI\%find_package()\fP, \fI\%find_program()\fP, \fI\%find_library()\fP,
+\fI\%find_file()\fP, and \fI\%find_path()\fP commands.  Each command will
 add appropriate subdirectories (like \fBbin\fP, \fBlib\fP, or \fBinclude\fP)
 as specified in its own documentation.
 .sp
@@ -119,59 +168,77 @@ This variable may hold a single prefix or a list of prefixes separated
 by \fB:\fP on UNIX or \fB;\fP on Windows (the same as the \fBPATH\fP environment
 variable convention on those platforms).
 .sp
-See also the \X'tty: link #variable:CMAKE_PREFIX_PATH'\fI\%CMAKE_PREFIX_PATH\fP\X'tty: link' CMake variable.
+See also the \fI\%CMAKE_PREFIX_PATH\fP CMake variable.
 .SS CMAKE_PROGRAM_PATH
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 The \fBCMAKE_PROGRAM_PATH\fP environment variable may be set to a list of
-directories to be searched by the \X'tty: link #command:find_program'\fI\%find_program()\fP\X'tty: link' command.
+directories to be searched by the \fI\%find_program()\fP command.
 .sp
 This variable may hold a single directory or a list of directories separated
 by \fB:\fP on UNIX or \fB;\fP on Windows (the same as the \fBPATH\fP environment
 variable convention on those platforms).
 .sp
-See also the \X'tty: link #variable:CMAKE_PROGRAM_PATH'\fI\%CMAKE_PROGRAM_PATH\fP\X'tty: link' CMake variable.
+See also the \fI\%CMAKE_PROGRAM_PATH\fP CMake variable.
 .SS CMAKE_TLS_VERIFY
 .sp
 Added in version 3.30.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
-Specify the default value for the \X'tty: link #download'\fI\%file(DOWNLOAD)\fP\X'tty: link' and
-\X'tty: link #upload'\fI\%file(UPLOAD)\fP\X'tty: link' commands\(aq \fBTLS_VERIFY\fP option.
+Specify the default value for the \fI\%file(DOWNLOAD)\fP and
+\fI\%file(UPLOAD)\fP commands\(aq \fBTLS_VERIFY\fP option.
 This environment variable is used if the option is not given
-and the \X'tty: link #variable:CMAKE_TLS_VERIFY'\fI\%CMAKE_TLS_VERIFY\fP\X'tty: link' cmake variable is not set.
+and the \fI\%CMAKE_TLS_VERIFY\fP cmake variable is not set.
 .sp
-This variable is also used by the \X'tty: link #module:ExternalProject'\fI\%ExternalProject\fP\X'tty: link' and
-\X'tty: link #module:FetchContent'\fI\%FetchContent\fP\X'tty: link' modules for internal calls to
-\X'tty: link #download'\fI\%file(DOWNLOAD)\fP\X'tty: link' and \fBgit clone\fP\&.
+This variable is also used by the \fI\%ExternalProject\fP and
+\fI\%FetchContent\fP modules for internal calls to
+\fI\%file(DOWNLOAD)\fP and \fBgit clone\fP\&.
 .SS CMAKE_TLS_VERSION
 .sp
 Added in version 3.30.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
-Specify the default value for the \X'tty: link #download'\fI\%file(DOWNLOAD)\fP\X'tty: link' and
-\X'tty: link #upload'\fI\%file(UPLOAD)\fP\X'tty: link' commands\(aq \fBTLS_VERSION\fP option.
+Specify the default value for the \fI\%file(DOWNLOAD)\fP and
+\fI\%file(UPLOAD)\fP commands\(aq \fBTLS_VERSION\fP option.
 This environment variable is used if the option is not given
-and the \X'tty: link #variable:CMAKE_TLS_VERSION'\fI\%CMAKE_TLS_VERSION\fP\X'tty: link' cmake variable is not set.
+and the \fI\%CMAKE_TLS_VERSION\fP cmake variable is not set.
 See that variable for allowed values.
 .sp
-This variable is also used by the \X'tty: link #module:ExternalProject'\fI\%ExternalProject\fP\X'tty: link' and
-\X'tty: link #module:FetchContent'\fI\%FetchContent\fP\X'tty: link' modules for internal calls to
-\X'tty: link #download'\fI\%file(DOWNLOAD)\fP\X'tty: link' and \fBgit clone\fP\&.
+This variable is also used by the \fI\%ExternalProject\fP and
+\fI\%FetchContent\fP modules for internal calls to
+\fI\%file(DOWNLOAD)\fP and \fBgit clone\fP\&.
+.SS NO_COLOR
+.sp
+Added in version 4.1.
+
+.sp
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
+the calling process environment.
+.sp
+Set to a non\-empty value, other than \fB0\fP, to tell command\-line
+tools not to print color messages even if connected to a terminal.
+This is a \X'tty: link https://web.archive.org/web/20250410160803/https://bixense.com/clicolors/'\fI\%common convention\fP\X'tty: link' among command\-line tools in general.
+.sp
+See also the \fI\%CLICOLOR_FORCE\fP and \fI\%CLICOLOR\fP environment
+variables.  If \fBNO_COLOR\fP is activated, it takes precedence
+over both of them.
+.sp
+See the \fI\%CMAKE_COLOR_DIAGNOSTICS\fP variable to control
+color in a generated build system.
 .SS SSL_CERT_DIR
 .sp
 Added in version 3.25.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Specify default directory containing CA certificates.  It overrides
@@ -181,7 +248,7 @@ the default CA directory used.
 Added in version 3.25.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Specify the file name containing CA certificates.  It overrides the
@@ -192,41 +259,52 @@ default, os\-specific CA file used.
 Added in version 3.24.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 The \fBADSP_ROOT\fP environment variable specifies a default value
-for the \X'tty: link #variable:CMAKE_ADSP_ROOT'\fI\%CMAKE_ADSP_ROOT\fP\X'tty: link' variable when there is no explicit
+for the \fI\%CMAKE_ADSP_ROOT\fP variable when there is no explicit
 configuration given on the first run while creating a new build tree.
 .SS CMAKE_APPLE_SILICON_PROCESSOR
 .sp
 Added in version 3.19.2.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 On Apple Silicon hosts running macOS, set this environment variable to tell
-CMake what architecture to use for \X'tty: link #variable:CMAKE_HOST_SYSTEM_PROCESSOR'\fI\%CMAKE_HOST_SYSTEM_PROCESSOR\fP\X'tty: link'\&.
+CMake what architecture to use for \fI\%CMAKE_HOST_SYSTEM_PROCESSOR\fP\&.
 The value must be either \fBarm64\fP or \fBx86_64\fP\&.
 .sp
-The \X'tty: link #variable:CMAKE_APPLE_SILICON_PROCESSOR'\fI\%CMAKE_APPLE_SILICON_PROCESSOR\fP\X'tty: link' normal variable, if set,
+The \fI\%CMAKE_APPLE_SILICON_PROCESSOR\fP normal variable, if set,
 overrides this environment variable.
+.SS CMAKE_AUTOGEN_INTERMEDIATE_DIR_STRATEGY
+.sp
+Added in version 4.2.
+
+.sp
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
+the calling process environment.
+.sp
+\fBCMAKE_AUTOGEN_INTERMEDIATE_DIR_STRATEGY\fP is a string specifying the
+strategy to use for autogen\-related target intermediate directories. It
+initializes the \fI\%CMAKE_AUTOGEN_INTERMEDIATE_DIR_STRATEGY\fP variable.
 .SS CMAKE_BUILD_PARALLEL_LEVEL
 .sp
 Added in version 3.12.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Specifies the maximum number of concurrent processes to use when building
 using the \fBcmake \-\-build\fP command line
-\X'tty: link #build-tool-mode'\fI\%Build Tool Mode\fP\X'tty: link'\&.
+\fI\%Build Tool Mode\fP\&.
 For example, if \fBCMAKE_BUILD_PARALLEL_LEVEL\fP is set to 8, the
 underlying build tool will execute up to 8 jobs concurrently as if
 \fBcmake \-\-build\fP were invoked with the
-\X'tty: link #cmdoption-cmake-build-j'\fI\%\-\-parallel 8\fP\X'tty: link' option.
+\fI\%\-\-parallel 8\fP option.
 .sp
 If this variable is defined empty the native build tool\(aqs default number is
 used.
@@ -235,32 +313,32 @@ used.
 Added in version 3.22.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 The \fBCMAKE_BUILD_TYPE\fP environment variable specifies a default value
-for the \X'tty: link #variable:CMAKE_BUILD_TYPE'\fI\%CMAKE_BUILD_TYPE\fP\X'tty: link' variable when there is no explicit
+for the \fI\%CMAKE_BUILD_TYPE\fP variable when there is no explicit
 configuration given on the first run while creating a new build tree.
 .SS CMAKE_COLOR_DIAGNOSTICS
 .sp
 Added in version 3.24.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
-Specifies a default value for the \X'tty: link #variable:CMAKE_COLOR_DIAGNOSTICS'\fI\%CMAKE_COLOR_DIAGNOSTICS\fP\X'tty: link' variable
+Specifies a default value for the \fI\%CMAKE_COLOR_DIAGNOSTICS\fP variable
 when there is no explicit value given on the first run.
 .SS CMAKE_CONFIG_DIR
 .sp
 Added in version 3.31.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Specify a CMake user\-wide configuration directory for
-\X'tty: link #manual:cmake-file-api(7)'\fI\%cmake\-file\-api(7)\fP\X'tty: link' queries.
+\fI\%cmake\-file\-api(7)\fP queries.
 .sp
 If this environment variable is not set, the default user\-wide
 configuration directory is platform\-specific:
@@ -276,21 +354,21 @@ Linux/Other: \fB$XDG_CONFIG_HOME/cmake\fP if set, otherwise
 .UNINDENT
 .SS CMAKE_CONFIG_TYPE
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
-The default build configuration for \X'tty: link #build-tool-mode'\fI\%Build a Project\fP\X'tty: link' and
+The default build configuration for \fI\%Build a Project\fP and
 \fBctest\fP build handler when there is no explicit configuration given.
 .SS CMAKE_CONFIGURATION_TYPES
 .sp
 Added in version 3.22.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 The \fBCMAKE_CONFIGURATION_TYPES\fP environment variable specifies a
-default value for the \X'tty: link #variable:CMAKE_CONFIGURATION_TYPES'\fI\%CMAKE_CONFIGURATION_TYPES\fP\X'tty: link' variable
+default value for the \fI\%CMAKE_CONFIGURATION_TYPES\fP variable
 when there is no explicit configuration given on the first run while
 creating a new build tree.
 .SS CMAKE_CROSSCOMPILING_EMULATOR
@@ -298,25 +376,25 @@ creating a new build tree.
 Added in version 3.28.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
-The default value for \X'tty: link #variable:CMAKE_CROSSCOMPILING_EMULATOR'\fI\%CMAKE_CROSSCOMPILING_EMULATOR\fP\X'tty: link' when there
+The default value for \fI\%CMAKE_CROSSCOMPILING_EMULATOR\fP when there
 is no explicit configuration given on the first run while creating a new
 build tree.  On later runs in an existing build tree the value persists in
-the cache as \X'tty: link #variable:CMAKE_CROSSCOMPILING_EMULATOR'\fI\%CMAKE_CROSSCOMPILING_EMULATOR\fP\X'tty: link'\&.
+the cache as \fI\%CMAKE_CROSSCOMPILING_EMULATOR\fP\&.
 .SS CMAKE_EXPORT_BUILD_DATABASE
 .sp
 Added in version 3.31.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
-The default value for \X'tty: link #variable:CMAKE_EXPORT_BUILD_DATABASE'\fI\%CMAKE_EXPORT_BUILD_DATABASE\fP\X'tty: link' when there is no
+The default value for \fI\%CMAKE_EXPORT_BUILD_DATABASE\fP when there is no
 explicit configuration given on the first run while creating a new build tree.
 On later runs in an existing build tree the value persists in the cache as
-\X'tty: link #variable:CMAKE_EXPORT_BUILD_DATABASE'\fI\%CMAKE_EXPORT_BUILD_DATABASE\fP\X'tty: link'\&.
+\fI\%CMAKE_EXPORT_BUILD_DATABASE\fP\&.
 .sp
 \fBNOTE:\fP
 .INDENT 0.0
@@ -331,78 +409,89 @@ databases has been enabled by the
 Added in version 3.17.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
-The default value for \X'tty: link #variable:CMAKE_EXPORT_COMPILE_COMMANDS'\fI\%CMAKE_EXPORT_COMPILE_COMMANDS\fP\X'tty: link' when there
+The default value for \fI\%CMAKE_EXPORT_COMPILE_COMMANDS\fP when there
 is no explicit configuration given on the first run while creating a new
 build tree.  On later runs in an existing build tree the value persists in
-the cache as \X'tty: link #variable:CMAKE_EXPORT_COMPILE_COMMANDS'\fI\%CMAKE_EXPORT_COMPILE_COMMANDS\fP\X'tty: link'\&.
+the cache as \fI\%CMAKE_EXPORT_COMPILE_COMMANDS\fP\&.
+.SS CMAKE_FASTBUILD_VERBOSE_GENERATOR
+.sp
+Added in version 4.2.
+
+.sp
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
+the calling process environment.
+.sp
+The \fBCMAKE_FASTBUILD_VERBOSE_GENERATOR\fP environment variable specifies a custom default
+value for the \fI\%CMAKE_FASTBUILD_VERBOSE_GENERATOR\fP variable in place of the
+default values specified by CMake itself.
 .SS CMAKE_GENERATOR
 .sp
 Added in version 3.15.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Specifies the CMake default generator to use when no generator is supplied
-with \X'tty: link #cmdoption-cmake-G'\fI\%\-G\fP\X'tty: link'\&. If the provided value doesn\(aqt name a generator
+with \fI\%\-G\fP\&. If the provided value doesn\(aqt name a generator
 known by CMake, the internal default is used.  Either way the resulting
-generator selection is stored in the \X'tty: link #variable:CMAKE_GENERATOR'\fI\%CMAKE_GENERATOR\fP\X'tty: link' variable.
+generator selection is stored in the \fI\%CMAKE_GENERATOR\fP variable.
 .sp
 Some generators may be additionally configured using the environment
 variables:
 .INDENT 0.0
 .IP \(bu 2
-\X'tty: link #envvar:CMAKE_GENERATOR_PLATFORM'\fI\%CMAKE_GENERATOR_PLATFORM\fP\X'tty: link'
+\fI\%CMAKE_GENERATOR_PLATFORM\fP
 .IP \(bu 2
-\X'tty: link #envvar:CMAKE_GENERATOR_TOOLSET'\fI\%CMAKE_GENERATOR_TOOLSET\fP\X'tty: link'
+\fI\%CMAKE_GENERATOR_TOOLSET\fP
 .IP \(bu 2
-\X'tty: link #envvar:CMAKE_GENERATOR_INSTANCE'\fI\%CMAKE_GENERATOR_INSTANCE\fP\X'tty: link'
+\fI\%CMAKE_GENERATOR_INSTANCE\fP
 .UNINDENT
 .SS CMAKE_GENERATOR_INSTANCE
 .sp
 Added in version 3.15.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
-Default value for \X'tty: link #variable:CMAKE_GENERATOR_INSTANCE'\fI\%CMAKE_GENERATOR_INSTANCE\fP\X'tty: link' if no Cache entry is
-present. This value is only applied if \X'tty: link #envvar:CMAKE_GENERATOR'\fI\%CMAKE_GENERATOR\fP\X'tty: link' is set.
+Default value for \fI\%CMAKE_GENERATOR_INSTANCE\fP if no Cache entry is
+present. This value is only applied if \fI\%CMAKE_GENERATOR\fP is set.
 .SS CMAKE_GENERATOR_PLATFORM
 .sp
 Added in version 3.15.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
-Default value for \X'tty: link #variable:CMAKE_GENERATOR_PLATFORM'\fI\%CMAKE_GENERATOR_PLATFORM\fP\X'tty: link' if no Cache entry
-is present and no value is specified by \X'tty: link #cmdoption-cmake-A'\fI\%cmake \-A\fP\X'tty: link' option.
-This value is only applied if \X'tty: link #envvar:CMAKE_GENERATOR'\fI\%CMAKE_GENERATOR\fP\X'tty: link' is set.
+Default value for \fI\%CMAKE_GENERATOR_PLATFORM\fP if no Cache entry
+is present and no value is specified by \fI\%cmake \-A\fP option.
+This value is only applied if \fI\%CMAKE_GENERATOR\fP is set.
 .SS CMAKE_GENERATOR_TOOLSET
 .sp
 Added in version 3.15.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
-Default value for \X'tty: link #variable:CMAKE_GENERATOR_TOOLSET'\fI\%CMAKE_GENERATOR_TOOLSET\fP\X'tty: link' if no Cache entry
-is present and no value is specified by \X'tty: link #cmdoption-cmake-T'\fI\%cmake \-T\fP\X'tty: link' option.
-This value is only applied if \X'tty: link #envvar:CMAKE_GENERATOR'\fI\%CMAKE_GENERATOR\fP\X'tty: link' is set.
+Default value for \fI\%CMAKE_GENERATOR_TOOLSET\fP if no Cache entry
+is present and no value is specified by \fI\%cmake \-T\fP option.
+This value is only applied if \fI\%CMAKE_GENERATOR\fP is set.
 .SS CMAKE_INSTALL_MODE
 .sp
 Added in version 3.22.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 The \fBCMAKE_INSTALL_MODE\fP environment variable allows users to operate
-CMake in an alternate mode of \X'tty: link #install'\fI\%file(INSTALL)\fP\X'tty: link' and \X'tty: link #command:install'\fI\%install()\fP\X'tty: link'\&.
+CMake in an alternate mode of \fI\%file(INSTALL)\fP and \fI\%install()\fP\&.
 .sp
 The default behavior for an installation is to copy a source file from a
 source directory into a destination directory. This environment variable
@@ -421,7 +510,7 @@ destination without having to re\-run the install step.
 .IP \(bu 2
 Editing through the link at the install destination will modify the source
 of the link. This may be useful when dealing with CMake project hierarchies,
-i.e. using \X'tty: link #module:ExternalProject'\fI\%ExternalProject\fP\X'tty: link' and consistent source navigation and
+i.e. using \fI\%ExternalProject\fP and consistent source navigation and
 refactoring is desired across projects.
 .UNINDENT
 .SS Allowed Values
@@ -472,16 +561,16 @@ For the environment variable to take effect, it must be set during the correct
 build phase(s).
 .INDENT 0.0
 .IP \(bu 2
-If the project calls \X'tty: link #install'\fI\%file(INSTALL)\fP\X'tty: link' directly, the environment
+If the project calls \fI\%file(INSTALL)\fP directly, the environment
 variable must be set during the configuration phase.
 .IP \(bu 2
-In order to apply to \X'tty: link #command:install'\fI\%install()\fP\X'tty: link', the environment variable must be
+In order to apply to \fI\%install()\fP, the environment variable must be
 set during installation.  This could be during a build if using the
 \fBinstall\fP or \fBpackage\fP build targets, or separate from the build when
-invoking an install or running \X'tty: link #manual:cpack(1)'\fI\%cpack\fP\X'tty: link' from the command
+invoking an install or running \fI\%cpack\fP from the command
 line.
 .IP \(bu 2
-When using \X'tty: link #module:ExternalProject'\fI\%ExternalProject\fP\X'tty: link', it might be required during the build
+When using \fI\%ExternalProject\fP, it might be required during the build
 phase, since the external project\(aqs own configure, build and install steps
 will execute during the main project\(aqs build phase.
 .UNINDENT
@@ -499,7 +588,7 @@ points to be considered:
 Symbolic links are not available on all platforms.
 .IP \(bu 2
 The way this environment variable interacts with the install step of
-\X'tty: link #module:ExternalProject'\fI\%ExternalProject\fP\X'tty: link' is more complex. For further details, see that
+\fI\%ExternalProject\fP is more complex. For further details, see that
 module\(aqs documentation.
 .IP \(bu 2
 A symbolic link ties the destination to the source in a persistent way.
@@ -508,7 +597,7 @@ This is in contrast to normal install behavior which only copies files as
 they were at the time the install was performed, with no enduring
 relationship between the source and destination of the install.
 .IP \(bu 2
-Combining \fBCMAKE_INSTALL_MODE\fP with \X'tty: link #prop_tgt:IOS_INSTALL_COMBINED'\fI\%IOS_INSTALL_COMBINED\fP\X'tty: link' is
+Combining \fBCMAKE_INSTALL_MODE\fP with \fI\%IOS_INSTALL_COMBINED\fP is
 not supported.
 .IP \(bu 2
 Changing \fBCMAKE_INSTALL_MODE\fP from what it was on a previous run can lead
@@ -523,124 +612,156 @@ will not be replaced by an actual file.
 Added in version 3.31.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Specifies the default maximum number of concurrent processes to use when
 installing using \fBcmake \-\-install\fP\&.
 .sp
-This has no impact unless \X'tty: link #prop_gbl:INSTALL_PARALLEL'\fI\%INSTALL_PARALLEL\fP\X'tty: link' is enabled.
+This has no impact unless \fI\%INSTALL_PARALLEL\fP is enabled.
 .SS CMAKE_INSTALL_PREFIX
 .sp
 Added in version 3.29.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 The \fBCMAKE_INSTALL_PREFIX\fP environment variable specifies a custom default
-value for the \X'tty: link #variable:CMAKE_INSTALL_PREFIX'\fI\%CMAKE_INSTALL_PREFIX\fP\X'tty: link' variable in place of the
+value for the \fI\%CMAKE_INSTALL_PREFIX\fP variable in place of the
 default values specified by CMake itself. The value specified must be an
 absolute path to a directory.
+.SS CMAKE_INTERMEDIATE_DIR_STRATEGY
+.sp
+Added in version 4.2.
+
+.sp
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
+the calling process environment.
+.sp
+\fBCMAKE_INTERMEDIATE_DIR_STRATEGY\fP is a string specifying the strategy to use
+for target intermediate directories. It initializes the
+\fI\%CMAKE_INTERMEDIATE_DIR_STRATEGY\fP variable.
 .SS CMAKE_<LANG>_COMPILER_LAUNCHER
 .sp
 Added in version 3.17.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Default compiler launcher to use for the specified language. Will only be used
 by CMake to initialize the variable on the first configuration. Afterwards, it
 is available through the cache setting of the variable of the same name. For
 any configuration run (including the first), the environment variable will be
-ignored if the \X'tty: link #variable:CMAKE_<LANG>_COMPILER_LAUNCHER'\fI\%CMAKE_<LANG>_COMPILER_LAUNCHER\fP\X'tty: link' variable is defined.
+ignored if the \fI\%CMAKE_<LANG>_COMPILER_LAUNCHER\fP variable is defined.
 .SS CMAKE_<LANG>_IMPLICIT_LINK_DIRECTORIES_EXCLUDE
 .sp
 Added in version 3.27.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
-A \X'tty: link #cmake-language-lists'\fI\%semicolon\-separated list\fP\X'tty: link' of directories
-to exclude from the \X'tty: link #variable:CMAKE_<LANG>_IMPLICIT_LINK_DIRECTORIES'\fI\%CMAKE_<LANG>_IMPLICIT_LINK_DIRECTORIES\fP\X'tty: link'
+A \fI\%semicolon\-separated list\fP of directories
+to exclude from the \fI\%CMAKE_<LANG>_IMPLICIT_LINK_DIRECTORIES\fP
 variable when it is automatically detected from the \fB<LANG>\fP compiler.
 .sp
 This may be used to work around misconfigured compiler drivers that pass
 extraneous implicit link directories to their linker.
+.sp
+See also the \fI\%CMAKE_<LANG>_IMPLICIT_LINK_LIBRARIES_EXCLUDE\fP
+environment variable.
+.SS CMAKE_<LANG>_IMPLICIT_LINK_LIBRARIES_EXCLUDE
+.sp
+Added in version 4.1.
+
+.sp
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
+the calling process environment.
+.sp
+A \fI\%semicolon\-separated list\fP of libraries
+to exclude from the \fI\%CMAKE_<LANG>_IMPLICIT_LINK_LIBRARIES\fP
+variable when it is automatically detected from the \fB<LANG>\fP compiler.
+.sp
+This may be used to work around detection limitations that result in
+extraneous implicit link libraries, e.g., when using compiler driver
+flags that affect the set of implicitly linked libraries.
+.sp
+See also the \fI\%CMAKE_<LANG>_IMPLICIT_LINK_DIRECTORIES_EXCLUDE\fP
+environment variable.
 .SS CMAKE_<LANG>_LINKER_LAUNCHER
 .sp
 Added in version 3.21.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Default launcher to use when linking a target of the specified language. Will
 only be used by CMake to initialize the variable on the first configuration.
 Afterwards, it is available through the cache setting of the variable of the
 same name. For any configuration run (including the first), the environment
-variable will be ignored if the \X'tty: link #variable:CMAKE_<LANG>_LINKER_LAUNCHER'\fI\%CMAKE_<LANG>_LINKER_LAUNCHER\fP\X'tty: link'
+variable will be ignored if the \fI\%CMAKE_<LANG>_LINKER_LAUNCHER\fP
 variable is defined.
 .SS CMAKE_MSVCIDE_RUN_PATH
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Extra PATH locations for custom commands when using
-\X'tty: link #visual-studio-generators'\fI\%Visual Studio Generators\fP\X'tty: link'\&.
+\fI\%Visual Studio Generators\fP\&.
 .sp
 The \fBCMAKE_MSVCIDE_RUN_PATH\fP environment variable sets the default value for
-the \X'tty: link #variable:CMAKE_MSVCIDE_RUN_PATH'\fI\%CMAKE_MSVCIDE_RUN_PATH\fP\X'tty: link' variable if not already explicitly set.
+the \fI\%CMAKE_MSVCIDE_RUN_PATH\fP variable if not already explicitly set.
 .SS CMAKE_NO_VERBOSE
 .sp
 Added in version 3.14.
 
 .sp
-Disables verbose output from CMake when \X'tty: link #envvar:VERBOSE'\fI\%VERBOSE\fP\X'tty: link' environment variable
+Disables verbose output from CMake when \fI\%VERBOSE\fP environment variable
 is set.
 .sp
 Only your build tool of choice will still print verbose output when you start
 to actually build your project.
 .SS CMAKE_OSX_ARCHITECTURES
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Target specific architectures for macOS.
 .sp
 The \fBCMAKE_OSX_ARCHITECTURES\fP environment variable sets the default value for
-the \X'tty: link #variable:CMAKE_OSX_ARCHITECTURES'\fI\%CMAKE_OSX_ARCHITECTURES\fP\X'tty: link' variable. See
-\X'tty: link #prop_tgt:OSX_ARCHITECTURES'\fI\%OSX_ARCHITECTURES\fP\X'tty: link' for more information.
+the \fI\%CMAKE_OSX_ARCHITECTURES\fP variable. See
+\fI\%OSX_ARCHITECTURES\fP for more information.
 .SS CMAKE_TEST_LAUNCHER
 .sp
 Added in version 3.29.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
-The default value for the \X'tty: link #variable:CMAKE_TEST_LAUNCHER'\fI\%CMAKE_TEST_LAUNCHER\fP\X'tty: link' variable when there
+The default value for the \fI\%CMAKE_TEST_LAUNCHER\fP variable when there
 is no explicit configuration given on the first run while creating a new
 build tree.  On later runs in an existing build tree the value persists in
-the cache as \X'tty: link #variable:CMAKE_TEST_LAUNCHER'\fI\%CMAKE_TEST_LAUNCHER\fP\X'tty: link'\&.
+the cache as \fI\%CMAKE_TEST_LAUNCHER\fP\&.
 .SS CMAKE_TOOLCHAIN_FILE
 .sp
 Added in version 3.21.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 The \fBCMAKE_TOOLCHAIN_FILE\fP environment variable specifies a default value
-for the \X'tty: link #variable:CMAKE_TOOLCHAIN_FILE'\fI\%CMAKE_TOOLCHAIN_FILE\fP\X'tty: link' variable when there is no explicit
+for the \fI\%CMAKE_TOOLCHAIN_FILE\fP variable when there is no explicit
 configuration given on the first run while creating a new build tree.
 On later runs in an existing build tree the value persists in the cache
-as \X'tty: link #variable:CMAKE_TOOLCHAIN_FILE'\fI\%CMAKE_TOOLCHAIN_FILE\fP\X'tty: link'\&.
+as \fI\%CMAKE_TOOLCHAIN_FILE\fP\&.
 .SS DESTDIR
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 On UNIX one can use the \fBDESTDIR\fP mechanism in order to relocate the
@@ -651,11 +772,9 @@ For example, running
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 make DESTDIR=/package/stage install
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -664,11 +783,11 @@ prepended with the \fBDESTDIR\fP value which gives \fB/package/stage/usr/local\f
 The packaging tool may then construct the package from the content of the
 \fB/package/stage\fP directory.
 .sp
-See the \X'tty: link #variable:CMAKE_INSTALL_PREFIX'\fI\%CMAKE_INSTALL_PREFIX\fP\X'tty: link' variable to control the
+See the \fI\%CMAKE_INSTALL_PREFIX\fP variable to control the
 installation prefix when configuring a build tree.  Or, when using
-the \X'tty: link #manual:cmake(1)'\fI\%cmake(1)\fP\X'tty: link' command\-line tool\(aqs \X'tty: link #cmdoption-cmake-install'\fI\%\-\-install\fP\X'tty: link'
+the \fI\%cmake(1)\fP command\-line tool\(aqs \fI\%\-\-install\fP
 mode, one may specify a different prefix using the
-\X'tty: link #cmdoption-cmake--install-0'\fI\%\-\-prefix\fP\X'tty: link' option.
+\fI\%\-\-prefix\fP option.
 .sp
 \fBNOTE:\fP
 .INDENT 0.0
@@ -680,55 +799,55 @@ which cannot be prepended with some other prefix.
 .UNINDENT
 .SS LDFLAGS
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Will only be used by CMake on the first configuration to determine the default
 linker flags, after which the value for \fBLDFLAGS\fP is stored in the cache
-as \X'tty: link #variable:CMAKE_EXE_LINKER_FLAGS_INIT'\fI\%CMAKE_EXE_LINKER_FLAGS_INIT\fP\X'tty: link',
-\X'tty: link #variable:CMAKE_SHARED_LINKER_FLAGS_INIT'\fI\%CMAKE_SHARED_LINKER_FLAGS_INIT\fP\X'tty: link', and
-\X'tty: link #variable:CMAKE_MODULE_LINKER_FLAGS_INIT'\fI\%CMAKE_MODULE_LINKER_FLAGS_INIT\fP\X'tty: link'\&. For any configuration run
+as \fI\%CMAKE_EXE_LINKER_FLAGS_INIT\fP,
+\fI\%CMAKE_SHARED_LINKER_FLAGS_INIT\fP, and
+\fI\%CMAKE_MODULE_LINKER_FLAGS_INIT\fP\&. For any configuration run
 (including the first), the environment variable will be ignored if the
 equivalent  \fBCMAKE_<TYPE>_LINKER_FLAGS_INIT\fP variable is defined.
 .SS MACOSX_DEPLOYMENT_TARGET
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Specify the minimum version of macOS on which the target binaries are
 to be deployed.
 .sp
 The \fBMACOSX_DEPLOYMENT_TARGET\fP environment variable sets the default value for
-the \X'tty: link #variable:CMAKE_OSX_DEPLOYMENT_TARGET'\fI\%CMAKE_OSX_DEPLOYMENT_TARGET\fP\X'tty: link' variable.
+the \fI\%CMAKE_OSX_DEPLOYMENT_TARGET\fP variable.
 .SS <PackageName>_ROOT
 .sp
 Added in version 3.12.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
-Calls to \X'tty: link #command:find_package'\fI\%find_package(<PackageName>)\fP\X'tty: link' will search in prefixes
+Calls to \fI\%find_package(<PackageName>)\fP will search in prefixes
 specified by the \fB<PackageName>_ROOT\fP environment variable, where
 \fB<PackageName>\fP is the (case\-preserved) name given to the
-\X'tty: link #command:find_package'\fI\%find_package()\fP\X'tty: link' call and \fB_ROOT\fP is literal.
+\fI\%find_package()\fP call and \fB_ROOT\fP is literal.
 For example, \fBfind_package(Foo)\fP will search prefixes specified in the
-\fBFoo_ROOT\fP environment variable (if set).  See policy \X'tty: link #policy:CMP0074'\fI\%CMP0074\fP\X'tty: link'\&.
+\fBFoo_ROOT\fP environment variable (if set).  See policy \fI\%CMP0074\fP\&.
 .sp
 This variable may hold a single prefix or a list of prefixes separated
 by \fB:\fP on UNIX or \fB;\fP on Windows (the same as the \fBPATH\fP environment
 variable convention on those platforms).
 .sp
-See also the \X'tty: link #variable:<PackageName>_ROOT'\fI\%<PackageName>_ROOT\fP\X'tty: link' CMake variable.
+See also the \fI\%<PackageName>_ROOT\fP CMake variable.
 .INDENT 0.0
 .TP
 .B <PACKAGENAME>_ROOT
 Added in version 3.27.
 
 .sp
-Calls to \X'tty: link #command:find_package'\fI\%find_package(<PackageName>)\fP\X'tty: link' will also search in
+Calls to \fI\%find_package(<PackageName>)\fP will also search in
 prefixes specified by the upper\-case \fB<PACKAGENAME>_ROOT\fP environment
-variable.  See policy \X'tty: link #policy:CMP0144'\fI\%CMP0144\fP\X'tty: link'\&.
+variable.  See policy \fI\%CMP0144\fP\&.
 .UNINDENT
 .sp
 \fBNOTE:\fP
@@ -749,12 +868,12 @@ you start to actually build your project.
 .sp
 Note that any given value is ignored. It\(aqs just checked for existence.
 .sp
-See also \X'tty: link #build-tool-mode'\fI\%Build Tool Mode\fP\X'tty: link' and
-\X'tty: link #envvar:CMAKE_NO_VERBOSE'\fI\%CMAKE_NO_VERBOSE\fP\X'tty: link' environment variable
+See also \fI\%Build Tool Mode\fP and
+\fI\%CMAKE_NO_VERBOSE\fP environment variable
 .SH ENVIRONMENT VARIABLES FOR LANGUAGES
 .SS ASM<DIALECT>
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Preferred executable for compiling a specific dialect of assembly language
@@ -775,9 +894,9 @@ files. \fBASM<DIALECT>\fP can be one of:
 Will only be used by CMake on the first configuration to determine
 \fBASM<DIALECT>\fP compiler, after which the value for \fBASM<DIALECT>\fP is stored
 in the cache as
-\X'tty: link #variable:CMAKE_<LANG>_COMPILER'\fI\%CMAKE_ASM<DIALECT>_COMPILER\fP\X'tty: link'\&. For subsequent
+\fI\%CMAKE_ASM<DIALECT>_COMPILER\fP\&. For subsequent
 configuration runs, the environment variable will be ignored in favor of
-\X'tty: link #variable:CMAKE_<LANG>_COMPILER'\fI\%CMAKE_ASM<DIALECT>_COMPILER\fP\X'tty: link'\&.
+\fI\%CMAKE_ASM<DIALECT>_COMPILER\fP\&.
 .sp
 \fBNOTE:\fP
 .INDENT 0.0
@@ -789,16 +908,14 @@ they can not be changed.
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 $ export ASM=\(dqcustom\-compiler \-\-arg1 \-\-arg2\(dq
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .SS ASM<DIALECT>FLAGS
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Add default compilation flags to be used when compiling a specific dialect
@@ -818,23 +935,23 @@ of an assembly language.  \fBASM<DIALECT>FLAGS\fP can be one of:
 .sp
 CMake uses this environment variable value, in combination with its own
 builtin default flags for the toolchain, to initialize and store the
-\X'tty: link #variable:CMAKE_<LANG>_FLAGS'\fI\%CMAKE_ASM<DIALECT>_FLAGS\fP\X'tty: link' cache entry.
+\fI\%CMAKE_ASM<DIALECT>_FLAGS\fP cache entry.
 This occurs the first time a build tree is configured for language \fBASM<DIALECT>\fP\&.
 For any configuration run (including the first), the environment variable
-will be ignored if the \X'tty: link #variable:CMAKE_<LANG>_FLAGS'\fI\%CMAKE_ASM<DIALECT>_FLAGS\fP\X'tty: link' variable is already defined.
+will be ignored if the \fI\%CMAKE_ASM<DIALECT>_FLAGS\fP variable is already defined.
 .sp
-See also \X'tty: link #variable:CMAKE_<LANG>_FLAGS_INIT'\fI\%CMAKE_ASM<DIALECT>_FLAGS_INIT\fP\X'tty: link'\&.
+See also \fI\%CMAKE_ASM<DIALECT>_FLAGS_INIT\fP\&.
 .SS CC
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Preferred executable for compiling \fBC\fP language files. Will only be used by
 CMake on the first configuration to determine \fBC\fP compiler, after which the
 value for \fBCC\fP is stored in the cache as
-\X'tty: link #variable:CMAKE_<LANG>_COMPILER'\fI\%CMAKE_C_COMPILER\fP\X'tty: link'\&. For any configuration run
+\fI\%CMAKE_C_COMPILER\fP\&. For any configuration run
 (including the first), the environment variable will be ignored if the
-\X'tty: link #variable:CMAKE_<LANG>_COMPILER'\fI\%CMAKE_C_COMPILER\fP\X'tty: link' variable is defined.
+\fI\%CMAKE_C_COMPILER\fP variable is defined.
 .sp
 \fBNOTE:\fP
 .INDENT 0.0
@@ -846,73 +963,71 @@ they can not be changed.
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 $ export CC=\(dqcustom\-compiler \-\-arg1 \-\-arg2\(dq
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .SS CFLAGS
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Add default compilation flags to be used when compiling \fBC\fP files.
 .sp
 CMake uses this environment variable value, in combination with its own
 builtin default flags for the toolchain, to initialize and store the
-\X'tty: link #variable:CMAKE_<LANG>_FLAGS'\fI\%CMAKE_C_FLAGS\fP\X'tty: link' cache entry.
+\fI\%CMAKE_C_FLAGS\fP cache entry.
 This occurs the first time a build tree is configured for language \fBC\fP\&.
 For any configuration run (including the first), the environment variable
-will be ignored if the \X'tty: link #variable:CMAKE_<LANG>_FLAGS'\fI\%CMAKE_C_FLAGS\fP\X'tty: link' variable is already defined.
+will be ignored if the \fI\%CMAKE_C_FLAGS\fP variable is already defined.
 .sp
-See also \X'tty: link #variable:CMAKE_<LANG>_FLAGS_INIT'\fI\%CMAKE_C_FLAGS_INIT\fP\X'tty: link'\&.
+See also \fI\%CMAKE_C_FLAGS_INIT\fP\&.
 .SS CSFLAGS
 .sp
 Added in version 3.9.2.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Add default compilation flags to be used when compiling \fBCSharp\fP files.
 .sp
 CMake uses this environment variable value, in combination with its own
 builtin default flags for the toolchain, to initialize and store the
-\X'tty: link #variable:CMAKE_<LANG>_FLAGS'\fI\%CMAKE_CSharp_FLAGS\fP\X'tty: link' cache entry.
+\fI\%CMAKE_CSharp_FLAGS\fP cache entry.
 This occurs the first time a build tree is configured for language \fBCSharp\fP\&.
 For any configuration run (including the first), the environment variable
-will be ignored if the \X'tty: link #variable:CMAKE_<LANG>_FLAGS'\fI\%CMAKE_CSharp_FLAGS\fP\X'tty: link' variable is already defined.
+will be ignored if the \fI\%CMAKE_CSharp_FLAGS\fP variable is already defined.
 .sp
-See also \X'tty: link #variable:CMAKE_<LANG>_FLAGS_INIT'\fI\%CMAKE_CSharp_FLAGS_INIT\fP\X'tty: link'\&.
+See also \fI\%CMAKE_CSharp_FLAGS_INIT\fP\&.
 .SS CUDAARCHS
 .sp
 Added in version 3.20.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
-Value used to initialize \X'tty: link #variable:CMAKE_CUDA_ARCHITECTURES'\fI\%CMAKE_CUDA_ARCHITECTURES\fP\X'tty: link' on the first
+Value used to initialize \fI\%CMAKE_CUDA_ARCHITECTURES\fP on the first
 configuration. Subsequent runs will use the value stored in the cache.
 .sp
 This is a semicolon\-separated list of architectures as described in
-\X'tty: link #prop_tgt:CUDA_ARCHITECTURES'\fI\%CUDA_ARCHITECTURES\fP\X'tty: link'\&.
+\fI\%CUDA_ARCHITECTURES\fP\&.
 .SS CUDACXX
 .sp
 Added in version 3.8.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Preferred executable for compiling \fBCUDA\fP language files. Will only be used by
 CMake on the first configuration to determine \fBCUDA\fP compiler, after which the
 value for \fBCUDA\fP is stored in the cache as
-\X'tty: link #variable:CMAKE_<LANG>_COMPILER'\fI\%CMAKE_CUDA_COMPILER\fP\X'tty: link'\&. For any configuration
+\fI\%CMAKE_CUDA_COMPILER\fP\&. For any configuration
 run (including the first), the environment variable will be ignored if the
-\X'tty: link #variable:CMAKE_<LANG>_COMPILER'\fI\%CMAKE_CUDA_COMPILER\fP\X'tty: link' variable is defined.
+\fI\%CMAKE_CUDA_COMPILER\fP variable is defined.
 .sp
 \fBNOTE:\fP
 .INDENT 0.0
@@ -924,11 +1039,9 @@ they can not be changed.
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 $ export CUDACXX=\(dqcustom\-compiler \-\-arg1 \-\-arg2\(dq
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .SS CUDAFLAGS
@@ -936,34 +1049,34 @@ $ export CUDACXX=\(dqcustom\-compiler \-\-arg1 \-\-arg2\(dq
 Added in version 3.8.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Add default compilation flags to be used when compiling \fBCUDA\fP files.
 .sp
 CMake uses this environment variable value, in combination with its own
 builtin default flags for the toolchain, to initialize and store the
-\X'tty: link #variable:CMAKE_<LANG>_FLAGS'\fI\%CMAKE_CUDA_FLAGS\fP\X'tty: link' cache entry.
+\fI\%CMAKE_CUDA_FLAGS\fP cache entry.
 This occurs the first time a build tree is configured for language \fBCUDA\fP\&.
 For any configuration run (including the first), the environment variable
-will be ignored if the \X'tty: link #variable:CMAKE_<LANG>_FLAGS'\fI\%CMAKE_CUDA_FLAGS\fP\X'tty: link' variable is already defined.
+will be ignored if the \fI\%CMAKE_CUDA_FLAGS\fP variable is already defined.
 .sp
-See also \X'tty: link #variable:CMAKE_<LANG>_FLAGS_INIT'\fI\%CMAKE_CUDA_FLAGS_INIT\fP\X'tty: link'\&.
+See also \fI\%CMAKE_CUDA_FLAGS_INIT\fP\&.
 .SS CUDAHOSTCXX
 .sp
 Added in version 3.8.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Preferred executable for compiling host code when compiling \fBCUDA\fP
 language files. Will only be used by CMake on the first configuration to
 determine \fBCUDA\fP host compiler, after which the value for \fBCUDAHOSTCXX\fP is
 stored in the cache as
-\X'tty: link #variable:CMAKE_<LANG>_HOST_COMPILER'\fI\%CMAKE_CUDA_HOST_COMPILER\fP\X'tty: link'\&.
+\fI\%CMAKE_CUDA_HOST_COMPILER\fP\&.
 This environment variable is preferred over
-\X'tty: link #variable:CMAKE_<LANG>_HOST_COMPILER'\fI\%CMAKE_CUDA_HOST_COMPILER\fP\X'tty: link'\&.
+\fI\%CMAKE_CUDA_HOST_COMPILER\fP\&.
 .sp
 This environment variable is primarily meant for use with projects that
 enable \fBCUDA\fP as a first\-class language.
@@ -971,24 +1084,24 @@ enable \fBCUDA\fP as a first\-class language.
 \fBNOTE:\fP
 .INDENT 0.0
 .INDENT 3.5
-Ignored when using \X'tty: link #visual-studio-generators'\fI\%Visual Studio Generators\fP\X'tty: link'\&.
+Ignored when using \fI\%Visual Studio Generators\fP\&.
 .UNINDENT
 .UNINDENT
 .sp
-Added in version 3.13: The \X'tty: link #module:FindCUDA'\fI\%FindCUDA\fP\X'tty: link'
+Added in version 3.13: The \fI\%FindCUDA\fP
 module will use this variable to initialize its \fBCUDA_HOST_COMPILER\fP setting.
 
 .SS CXX
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Preferred executable for compiling \fBCXX\fP language files. Will only be used by
 CMake on the first configuration to determine \fBCXX\fP compiler, after which the
 value for \fBCXX\fP is stored in the cache as
-\X'tty: link #variable:CMAKE_<LANG>_COMPILER'\fI\%CMAKE_CXX_COMPILER\fP\X'tty: link'\&. For any configuration
+\fI\%CMAKE_CXX_COMPILER\fP\&. For any configuration
 run (including the first), the environment variable will be ignored if the
-\X'tty: link #variable:CMAKE_<LANG>_COMPILER'\fI\%CMAKE_CXX_COMPILER\fP\X'tty: link' variable is defined.
+\fI\%CMAKE_CXX_COMPILER\fP variable is defined.
 .sp
 \fBNOTE:\fP
 .INDENT 0.0
@@ -1000,39 +1113,37 @@ they can not be changed.
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 $ export CXX=\(dqcustom\-compiler \-\-arg1 \-\-arg2\(dq
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .SS CXXFLAGS
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Add default compilation flags to be used when compiling \fBCXX\fP (C++) files.
 .sp
 CMake uses this environment variable value, in combination with its own
 builtin default flags for the toolchain, to initialize and store the
-\X'tty: link #variable:CMAKE_<LANG>_FLAGS'\fI\%CMAKE_CXX_FLAGS\fP\X'tty: link' cache entry.
+\fI\%CMAKE_CXX_FLAGS\fP cache entry.
 This occurs the first time a build tree is configured for language \fBCXX\fP\&.
 For any configuration run (including the first), the environment variable
-will be ignored if the \X'tty: link #variable:CMAKE_<LANG>_FLAGS'\fI\%CMAKE_CXX_FLAGS\fP\X'tty: link' variable is already defined.
+will be ignored if the \fI\%CMAKE_CXX_FLAGS\fP variable is already defined.
 .sp
-See also \X'tty: link #variable:CMAKE_<LANG>_FLAGS_INIT'\fI\%CMAKE_CXX_FLAGS_INIT\fP\X'tty: link'\&.
+See also \fI\%CMAKE_CXX_FLAGS_INIT\fP\&.
 .SS FC
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Preferred executable for compiling \fBFortran\fP language files. Will only be used
 by CMake on the first configuration to determine \fBFortran\fP compiler, after
 which the value for \fBFortran\fP is stored in the cache as
-\X'tty: link #variable:CMAKE_<LANG>_COMPILER'\fI\%CMAKE_Fortran_COMPILER\fP\X'tty: link'\&. For any
+\fI\%CMAKE_Fortran_COMPILER\fP\&. For any
 configuration run (including the first), the environment variable will be
-ignored if the \X'tty: link #variable:CMAKE_<LANG>_COMPILER'\fI\%CMAKE_Fortran_COMPILER\fP\X'tty: link'
+ignored if the \fI\%CMAKE_Fortran_COMPILER\fP
 variable is defined.
 .sp
 \fBNOTE:\fP
@@ -1045,73 +1156,71 @@ they can not be changed.
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 $ export FC=\(dqcustom\-compiler \-\-arg1 \-\-arg2\(dq
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .SS FFLAGS
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Add default compilation flags to be used when compiling \fBFortran\fP files.
 .sp
 CMake uses this environment variable value, in combination with its own
 builtin default flags for the toolchain, to initialize and store the
-\X'tty: link #variable:CMAKE_<LANG>_FLAGS'\fI\%CMAKE_Fortran_FLAGS\fP\X'tty: link' cache entry.
+\fI\%CMAKE_Fortran_FLAGS\fP cache entry.
 This occurs the first time a build tree is configured for language \fBFortran\fP\&.
 For any configuration run (including the first), the environment variable
-will be ignored if the \X'tty: link #variable:CMAKE_<LANG>_FLAGS'\fI\%CMAKE_Fortran_FLAGS\fP\X'tty: link' variable is already defined.
+will be ignored if the \fI\%CMAKE_Fortran_FLAGS\fP variable is already defined.
 .sp
-See also \X'tty: link #variable:CMAKE_<LANG>_FLAGS_INIT'\fI\%CMAKE_Fortran_FLAGS_INIT\fP\X'tty: link'\&.
+See also \fI\%CMAKE_Fortran_FLAGS_INIT\fP\&.
 .SS HIPCXX
 .sp
 Added in version 3.21.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Preferred executable for compiling \fBHIP\fP language files. Will only be used by
 CMake on the first configuration to determine \fBHIP\fP compiler, after which the
 value for \fBHIP\fP is stored in the cache as
-\X'tty: link #variable:CMAKE_<LANG>_COMPILER'\fI\%CMAKE_HIP_COMPILER\fP\X'tty: link'\&. For any configuration
+\fI\%CMAKE_HIP_COMPILER\fP\&. For any configuration
 run (including the first), the environment variable will be ignored if the
-\X'tty: link #variable:CMAKE_<LANG>_COMPILER'\fI\%CMAKE_HIP_COMPILER\fP\X'tty: link' variable is defined.
+\fI\%CMAKE_HIP_COMPILER\fP variable is defined.
 .SS HIPFLAGS
 .sp
 Added in version 3.21.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Add default compilation flags to be used when compiling \fBHIP\fP files.
 .sp
 CMake uses this environment variable value, in combination with its own
 builtin default flags for the toolchain, to initialize and store the
-\X'tty: link #variable:CMAKE_<LANG>_FLAGS'\fI\%CMAKE_HIP_FLAGS\fP\X'tty: link' cache entry.
+\fI\%CMAKE_HIP_FLAGS\fP cache entry.
 This occurs the first time a build tree is configured for language \fBHIP\fP\&.
 For any configuration run (including the first), the environment variable
-will be ignored if the \X'tty: link #variable:CMAKE_<LANG>_FLAGS'\fI\%CMAKE_HIP_FLAGS\fP\X'tty: link' variable is already defined.
+will be ignored if the \fI\%CMAKE_HIP_FLAGS\fP variable is already defined.
 .sp
-See also \X'tty: link #variable:CMAKE_<LANG>_FLAGS_INIT'\fI\%CMAKE_HIP_FLAGS_INIT\fP\X'tty: link'\&.
+See also \fI\%CMAKE_HIP_FLAGS_INIT\fP\&.
 .SS HIPHOSTCXX
 .sp
 Added in version 3.28.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Preferred executable for compiling host code when compiling \fBHIP\fP
 language files with the NVIDIA CUDA Compiler. Will only be used by CMake
 on the first configuration to determine \fBHIP\fP host compiler, after which
 the value for \fBHIPHOSTCXX\fP is stored in the cache as
-\X'tty: link #variable:CMAKE_<LANG>_HOST_COMPILER'\fI\%CMAKE_HIP_HOST_COMPILER\fP\X'tty: link'\&.
+\fI\%CMAKE_HIP_HOST_COMPILER\fP\&.
 .sp
 This environment variable is primarily meant for use with projects that
 enable \fBHIP\fP as a first\-class language.
@@ -1119,7 +1228,7 @@ enable \fBHIP\fP as a first\-class language.
 \fBNOTE:\fP
 .INDENT 0.0
 .INDENT 3.5
-Ignored when using \X'tty: link #visual-studio-generators'\fI\%Visual Studio Generators\fP\X'tty: link'\&.
+Ignored when using \fI\%Visual Studio Generators\fP\&.
 .UNINDENT
 .UNINDENT
 .SS ISPC
@@ -1127,114 +1236,114 @@ Ignored when using \X'tty: link #visual-studio-generators'\fI\%Visual Studio Gen
 Added in version 3.19.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Preferred executable for compiling \fBISPC\fP language files. Will only be used by
 CMake on the first configuration to determine \fBISPC\fP compiler, after which the
 value for \fBISPC\fP is stored in the cache as
-\X'tty: link #variable:CMAKE_<LANG>_COMPILER'\fI\%CMAKE_ISPC_COMPILER\fP\X'tty: link'\&. For any configuration
+\fI\%CMAKE_ISPC_COMPILER\fP\&. For any configuration
 run (including the first), the environment variable will be ignored if the
-\X'tty: link #variable:CMAKE_<LANG>_COMPILER'\fI\%CMAKE_ISPC_COMPILER\fP\X'tty: link' variable is defined.
+\fI\%CMAKE_ISPC_COMPILER\fP variable is defined.
 .SS ISPCFLAGS
 .sp
 Added in version 3.19.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Add default compilation flags to be used when compiling \fBISPC\fP files.
 .sp
 CMake uses this environment variable value, in combination with its own
 builtin default flags for the toolchain, to initialize and store the
-\X'tty: link #variable:CMAKE_<LANG>_FLAGS'\fI\%CMAKE_ISPC_FLAGS\fP\X'tty: link' cache entry.
+\fI\%CMAKE_ISPC_FLAGS\fP cache entry.
 This occurs the first time a build tree is configured for language \fBISPC\fP\&.
 For any configuration run (including the first), the environment variable
-will be ignored if the \X'tty: link #variable:CMAKE_<LANG>_FLAGS'\fI\%CMAKE_ISPC_FLAGS\fP\X'tty: link' variable is already defined.
+will be ignored if the \fI\%CMAKE_ISPC_FLAGS\fP variable is already defined.
 .sp
-See also \X'tty: link #variable:CMAKE_<LANG>_FLAGS_INIT'\fI\%CMAKE_ISPC_FLAGS_INIT\fP\X'tty: link'\&.
+See also \fI\%CMAKE_ISPC_FLAGS_INIT\fP\&.
 .SS OBJC
 .sp
 Added in version 3.16.7.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Preferred executable for compiling \fBOBJC\fP language files. Will only be used
 by CMake on the first configuration to determine \fBOBJC\fP compiler, after
 which the value for \fBOBJC\fP is stored in the cache as
-\X'tty: link #variable:CMAKE_<LANG>_COMPILER'\fI\%CMAKE_OBJC_COMPILER\fP\X'tty: link'\&. For any configuration
+\fI\%CMAKE_OBJC_COMPILER\fP\&. For any configuration
 run (including the first), the environment variable will be ignored if the
-\X'tty: link #variable:CMAKE_<LANG>_COMPILER'\fI\%CMAKE_OBJC_COMPILER\fP\X'tty: link' variable is defined.
+\fI\%CMAKE_OBJC_COMPILER\fP variable is defined.
 .sp
-If \fBOBJC\fP is not defined, the \X'tty: link #envvar:CC'\fI\%CC\fP\X'tty: link' environment variable will
+If \fBOBJC\fP is not defined, the \fI\%CC\fP environment variable will
 be checked instead.
 .SS OBJCFLAGS
 .sp
 Added in version 3.16.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Add default compilation flags to be used when compiling \fBObjective C\fP files.
 .sp
 CMake uses this environment variable value, in combination with its own
 builtin default flags for the toolchain, to initialize and store the
-\X'tty: link #variable:CMAKE_<LANG>_FLAGS'\fI\%CMAKE_OBJC_FLAGS\fP\X'tty: link' cache entry.
+\fI\%CMAKE_OBJC_FLAGS\fP cache entry.
 This occurs the first time a build tree is configured for language \fBOBJC\fP\&.
 For any configuration run (including the first), the environment variable
-will be ignored if the \X'tty: link #variable:CMAKE_<LANG>_FLAGS'\fI\%CMAKE_OBJC_FLAGS\fP\X'tty: link' variable is already defined.
+will be ignored if the \fI\%CMAKE_OBJC_FLAGS\fP variable is already defined.
 .sp
-See also \X'tty: link #variable:CMAKE_<LANG>_FLAGS_INIT'\fI\%CMAKE_OBJC_FLAGS_INIT\fP\X'tty: link'\&.
+See also \fI\%CMAKE_OBJC_FLAGS_INIT\fP\&.
 .SS OBJCXX
 .sp
 Added in version 3.16.7.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Preferred executable for compiling \fBOBJCXX\fP language files. Will only be used
 by CMake on the first configuration to determine \fBOBJCXX\fP compiler, after
 which the value for \fBOBJCXX\fP is stored in the cache as
-\X'tty: link #variable:CMAKE_<LANG>_COMPILER'\fI\%CMAKE_OBJCXX_COMPILER\fP\X'tty: link'\&. For any configuration
+\fI\%CMAKE_OBJCXX_COMPILER\fP\&. For any configuration
 run (including the first), the environment variable will be ignored if the
-\X'tty: link #variable:CMAKE_<LANG>_COMPILER'\fI\%CMAKE_OBJCXX_COMPILER\fP\X'tty: link' variable is defined.
+\fI\%CMAKE_OBJCXX_COMPILER\fP variable is defined.
 .sp
-If \fBOBJCXX\fP is not defined, the \X'tty: link #envvar:CXX'\fI\%CXX\fP\X'tty: link' environment variable will
+If \fBOBJCXX\fP is not defined, the \fI\%CXX\fP environment variable will
 be checked instead.
 .SS OBJCXXFLAGS
 .sp
 Added in version 3.16.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Add default compilation flags to be used when compiling \fBObjective C++\fP (.mm) files.
 .sp
 CMake uses this environment variable value, in combination with its own
 builtin default flags for the toolchain, to initialize and store the
-\X'tty: link #variable:CMAKE_<LANG>_FLAGS'\fI\%CMAKE_OBJCXX_FLAGS\fP\X'tty: link' cache entry.
+\fI\%CMAKE_OBJCXX_FLAGS\fP cache entry.
 This occurs the first time a build tree is configured for language \fBOBJCXX\fP\&.
 For any configuration run (including the first), the environment variable
-will be ignored if the \X'tty: link #variable:CMAKE_<LANG>_FLAGS'\fI\%CMAKE_OBJCXX_FLAGS\fP\X'tty: link' variable is already defined.
+will be ignored if the \fI\%CMAKE_OBJCXX_FLAGS\fP variable is already defined.
 .sp
-See also \X'tty: link #variable:CMAKE_<LANG>_FLAGS_INIT'\fI\%CMAKE_OBJCXX_FLAGS_INIT\fP\X'tty: link'\&.
+See also \fI\%CMAKE_OBJCXX_FLAGS_INIT\fP\&.
 .SS RC
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Preferred executable for compiling \fBresource\fP files. Will only be used by CMake
 on the first configuration to determine \fBresource\fP compiler, after which the
 value for \fBRC\fP is stored in the cache as
-\X'tty: link #variable:CMAKE_<LANG>_COMPILER'\fI\%CMAKE_RC_COMPILER\fP\X'tty: link'\&. For any configuration run
+\fI\%CMAKE_RC_COMPILER\fP\&. For any configuration run
 (including the first), the environment variable will be ignored if the
-\X'tty: link #variable:CMAKE_<LANG>_COMPILER'\fI\%CMAKE_RC_COMPILER\fP\X'tty: link' variable is defined.
+\fI\%CMAKE_RC_COMPILER\fP variable is defined.
 .sp
 \fBNOTE:\fP
 .INDENT 0.0
@@ -1246,42 +1355,40 @@ they can not be changed.
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 $ export RC=\(dqcustom\-compiler \-\-arg1 \-\-arg2\(dq
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .SS RCFLAGS
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Add default compilation flags to be used when compiling \fBRC\fP (resource) files.
 .sp
 CMake uses this environment variable value, in combination with its own
 builtin default flags for the toolchain, to initialize and store the
-\X'tty: link #variable:CMAKE_<LANG>_FLAGS'\fI\%CMAKE_RC_FLAGS\fP\X'tty: link' cache entry.
+\fI\%CMAKE_RC_FLAGS\fP cache entry.
 This occurs the first time a build tree is configured for language \fBRC\fP\&.
 For any configuration run (including the first), the environment variable
-will be ignored if the \X'tty: link #variable:CMAKE_<LANG>_FLAGS'\fI\%CMAKE_RC_FLAGS\fP\X'tty: link' variable is already defined.
+will be ignored if the \fI\%CMAKE_RC_FLAGS\fP variable is already defined.
 .sp
-See also \X'tty: link #variable:CMAKE_<LANG>_FLAGS_INIT'\fI\%CMAKE_RC_FLAGS_INIT\fP\X'tty: link'\&.
+See also \fI\%CMAKE_RC_FLAGS_INIT\fP\&.
 .SS SWIFTC
 .sp
 Added in version 3.15.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Preferred executable for compiling \fBSwift\fP language files. Will only be used by
 CMake on the first configuration to determine \fBSwift\fP compiler, after which the
 value for \fBSWIFTC\fP is stored in the cache as
-\X'tty: link #variable:CMAKE_<LANG>_COMPILER'\fI\%CMAKE_Swift_COMPILER\fP\X'tty: link'\&. For any configuration run
+\fI\%CMAKE_Swift_COMPILER\fP\&. For any configuration run
 (including the first), the environment variable will be ignored if the
-\X'tty: link #variable:CMAKE_<LANG>_COMPILER'\fI\%CMAKE_Swift_COMPILER\fP\X'tty: link' variable is defined.
+\fI\%CMAKE_Swift_COMPILER\fP variable is defined.
 .sp
 \fBNOTE:\fP
 .INDENT 0.0
@@ -1293,75 +1400,72 @@ they can not be changed.
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 $ export SWIFTC=\(dqcustom\-compiler \-\-arg1 \-\-arg2\(dq
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .SH ENVIRONMENT VARIABLES FOR CTEST
 .SS CTEST_INTERACTIVE_DEBUG_MODE
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Environment variable that will exist and be set to \fB1\fP when a test executed
-by \X'tty: link #manual:ctest(1)'\fI\%ctest(1)\fP\X'tty: link' is run in interactive mode.
+by \fI\%ctest(1)\fP is run in interactive mode.
 .SS CTEST_NO_TESTS_ACTION
 .sp
 Added in version 3.26.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
-Environment variable that controls how \X'tty: link #manual:ctest(1)'\fI\%ctest\fP\X'tty: link' handles
+Environment variable that controls how \fI\%ctest\fP handles
 cases when there are no tests to run. Possible values are: \fBerror\fP,
 \fBignore\fP, empty or unset.
 .sp
-The \X'tty: link #cmdoption-ctest-no-tests'\fI\%\-\-no\-tests=<action>\fP\X'tty: link' option to
-\X'tty: link #manual:ctest(1)'\fI\%ctest\fP\X'tty: link' overrides this environment variable if both
+The \fI\%\-\-no\-tests=<action>\fP option to
+\fI\%ctest\fP overrides this environment variable if both
 are given.
 .SS CTEST_OUTPUT_ON_FAILURE
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Boolean environment variable that controls if the output should be logged for
 failed tests. Set the value to \fB1\fP, \fBTrue\fP, or \fBON\fP to enable output on failure.
-See \X'tty: link #manual:ctest(1)'\fI\%ctest(1)\fP\X'tty: link' for more information on controlling output of failed
+See \fI\%ctest(1)\fP for more information on controlling output of failed
 tests.
 .SS CTEST_PARALLEL_LEVEL
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
 Specify the number of tests for CTest to run in parallel.
 For example, if \fBCTEST_PARALLEL_LEVEL\fP is set to 8, CTest will run
 up to 8 tests concurrently as if \fBctest\fP were invoked with the
-\X'tty: link #cmdoption-ctest-j'\fI\%\-\-parallel 8\fP\X'tty: link' option.
+\fI\%\-\-parallel 8\fP option.
 .sp
 Changed in version 3.29: The value may be empty, or \fB0\fP, to let ctest use a default level of
 parallelism, or unbounded parallelism, respectively, as documented by
-the \X'tty: link #cmdoption-ctest-j'\fI\%ctest \-\-parallel\fP\X'tty: link' option.
+the \fI\%ctest \-\-parallel\fP option.
 .sp
-On Windows, environment variables cannot be set to an empty string.
 CTest will interpret a whitespace\-only string as empty.
 .sp
 In CMake 3.28 and earlier, an empty or \fB0\fP value was equivalent to \fB1\fP\&.
 
 .sp
-See \X'tty: link #manual:ctest(1)'\fI\%ctest(1)\fP\X'tty: link' for more information on parallel test execution.
+See \fI\%ctest(1)\fP for more information on parallel test execution.
 .SS CTEST_PROGRESS_OUTPUT
 .sp
 Added in version 3.13.
 
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
-Boolean environment variable that affects how \X'tty: link #manual:ctest(1)'\fI\%ctest\fP\X'tty: link'
+Boolean environment variable that affects how \fI\%ctest\fP
 command output reports overall progress.  When set to \fB1\fP, \fBTRUE\fP, \fBON\fP or anything
 else that evaluates to boolean true, progress is reported by repeatedly
 updating the same line.  This greatly reduces the overall verbosity, but is
@@ -1370,22 +1474,47 @@ variable is not set or has a value that evaluates to false, output is reported
 normally with each test having its own start and end lines logged to the
 output.
 .sp
-The \X'tty: link #cmdoption-ctest-progress'\fI\%\-\-progress\fP\X'tty: link' option to \X'tty: link #manual:ctest(1)'\fI\%ctest\fP\X'tty: link'
+The \fI\%\-\-progress\fP option to \fI\%ctest\fP
 overrides this environment variable if both are given.
+.SS CTEST_USE_INSTRUMENTATION
+.sp
+Added in version 4.3.
+
+.sp
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
+the calling process environment.
+.sp
+Setting this environment variable to \fB1\fP, \fBTrue\fP, or \fBON\fP enables
+\fI\%instrumentation\fP for CTest in
+\fI\%Dashboard Client\fP mode.
 .SS CTEST_USE_LAUNCHERS_DEFAULT
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
-Initializes the \X'tty: link #variable:CTEST_USE_LAUNCHERS'\fI\%CTEST_USE_LAUNCHERS\fP\X'tty: link' variable if not already defined.
+Initializes the \fI\%CTEST_USE_LAUNCHERS\fP variable if not already defined.
+.SS CTEST_USE_VERBOSE_INSTRUMENTATION
+.sp
+Added in version 4.3.
+
+.sp
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
+the calling process environment.
+.sp
+Setting this environment variable to \fB1\fP, \fBTrue\fP, or \fBON\fP causes CTest to
+report the full command line (including arguments) to CDash for each
+instrumented command. By default, CTest truncates the command line at the first
+space.
+.sp
+See also \fI\%CTEST_USE_INSTRUMENTATION\fP
 .SS DASHBOARD_TEST_FROM_CTEST
 .sp
-This is a CMake \X'tty: link #cmake-language-environment-variables'\fI\%Environment Variable\fP\X'tty: link'\&. Its initial value is taken from
+This is a CMake \fI\%Environment Variable\fP\&. Its initial value is taken from
 the calling process environment.
 .sp
-Environment variable that will exist when a test executed by \X'tty: link #manual:ctest(1)'\fI\%ctest(1)\fP\X'tty: link'
+Environment variable that will exist when a test executed by \fI\%ctest(1)\fP
 is run in non\-interactive mode.  The value will be equal to
-\X'tty: link #variable:CMAKE_VERSION'\fI\%CMAKE_VERSION\fP\X'tty: link'\&.
+\fI\%CMAKE_VERSION\fP\&.
 .SH ENVIRONMENT VARIABLES FOR THE CMAKE CURSES INTERFACE
 .SS CCMAKE_COLORS
 .sp
@@ -1430,14 +1559,12 @@ For example:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 CCMAKE_COLORS=\(aqs=39:p=220:c=207:n=196:y=46\(aq
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .SH COPYRIGHT
-2000-2024 Kitware, Inc. and Contributors
+2000-2026 Kitware, Inc. and Contributors
 .\" Generated by docutils manpage writer.
 .

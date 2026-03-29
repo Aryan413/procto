@@ -5,13 +5,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <title>CPack IFW Generator &mdash; CMake 3.31.11 Documentation</title>
+  <title>CPack IFW Generator &mdash; CMake 4.3.0 Documentation</title>
 
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a2c47e09" />
-    <link rel="stylesheet" type="text/css" href="../_static/cmake.css?v=3e562cf9" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a3862c66" />
+    <link rel="stylesheet" type="text/css" href="../_static/cmake.css?v=d27bb136" />
     
-    <script src="../_static/documentation_options.js?v=5746678a"></script>
-    <script src="../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../_static/documentation_options.js?v=a17b270f"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     
     <link rel="icon" href="../_static/cmake-favicon.ico"/>
@@ -22,8 +22,12 @@
  
 
   </head><body>
+    <input id="sidebar-check" type="checkbox" />
+    <label id="sidebar-overlay" for="sidebar-check"></label>
 
-    <div class="related" role="navigation" aria-label="related navigation">
+
+
+    <div class="related relbar1" role="navigation" aria-label="Related">
       <h3>Navigation</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
@@ -36,14 +40,15 @@
           <a href="innosetup.html" title="CPack Inno Setup Generator"
              accesskey="P">previous</a> |</li>
   <li>
-    <img src="../_static/cmake-logo-16.png" alt=""
-         style="vertical-align: middle; margin-top: -2px" />
+    <label class="sidebar-toggle" for="sidebar-check"></label>
+  </li>
+  <li class="rootlink">
+    <img src="../_static/cmake-logo-16.png" width="16" height="16" alt=""/>
+    <a href="https://cmake.org/">CMake 4.3.0</a>
+    <span class="reldelim1"> &#187;</span>
   </li>
   <li>
-    <a href="https://cmake.org/">CMake</a> &#187;
-  </li>
-  <li>
-    <a href="../index.html">3.31.11 Documentation</a> &#187;
+    <a href="../index.html">Documentation</a> &#187;
   </li>
 
           <li class="nav-item nav-item-1"><a href="../manual/cpack-generators.7.html" accesskey="U">cpack-generators(7)</a> &#187;</li>
@@ -511,8 +516,7 @@ only <code class="docutils literal notranslate"><span class="pre">7z</span></cod
 <p><span class="versionmodified added">Added in version 3.23.</span></p>
 </div>
 <p>Archive compression level. The allowable values are:</p>
-<blockquote>
-<div><ul class="simple">
+<ul class="simple">
 <li><p>0 (<em>No compression</em>)</p></li>
 <li><p>1 (<em>Fastest compression</em>)</p></li>
 <li><p>3 (<em>Fast compression</em>)</p></li>
@@ -520,7 +524,6 @@ only <code class="docutils literal notranslate"><span class="pre">7z</span></cod
 <li><p>7 (<em>Maximum compression</em>)</p></li>
 <li><p>9 (<em>Ultra compression</em>)</p></li>
 </ul>
-</div></blockquote>
 <p>If this variable is not set, QtIFW will use a default compression level,
 which will typically be 5 (<em>Normal compression</em>).</p>
 <div class="admonition note">
@@ -661,7 +664,7 @@ a remote server.</p>
 <p>The <code class="docutils literal notranslate"><span class="pre">DOWNLOADED</span></code> option in the <span class="target" id="index-0-command:cpack_add_component"></span><a class="reference internal" href="../module/CPackComponent.html#command:cpack_add_component" title="cpack_add_component"><code class="xref cmake cmake-command docutils literal notranslate"><span class="pre">cpack_add_component()</span></code></a> command
 specifies that a component is to be downloaded. Alternatively, the <code class="docutils literal notranslate"><span class="pre">ALL</span></code>
 option in the <span class="target" id="index-1-command:cpack_configure_downloads"></span><a class="reference internal" href="../module/CPackComponent.html#command:cpack_configure_downloads" title="cpack_configure_downloads"><code class="xref cmake cmake-command docutils literal notranslate"><span class="pre">cpack_configure_downloads()</span></code></a> command specifies that
-<cite>all</cite> components are to be be downloaded.</p>
+<code class="docutils literal notranslate"><span class="pre">all</span></code> components are to be downloaded.</p>
 <p>The <span class="target" id="index-1-command:cpack_ifw_add_repository"></span><a class="reference internal" href="../module/CPackIFW.html#command:cpack_ifw_add_repository" title="cpack_ifw_add_repository"><code class="xref cmake cmake-command docutils literal notranslate"><span class="pre">cpack_ifw_add_repository()</span></code></a> command and the
 <span class="target" id="index-0-variable:CPACK_IFW_DOWNLOAD_ALL"></span><a class="reference internal" href="#variable:CPACK_IFW_DOWNLOAD_ALL" title="CPACK_IFW_DOWNLOAD_ALL"><code class="xref cmake cmake-variable docutils literal notranslate"><span class="pre">CPACK_IFW_DOWNLOAD_ALL</span></code></a> variable allow for more specific
 configuration.</p>
@@ -719,10 +722,10 @@ after that a set of pairs with the name of the locale and the localized value.</
           </div>
         </div>
       </div>
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
         <div class="sphinxsidebarwrapper">
   <div>
-    <h3><a href="../index.html">Table of Contents</a></h3>
+    <h3>Table of Contents</h3>
     <ul>
 <li><a class="reference internal" href="#">CPack IFW Generator</a><ul>
 <li><a class="reference internal" href="#overview">Overview</a></li>
@@ -776,7 +779,7 @@ after that a set of pairs with the name of the locale and the localized value.</
       </div>
       <div class="clearer"></div>
     </div>
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>Navigation</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
@@ -789,14 +792,15 @@ after that a set of pairs with the name of the locale and the localized value.</
           <a href="innosetup.html" title="CPack Inno Setup Generator"
              >previous</a> |</li>
   <li>
-    <img src="../_static/cmake-logo-16.png" alt=""
-         style="vertical-align: middle; margin-top: -2px" />
+    <label class="sidebar-toggle" for="sidebar-check"></label>
+  </li>
+  <li class="rootlink">
+    <img src="../_static/cmake-logo-16.png" width="16" height="16" alt=""/>
+    <a href="https://cmake.org/">CMake 4.3.0</a>
+    <span class="reldelim1"> &#187;</span>
   </li>
   <li>
-    <a href="https://cmake.org/">CMake</a> &#187;
-  </li>
-  <li>
-    <a href="../index.html">3.31.11 Documentation</a> &#187;
+    <a href="../index.html">Documentation</a> &#187;
   </li>
 
           <li class="nav-item nav-item-1"><a href="../manual/cpack-generators.7.html" >cpack-generators(7)</a> &#187;</li>
@@ -805,8 +809,17 @@ after that a set of pairs with the name of the locale and the localized value.</
     </div>
 
     <div class="footer" role="contentinfo">
-    &#169; Copyright 2000-2024 Kitware, Inc. and Contributors.
-      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.3.7.
+    &#169; Copyright 2000-2026 Kitware, Inc. and Contributors.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3.
     </div>
+<script type="text/javascript">
+(function() {
+  "use strict";
+  const hide = () => document.getElementById("sidebar-check").checked = false;
+  addEventListener("keydown", e => (e.key === "Escape") && hide());
+  addEventListener("click", e => (e.target.tagName === "A") && hide());
+  addEventListener("hashchange", hide)
+})();
+</script>
   </body>
 </html>

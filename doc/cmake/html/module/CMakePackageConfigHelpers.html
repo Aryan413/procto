@@ -5,25 +5,29 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <title>CMakePackageConfigHelpers &mdash; CMake 3.31.11 Documentation</title>
+  <title>CMakePackageConfigHelpers &mdash; CMake 4.3.0 Documentation</title>
 
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a2c47e09" />
-    <link rel="stylesheet" type="text/css" href="../_static/cmake.css?v=3e562cf9" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a3862c66" />
+    <link rel="stylesheet" type="text/css" href="../_static/cmake.css?v=d27bb136" />
     
-    <script src="../_static/documentation_options.js?v=5746678a"></script>
-    <script src="../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../_static/documentation_options.js?v=a17b270f"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     
     <link rel="icon" href="../_static/cmake-favicon.ico"/>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="CMakePrintHelpers" href="CMakePrintHelpers.html" />
-    <link rel="prev" title="CMakeGraphVizOptions" href="CMakeGraphVizOptions.html" />
+    <link rel="prev" title="CMakeFindDependencyMacro" href="CMakeFindDependencyMacro.html" />
  
 
   </head><body>
+    <input id="sidebar-check" type="checkbox" />
+    <label id="sidebar-overlay" for="sidebar-check"></label>
 
-    <div class="related" role="navigation" aria-label="related navigation">
+
+
+    <div class="related relbar1" role="navigation" aria-label="Related">
       <h3>Navigation</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
@@ -33,17 +37,18 @@
           <a href="CMakePrintHelpers.html" title="CMakePrintHelpers"
              accesskey="N">next</a> |</li>
         <li class="right" >
-          <a href="CMakeGraphVizOptions.html" title="CMakeGraphVizOptions"
+          <a href="CMakeFindDependencyMacro.html" title="CMakeFindDependencyMacro"
              accesskey="P">previous</a> |</li>
   <li>
-    <img src="../_static/cmake-logo-16.png" alt=""
-         style="vertical-align: middle; margin-top: -2px" />
+    <label class="sidebar-toggle" for="sidebar-check"></label>
+  </li>
+  <li class="rootlink">
+    <img src="../_static/cmake-logo-16.png" width="16" height="16" alt=""/>
+    <a href="https://cmake.org/">CMake 4.3.0</a>
+    <span class="reldelim1"> &#187;</span>
   </li>
   <li>
-    <a href="https://cmake.org/">CMake</a> &#187;
-  </li>
-  <li>
-    <a href="../index.html">3.31.11 Documentation</a> &#187;
+    <a href="../index.html">Documentation</a> &#187;
   </li>
 
           <li class="nav-item nav-item-1"><a href="../manual/cmake-modules.7.html" accesskey="U">cmake-modules(7)</a> &#187;</li>
@@ -58,21 +63,25 @@
             
   <section id="cmakepackageconfighelpers">
 <span id="module:CMakePackageConfigHelpers"></span><h1>CMakePackageConfigHelpers<a class="headerlink" href="#cmakepackageconfighelpers" title="Link to this heading">¶</a></h1>
-<p>Helper functions for creating config files that can be included by other
+<p>This module provides helper commands for creating <a class="reference internal" href="../guide/using-dependencies/index.html#libraries-providing-config-file-packages"><span class="std std-ref">config files</span></a> that can be included by other
 projects to find and use a package.</p>
+<p>Load this module in a CMake project with:</p>
+<div class="highlight-cmake notranslate"><div class="highlight"><pre><span></span><span class="nf">include(</span><span class="nb">CMakePackageConfigHelpers</span><span class="nf">)</span>
+</pre></div>
+</div>
 <section id="generating-a-package-configuration-file">
 <h2>Generating a Package Configuration File<a class="headerlink" href="#generating-a-package-configuration-file" title="Link to this heading">¶</a></h2>
 <dl class="cmake command">
 <dt class="sig sig-object cmake" id="command:configure_package_config_file">
 <span class="sig-name descname"><span class="pre">configure_package_config_file</span></span><a class="headerlink" href="#command:configure_package_config_file" title="Link to this definition">¶</a></dt>
 <dd><p>Create a config file for a project:</p>
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>configure_package_config_file(&lt;input&gt; &lt;output&gt;
-  INSTALL_DESTINATION &lt;path&gt;
-  [PATH_VARS &lt;var1&gt; &lt;var2&gt; ... &lt;varN&gt;]
-  [NO_SET_AND_CHECK_MACRO]
-  [NO_CHECK_REQUIRED_COMPONENTS_MACRO]
-  [INSTALL_PREFIX &lt;path&gt;]
-  )
+<div class="highlight-cmake notranslate"><div class="highlight"><pre><span></span><span class="nf">configure_package_config_file(</span><span class="nv">&lt;input&gt;</span><span class="w"> </span><span class="nv">&lt;output&gt;</span>
+<span class="w">  </span><span class="no">INSTALL_DESTINATION</span><span class="w"> </span><span class="nv">&lt;path&gt;</span>
+<span class="w">  </span><span class="p">[</span><span class="no">PATH_VARS</span><span class="w"> </span><span class="nv">&lt;var1&gt;</span><span class="w"> </span><span class="nv">&lt;var2&gt;</span><span class="w"> </span><span class="p">...</span><span class="w"> </span><span class="nv">&lt;varN&gt;</span><span class="p">]</span>
+<span class="w">  </span><span class="p">[</span><span class="no">NO_SET_AND_CHECK_MACRO</span><span class="p">]</span>
+<span class="w">  </span><span class="p">[</span><span class="no">NO_CHECK_REQUIRED_COMPONENTS_MACRO</span><span class="p">]</span>
+<span class="w">  </span><span class="p">[</span><span class="no">INSTALL_PREFIX</span><span class="w"> </span><span class="nv">&lt;path&gt;</span><span class="p">]</span>
+<span class="w">  </span><span class="nf">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -178,10 +187,10 @@ users are not specifying components erroneously.  Add the
 <dt class="sig sig-object cmake" id="command:write_basic_package_version_file">
 <span class="sig-name descname"><span class="pre">write_basic_package_version_file</span></span><a class="headerlink" href="#command:write_basic_package_version_file" title="Link to this definition">¶</a></dt>
 <dd><p>Create a version file for a project:</p>
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>write_basic_package_version_file(&lt;filename&gt;
-  [VERSION &lt;major.minor.patch&gt;]
-  COMPATIBILITY &lt;AnyNewerVersion|SameMajorVersion|SameMinorVersion|ExactVersion&gt;
-  [ARCH_INDEPENDENT] )
+<div class="highlight-cmake notranslate"><div class="highlight"><pre><span></span><span class="nf">write_basic_package_version_file(</span><span class="nv">&lt;filename&gt;</span>
+<span class="w">  </span><span class="p">[</span><span class="no">VERSION</span><span class="w"> </span><span class="nv">&lt;major.minor.patch&gt;</span><span class="p">]</span>
+<span class="w">  </span><span class="no">COMPATIBILITY</span><span class="w"> </span><span class="p">&lt;</span><span class="nb">AnyNewerVersion</span><span class="p">|</span><span class="nb">SameMajorVersion</span><span class="p">|</span><span class="nb">SameMinorVersion</span><span class="p">|</span><span class="nb">ExactVersion</span><span class="p">&gt;</span>
+<span class="w">  </span><span class="p">[</span><span class="no">ARCH_INDEPENDENT</span><span class="p">]</span><span class="w"> </span><span class="nf">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -429,10 +438,10 @@ is not given, the default behavior is to issue a fatal error.</p>
           </div>
         </div>
       </div>
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
         <div class="sphinxsidebarwrapper">
   <div>
-    <h3><a href="../index.html">Table of Contents</a></h3>
+    <h3>Table of Contents</h3>
     <ul>
 <li><a class="reference internal" href="#">CMakePackageConfigHelpers</a><ul>
 <li><a class="reference internal" href="#generating-a-package-configuration-file">Generating a Package Configuration File</a></li>
@@ -447,8 +456,8 @@ is not given, the default behavior is to issue a fatal error.</p>
   </div>
   <div>
     <h4>Previous topic</h4>
-    <p class="topless"><a href="CMakeGraphVizOptions.html"
-                          title="previous chapter">CMakeGraphVizOptions</a></p>
+    <p class="topless"><a href="CMakeFindDependencyMacro.html"
+                          title="previous chapter">CMakeFindDependencyMacro</a></p>
   </div>
   <div>
     <h4>Next topic</h4>
@@ -476,7 +485,7 @@ is not given, the default behavior is to issue a fatal error.</p>
       </div>
       <div class="clearer"></div>
     </div>
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>Navigation</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
@@ -486,17 +495,18 @@ is not given, the default behavior is to issue a fatal error.</p>
           <a href="CMakePrintHelpers.html" title="CMakePrintHelpers"
              >next</a> |</li>
         <li class="right" >
-          <a href="CMakeGraphVizOptions.html" title="CMakeGraphVizOptions"
+          <a href="CMakeFindDependencyMacro.html" title="CMakeFindDependencyMacro"
              >previous</a> |</li>
   <li>
-    <img src="../_static/cmake-logo-16.png" alt=""
-         style="vertical-align: middle; margin-top: -2px" />
+    <label class="sidebar-toggle" for="sidebar-check"></label>
+  </li>
+  <li class="rootlink">
+    <img src="../_static/cmake-logo-16.png" width="16" height="16" alt=""/>
+    <a href="https://cmake.org/">CMake 4.3.0</a>
+    <span class="reldelim1"> &#187;</span>
   </li>
   <li>
-    <a href="https://cmake.org/">CMake</a> &#187;
-  </li>
-  <li>
-    <a href="../index.html">3.31.11 Documentation</a> &#187;
+    <a href="../index.html">Documentation</a> &#187;
   </li>
 
           <li class="nav-item nav-item-1"><a href="../manual/cmake-modules.7.html" >cmake-modules(7)</a> &#187;</li>
@@ -505,8 +515,17 @@ is not given, the default behavior is to issue a fatal error.</p>
     </div>
 
     <div class="footer" role="contentinfo">
-    &#169; Copyright 2000-2024 Kitware, Inc. and Contributors.
-      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.3.7.
+    &#169; Copyright 2000-2026 Kitware, Inc. and Contributors.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3.
     </div>
+<script type="text/javascript">
+(function() {
+  "use strict";
+  const hide = () => document.getElementById("sidebar-check").checked = false;
+  addEventListener("keydown", e => (e.key === "Escape") && hide());
+  addEventListener("click", e => (e.target.tagName === "A") && hide());
+  addEventListener("hashchange", hide)
+})();
+</script>
   </body>
 </html>

@@ -5,45 +5,50 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <title>CMAKE_ENABLE_EXPORTS &mdash; CMake 3.31.11 Documentation</title>
+  <title>CMAKE_ENABLE_EXPORTS &mdash; CMake 4.3.0 Documentation</title>
 
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a2c47e09" />
-    <link rel="stylesheet" type="text/css" href="../_static/cmake.css?v=3e562cf9" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a3862c66" />
+    <link rel="stylesheet" type="text/css" href="../_static/cmake.css?v=d27bb136" />
     
-    <script src="../_static/documentation_options.js?v=5746678a"></script>
-    <script src="../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../_static/documentation_options.js?v=a17b270f"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     
     <link rel="icon" href="../_static/cmake-favicon.ico"/>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="CMAKE_EXECUTABLE_ENABLE_EXPORTS" href="CMAKE_EXECUTABLE_ENABLE_EXPORTS.html" />
-    <link rel="prev" title="CMAKE_DLL_NAME_WITH_SOVERSION" href="CMAKE_DLL_NAME_WITH_SOVERSION.html" />
+    <link rel="next" title="CMAKE_IOS_INSTALL_COMBINED" href="CMAKE_IOS_INSTALL_COMBINED.html" />
+    <link rel="prev" title="MSVC90" href="MSVC90.html" />
  
 
   </head><body>
+    <input id="sidebar-check" type="checkbox" />
+    <label id="sidebar-overlay" for="sidebar-check"></label>
 
-    <div class="related" role="navigation" aria-label="related navigation">
+
+
+    <div class="related relbar1" role="navigation" aria-label="Related">
       <h3>Navigation</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
           <a href="../genindex.html" title="General Index"
              accesskey="I">index</a></li>
         <li class="right" >
-          <a href="CMAKE_EXECUTABLE_ENABLE_EXPORTS.html" title="CMAKE_EXECUTABLE_ENABLE_EXPORTS"
+          <a href="CMAKE_IOS_INSTALL_COMBINED.html" title="CMAKE_IOS_INSTALL_COMBINED"
              accesskey="N">next</a> |</li>
         <li class="right" >
-          <a href="CMAKE_DLL_NAME_WITH_SOVERSION.html" title="CMAKE_DLL_NAME_WITH_SOVERSION"
+          <a href="MSVC90.html" title="MSVC90"
              accesskey="P">previous</a> |</li>
   <li>
-    <img src="../_static/cmake-logo-16.png" alt=""
-         style="vertical-align: middle; margin-top: -2px" />
+    <label class="sidebar-toggle" for="sidebar-check"></label>
+  </li>
+  <li class="rootlink">
+    <img src="../_static/cmake-logo-16.png" width="16" height="16" alt=""/>
+    <a href="https://cmake.org/">CMake 4.3.0</a>
+    <span class="reldelim1"> &#187;</span>
   </li>
   <li>
-    <a href="https://cmake.org/">CMake</a> &#187;
-  </li>
-  <li>
-    <a href="../index.html">3.31.11 Documentation</a> &#187;
+    <a href="../index.html">Documentation</a> &#187;
   </li>
 
           <li class="nav-item nav-item-1"><a href="../manual/cmake-variables.7.html" accesskey="U">cmake-variables(7)</a> &#187;</li>
@@ -61,14 +66,18 @@
 <div class="versionadded">
 <p><span class="versionmodified added">Added in version 3.4.</span></p>
 </div>
+<div class="deprecated">
+<p><span class="versionmodified deprecated">Deprecated since version 4.3: </span>This variable has been deprecated in favor of the
+<span class="target" id="index-0-variable:CMAKE_EXECUTABLE_ENABLE_EXPORTS"></span><a class="reference internal" href="CMAKE_EXECUTABLE_ENABLE_EXPORTS.html#variable:CMAKE_EXECUTABLE_ENABLE_EXPORTS" title="CMAKE_EXECUTABLE_ENABLE_EXPORTS"><code class="xref cmake cmake-variable docutils literal notranslate"><span class="pre">CMAKE_EXECUTABLE_ENABLE_EXPORTS</span></code></a> and
+<span class="target" id="index-0-variable:CMAKE_SHARED_LIBRARY_ENABLE_EXPORTS"></span><a class="reference internal" href="CMAKE_SHARED_LIBRARY_ENABLE_EXPORTS.html#variable:CMAKE_SHARED_LIBRARY_ENABLE_EXPORTS" title="CMAKE_SHARED_LIBRARY_ENABLE_EXPORTS"><code class="xref cmake cmake-variable docutils literal notranslate"><span class="pre">CMAKE_SHARED_LIBRARY_ENABLE_EXPORTS</span></code></a> variables,
+which have been available since CMake 3.27.
+It is provided for backward compatibility with older CMake code,
+but should not be used in new projects.</p>
+</div>
 <p>Specify whether executables export symbols for loadable modules.</p>
 <p>This variable is used to initialize the <span class="target" id="index-0-prop_tgt:ENABLE_EXPORTS"></span><a class="reference internal" href="../prop_tgt/ENABLE_EXPORTS.html#prop_tgt:ENABLE_EXPORTS" title="ENABLE_EXPORTS"><code class="xref cmake cmake-prop_tgt docutils literal notranslate"><span class="pre">ENABLE_EXPORTS</span></code></a> target
 property for executable targets when they are created by calls to the
 <span class="target" id="index-0-command:add_executable"></span><a class="reference internal" href="../command/add_executable.html#command:add_executable" title="add_executable"><code class="xref cmake cmake-command docutils literal notranslate"><span class="pre">add_executable()</span></code></a> command.  See the property documentation for details.</p>
-<p>This variable has been superseded by the
-<span class="target" id="index-0-variable:CMAKE_EXECUTABLE_ENABLE_EXPORTS"></span><a class="reference internal" href="CMAKE_EXECUTABLE_ENABLE_EXPORTS.html#variable:CMAKE_EXECUTABLE_ENABLE_EXPORTS" title="CMAKE_EXECUTABLE_ENABLE_EXPORTS"><code class="xref cmake cmake-variable docutils literal notranslate"><span class="pre">CMAKE_EXECUTABLE_ENABLE_EXPORTS</span></code></a> variable.  It is provided for
-backward compatibility with older CMake code, but should not be used in new
-projects.</p>
 </section>
 
 
@@ -76,17 +85,17 @@ projects.</p>
           </div>
         </div>
       </div>
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
         <div class="sphinxsidebarwrapper">
   <div>
     <h4>Previous topic</h4>
-    <p class="topless"><a href="CMAKE_DLL_NAME_WITH_SOVERSION.html"
-                          title="previous chapter">CMAKE_DLL_NAME_WITH_SOVERSION</a></p>
+    <p class="topless"><a href="MSVC90.html"
+                          title="previous chapter">MSVC90</a></p>
   </div>
   <div>
     <h4>Next topic</h4>
-    <p class="topless"><a href="CMAKE_EXECUTABLE_ENABLE_EXPORTS.html"
-                          title="next chapter">CMAKE_EXECUTABLE_ENABLE_EXPORTS</a></p>
+    <p class="topless"><a href="CMAKE_IOS_INSTALL_COMBINED.html"
+                          title="next chapter">CMAKE_IOS_INSTALL_COMBINED</a></p>
   </div>
   <div role="note" aria-label="source link">
     <h3>This Page</h3>
@@ -109,27 +118,28 @@ projects.</p>
       </div>
       <div class="clearer"></div>
     </div>
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>Navigation</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
           <a href="../genindex.html" title="General Index"
              >index</a></li>
         <li class="right" >
-          <a href="CMAKE_EXECUTABLE_ENABLE_EXPORTS.html" title="CMAKE_EXECUTABLE_ENABLE_EXPORTS"
+          <a href="CMAKE_IOS_INSTALL_COMBINED.html" title="CMAKE_IOS_INSTALL_COMBINED"
              >next</a> |</li>
         <li class="right" >
-          <a href="CMAKE_DLL_NAME_WITH_SOVERSION.html" title="CMAKE_DLL_NAME_WITH_SOVERSION"
+          <a href="MSVC90.html" title="MSVC90"
              >previous</a> |</li>
   <li>
-    <img src="../_static/cmake-logo-16.png" alt=""
-         style="vertical-align: middle; margin-top: -2px" />
+    <label class="sidebar-toggle" for="sidebar-check"></label>
+  </li>
+  <li class="rootlink">
+    <img src="../_static/cmake-logo-16.png" width="16" height="16" alt=""/>
+    <a href="https://cmake.org/">CMake 4.3.0</a>
+    <span class="reldelim1"> &#187;</span>
   </li>
   <li>
-    <a href="https://cmake.org/">CMake</a> &#187;
-  </li>
-  <li>
-    <a href="../index.html">3.31.11 Documentation</a> &#187;
+    <a href="../index.html">Documentation</a> &#187;
   </li>
 
           <li class="nav-item nav-item-1"><a href="../manual/cmake-variables.7.html" >cmake-variables(7)</a> &#187;</li>
@@ -138,8 +148,17 @@ projects.</p>
     </div>
 
     <div class="footer" role="contentinfo">
-    &#169; Copyright 2000-2024 Kitware, Inc. and Contributors.
-      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.3.7.
+    &#169; Copyright 2000-2026 Kitware, Inc. and Contributors.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3.
     </div>
+<script type="text/javascript">
+(function() {
+  "use strict";
+  const hide = () => document.getElementById("sidebar-check").checked = false;
+  addEventListener("keydown", e => (e.key === "Escape") && hide());
+  addEventListener("click", e => (e.target.tagName === "A") && hide());
+  addEventListener("hashchange", hide)
+})();
+</script>
   </body>
 </html>

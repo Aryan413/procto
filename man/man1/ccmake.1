@@ -27,19 +27,17 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "CCMAKE" "1" "Jan 26, 2026" "3.31.11" "CMake"
+.TH "CCMAKE" "1" "Mar 17, 2026" "4.3.0" "CMake"
 .SH NAME
 ccmake \- CMake Curses Dialog Command-Line Reference
 .SH SYNOPSIS
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 ccmake [<options>] \-B <path\-to\-build> [\-S <path\-to\-source>]
 ccmake [<options>] <path\-to\-source | path\-to\-existing\-build>
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .SH DESCRIPTION
@@ -78,10 +76,10 @@ the project.  This option may be used to specify a file from which
 to load cache entries before the first pass through the project\(aqs
 CMake listfiles.  The loaded entries take priority over the
 project\(aqs default values.  The given file should be a CMake script
-containing \X'tty: link #command:set'\fI\%set()\fP\X'tty: link' commands that use the \fBCACHE\fP option, not a
+containing \fI\%set()\fP commands that use the \fBCACHE\fP option, not a
 cache\-format file.
 .sp
-References to \X'tty: link #variable:CMAKE_SOURCE_DIR'\fI\%CMAKE_SOURCE_DIR\fP\X'tty: link' and \X'tty: link #variable:CMAKE_BINARY_DIR'\fI\%CMAKE_BINARY_DIR\fP\X'tty: link'
+References to \fI\%CMAKE_SOURCE_DIR\fP and \fI\%CMAKE_BINARY_DIR\fP
 within the script evaluate to the top\-level source and build tree.
 .UNINDENT
 .INDENT 0.0
@@ -96,7 +94,7 @@ takes priority over the project\(aqs default value.  The option may be
 repeated for as many \fBCACHE\fP entries as desired.
 .sp
 If the \fB:<type>\fP portion is given it must be one of the types
-specified by the \X'tty: link #command:set'\fI\%set()\fP\X'tty: link' command documentation for its
+specified by the \fI\%set()\fP command documentation for its
 \fBCACHE\fP signature.
 If the \fB:<type>\fP portion is omitted the entry will be created
 with no type if it does not exist with a type already.  If a
@@ -114,11 +112,9 @@ file that calls:
 .INDENT 7.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 set(CMAKE_BUILD_TYPE \(dqRelease\(dq CACHE STRING \(dq\(dq FORCE)
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -151,9 +147,9 @@ Specify a build system generator.
 CMake may support multiple native build systems on certain
 platforms.  A generator is responsible for generating a particular
 build system.  Possible generator names are specified in the
-\X'tty: link #manual:cmake-generators(7)'\fI\%cmake\-generators(7)\fP\X'tty: link' manual.
+\fI\%cmake\-generators(7)\fP manual.
 .sp
-If not specified, CMake checks the \X'tty: link #envvar:CMAKE_GENERATOR'\fI\%CMAKE_GENERATOR\fP\X'tty: link' environment
+If not specified, CMake checks the \fI\%CMAKE_GENERATOR\fP environment
 variable and otherwise falls back to a builtin default selection.
 .UNINDENT
 .INDENT 0.0
@@ -163,7 +159,7 @@ Toolset specification for the generator, if supported.
 .sp
 Some CMake generators support a toolset specification to tell
 the native build system how to choose a compiler.  See the
-\X'tty: link #variable:CMAKE_GENERATOR_TOOLSET'\fI\%CMAKE_GENERATOR_TOOLSET\fP\X'tty: link' variable for details.
+\fI\%CMAKE_GENERATOR_TOOLSET\fP variable for details.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -172,7 +168,7 @@ Specify platform name if supported by generator.
 .sp
 Some CMake generators support a platform name to be given to the
 native build system to choose a compiler or SDK.  See the
-\X'tty: link #variable:CMAKE_GENERATOR_PLATFORM'\fI\%CMAKE_GENERATOR_PLATFORM\fP\X'tty: link' variable for details.
+\fI\%CMAKE_GENERATOR_PLATFORM\fP variable for details.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -181,7 +177,7 @@ Added in version 3.21.
 
 .sp
 Specify the cross compiling toolchain file, equivalent to setting
-\X'tty: link #variable:CMAKE_TOOLCHAIN_FILE'\fI\%CMAKE_TOOLCHAIN_FILE\fP\X'tty: link' variable. Relative paths are interpreted as
+\fI\%CMAKE_TOOLCHAIN_FILE\fP variable. Relative paths are interpreted as
 relative to the build directory, and if not found, relative to the source
 directory.
 .UNINDENT
@@ -192,7 +188,31 @@ Added in version 3.21.
 
 .sp
 Specify the installation directory, used by the
-\X'tty: link #variable:CMAKE_INSTALL_PREFIX'\fI\%CMAKE_INSTALL_PREFIX\fP\X'tty: link' variable. Must be an absolute path.
+\fI\%CMAKE_INSTALL_PREFIX\fP variable. Must be an absolute path.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B \-\-project\-file <project\-file\-name>
+Added in version 4.0.
+
+.sp
+Specify an alternate project file name.
+.sp
+This determines the top\-level file processed by CMake when configuring a
+project, and the file processed by \fI\%add_subdirectory()\fP\&.
+.sp
+By default, this is \fBCMakeLists.txt\fP\&. If set to anything else,
+\fBCMakeLists.txt\fP will be used as a fallback whenever the specified file
+cannot be found within a project subdirectory.
+.sp
+\fBNOTE:\fP
+.INDENT 7.0
+.INDENT 3.5
+This feature is intended for temporary use by developers during an incremental
+transition and not for publication of a final product. CMake will always emit
+a warning when the project file is anything other than \fBCMakeLists.txt\fP\&.
+.UNINDENT
+.UNINDENT
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -263,9 +283,15 @@ for the author of the \fBCMakeLists.txt\fP files, not errors.
 .UNINDENT
 .INDENT 0.0
 .TP
-.B \-version [<file>], \-\-version [<file>], /V [<file>]
-Show program name/version banner and exit.
+.B \-version[=json\-v1] [<file>], \-\-version[=json\-v1] [<file>], /V[=json\-v1] [<file>], /version[=json\-v1] [<file>]
+Show program name/version banner and exit. If \fBjson\-v1\fP is
+specified, print extended version information in JSON format.
+The JSON output contains the versions for the CMake and its
+dependencies.
 The output is printed to a named \fB<file>\fP if given.
+.sp
+The JSON output format is described in machine\-readable form by
+\fBthis JSON schema\fP\&.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -319,7 +345,7 @@ The output is printed to a named \fB<file>\fP if given.
 .B \-\-help\-command <cmd> [<file>]
 Print help for one command and exit.
 .sp
-The \X'tty: link #manual:cmake-commands(7)'\fI\%cmake\-commands(7)\fP\X'tty: link' manual entry for \fB<cmd>\fP is
+The \fI\%cmake\-commands(7)\fP manual entry for \fB<cmd>\fP is
 printed in a human\-readable text format.
 The output is printed to a named \fB<file>\fP if given.
 .UNINDENT
@@ -337,7 +363,7 @@ The output is printed to a named \fB<file>\fP if given.
 .B \-\-help\-commands [<file>]
 Print cmake\-commands manual and exit.
 .sp
-The \X'tty: link #manual:cmake-commands(7)'\fI\%cmake\-commands(7)\fP\X'tty: link' manual is printed in a
+The \fI\%cmake\-commands(7)\fP manual is printed in a
 human\-readable text format.
 The output is printed to a named \fB<file>\fP if given.
 .UNINDENT
@@ -346,7 +372,7 @@ The output is printed to a named \fB<file>\fP if given.
 .B \-\-help\-module <mod> [<file>]
 Print help for one module and exit.
 .sp
-The \X'tty: link #manual:cmake-modules(7)'\fI\%cmake\-modules(7)\fP\X'tty: link' manual entry for \fB<mod>\fP is printed
+The \fI\%cmake\-modules(7)\fP manual entry for \fB<mod>\fP is printed
 in a human\-readable text format.
 The output is printed to a named \fB<file>\fP if given.
 .UNINDENT
@@ -364,7 +390,7 @@ The output is printed to a named \fB<file>\fP if given.
 .B \-\-help\-modules [<file>]
 Print cmake\-modules manual and exit.
 .sp
-The \X'tty: link #manual:cmake-modules(7)'\fI\%cmake\-modules(7)\fP\X'tty: link' manual is printed in a human\-readable
+The \fI\%cmake\-modules(7)\fP manual is printed in a human\-readable
 text format.
 The output is printed to a named \fB<file>\fP if given.
 .UNINDENT
@@ -373,7 +399,7 @@ The output is printed to a named \fB<file>\fP if given.
 .B \-\-help\-policy <cmp> [<file>]
 Print help for one policy and exit.
 .sp
-The \X'tty: link #manual:cmake-policies(7)'\fI\%cmake\-policies(7)\fP\X'tty: link' manual entry for \fB<cmp>\fP is
+The \fI\%cmake\-policies(7)\fP manual entry for \fB<cmp>\fP is
 printed in a human\-readable text format.
 The output is printed to a named \fB<file>\fP if given.
 .UNINDENT
@@ -391,7 +417,7 @@ The output is printed to a named \fB<file>\fP if given.
 .B \-\-help\-policies [<file>]
 Print cmake\-policies manual and exit.
 .sp
-The \X'tty: link #manual:cmake-policies(7)'\fI\%cmake\-policies(7)\fP\X'tty: link' manual is printed in a
+The \fI\%cmake\-policies(7)\fP manual is printed in a
 human\-readable text format.
 The output is printed to a named \fB<file>\fP if given.
 .UNINDENT
@@ -400,7 +426,7 @@ The output is printed to a named \fB<file>\fP if given.
 .B \-\-help\-property <prop> [<file>]
 Print help for one property and exit.
 .sp
-The \X'tty: link #manual:cmake-properties(7)'\fI\%cmake\-properties(7)\fP\X'tty: link' manual entries for \fB<prop>\fP are
+The \fI\%cmake\-properties(7)\fP manual entries for \fB<prop>\fP are
 printed in a human\-readable text format.
 The output is printed to a named \fB<file>\fP if given.
 .UNINDENT
@@ -418,7 +444,7 @@ The output is printed to a named \fB<file>\fP if given.
 .B \-\-help\-properties [<file>]
 Print cmake\-properties manual and exit.
 .sp
-The \X'tty: link #manual:cmake-properties(7)'\fI\%cmake\-properties(7)\fP\X'tty: link' manual is printed in a
+The \fI\%cmake\-properties(7)\fP manual is printed in a
 human\-readable text format.
 The output is printed to a named \fB<file>\fP if given.
 .UNINDENT
@@ -427,7 +453,7 @@ The output is printed to a named \fB<file>\fP if given.
 .B \-\-help\-variable <var> [<file>]
 Print help for one variable and exit.
 .sp
-The \X'tty: link #manual:cmake-variables(7)'\fI\%cmake\-variables(7)\fP\X'tty: link' manual entry for \fB<var>\fP is
+The \fI\%cmake\-variables(7)\fP manual entry for \fB<var>\fP is
 printed in a human\-readable text format.
 The output is printed to a named \fB<file>\fP if given.
 .UNINDENT
@@ -445,7 +471,7 @@ The output is printed to a named \fB<file>\fP if given.
 .B \-\-help\-variables [<file>]
 Print cmake\-variables manual and exit.
 .sp
-The \X'tty: link #manual:cmake-variables(7)'\fI\%cmake\-variables(7)\fP\X'tty: link' manual is printed in a
+The \fI\%cmake\-variables(7)\fP manual is printed in a
 human\-readable text format.
 The output is printed to a named \fB<file>\fP if given.
 .UNINDENT
@@ -471,6 +497,6 @@ found on this web page.
 The Discourse Forum hosts discussion and questions about CMake.
 .UNINDENT
 .SH COPYRIGHT
-2000-2024 Kitware, Inc. and Contributors
+2000-2026 Kitware, Inc. and Contributors
 .\" Generated by docutils manpage writer.
 .

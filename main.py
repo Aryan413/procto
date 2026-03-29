@@ -479,6 +479,11 @@ class SecurityMonitor:
 
             exam_has_focus = "examshield" in fg_title or fg_title == ""
 
+            # Also treat a question-popup Toplevel as "in focus" — its title
+            # won't contain "examshield" so we suppress via the global counter.
+            if _question_popup_open > 0:
+                exam_has_focus = True
+
             if not exam_has_focus and fg_title and len(fg_title) > 2:
                 if _tab_first_seen is None:
                     _tab_first_seen = now
@@ -960,6 +965,17 @@ class InterviewHub:
 # Global hubs — set when a student logs in on THIS machine
 _hub:       CameraHub    = None
 _iv_hub:    InterviewHub = None
+
+# Proctor camera JPEG cache — written by proctor capture thread, served via
+# GET /proctor_frame so students can PULL the interviewer camera without
+# relying on push-URL timing or _student_data registration order.
+_proctor_jpeg_cache: list = [None]   # [bytes | None]
+_proctor_jpeg_lock  = threading.Lock()
+
+# Question-popup suppression counter — incremented when a runtime-question
+# Toplevel is open, decremented on destroy.  Both SecurityMonitor and the
+# focus handlers skip TAB_SWITCH strikes while this is > 0.
+_question_popup_open: int = 0
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  PARTICLE / BASE WINDOW  (unchanged)
@@ -1475,20 +1491,7 @@ class MainLogin(BaseWindow):
     def _close(self): self.animating=False; self.root.destroy()
     def run(self): self.root.mainloop()
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  WebRTC / PeerJS-style Signaling Engine
-#  Inspired by MockInt (manthankhawse/Interview-Platform) which uses:
-#    • PeerJS (wrapper around WebRTC) for peer-to-peer video/audio
-#    • Socket.io for signaling (room IDs, offer/answer exchange)
-#    • navigator.mediaDevices.getUserMedia() for camera/mic access
-#
-#  Architecture here mirrors that pattern:
-#    • aiortc handles WebRTC on the Python (proctor) side
-#    • A browser-based PeerJS page handles WebRTC on the student side
-#    • Flask serves a /videocall/<room> HTML page (PeerJS + Socket.io client)
-#    • Flask-SocketIO acts as the signaling server (same process, port 6000)
-# ══════════════════════════════════════════════════════════════════════════════
-
+# --- WebRTC & Signaling Engine (optional) ---
 _WEBRTC_AVAILABLE = False
 try:
     import socketio as _sio_lib
@@ -1498,304 +1501,52 @@ try:
 except ImportError:
     pass
 
-_FLASK_SOCKETIO_AVAILABLE = False
-try:
-    from flask_socketio import SocketIO as _FlaskSocketIO, emit as _sio_emit, join_room as _sio_join_room
-    _FLASK_SOCKETIO_AVAILABLE = True
-except ImportError:
-    pass
-
-# Global SocketIO instance (set by start_network_server when flask-socketio is available)
-_socketio_server = None
-
-# In-memory PeerJS-style signaling rooms: room_id → {student_peer_id, proctor_peer_id}
-_signaling_rooms: dict = {}
-_signaling_lock = threading.Lock()
-
-
 if _WEBRTC_AVAILABLE:
     class CameraHubTrack(VideoStreamTrack):
-        """
-        Bridge between OpenCV CameraHub and WebRTC.
-        Mirrors PeerJS VideoStreamTrack — sends annotated frames from CameraHub
-        over the WebRTC data channel to the proctor browser.
-        """
+        """Bridge between your OpenCV CameraHub and WebRTC."""
         kind = "video"
-
         def __init__(self, hub):
             super().__init__()
             self.hub = hub
-            self._frame_count = 0
 
         async def recv(self):
             pts, time_base = await self.next_timestamp()
             frame_bgr = self.hub.get_frame() if self.hub else None
             if frame_bgr is None:
                 frame_bgr = np.zeros((360, 480, 3), dtype=np.uint8)
-                # Show a "no signal" placeholder
-                cv2.putText(frame_bgr, "No Camera Signal", (80, 180),
-                            cv2.FONT_HERSHEY_DUPLEX, 0.8, (80, 80, 180), 2)
+            
+            # Convert BGR to RGB for WebRTC
             frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
             video_frame = VideoFrame.from_ndarray(frame_rgb, format="rgb24")
             video_frame.pts, video_frame.time_base = pts, time_base
-            self._frame_count += 1
             return video_frame
 
-
 if _WEBRTC_AVAILABLE:
-    class StudentWebRTCPeer:
-        """
-        Python-side WebRTC peer for the student.
-        Connects to the Flask-SocketIO signaling server, waits for a proctor
-        offer, then streams CameraHub frames back as the WebRTC answer.
+  class StudentWebRTCPeer:
+    """The background engine that streams to the proctor."""
+    def __init__(self, server_url, student_id, hub):
+        self.server_url = server_url
+        self.student_id = student_id
+        self.hub = hub
+        self._sio = _sio_lib.AsyncClient(ssl_verify=False)
+        self._pc = None
 
-        This mirrors the PeerJS peer.on('call', stream => ...) pattern in MockInt,
-        but implemented with aiortc so the existing Python CameraHub can be reused.
-        """
-        def __init__(self, server_url: str, student_id: str, hub, room_id: str = ""):
-            self.server_url  = server_url
-            self.student_id  = student_id
-            self.hub         = hub
-            self.room_id     = room_id or student_id
-            self._sio        = _sio_lib.AsyncClient(ssl_verify=False,
-                                                    reconnection=True,
-                                                    reconnection_attempts=5,
-                                                    reconnection_delay=2)
-            self._pc: "RTCPeerConnection | None" = None
-            self._running    = True
+    def start(self):
+        import asyncio
+        threading.Thread(target=lambda: asyncio.run(self._main()), daemon=True).start()
 
-        def start(self):
-            import asyncio
-            threading.Thread(
-                target=lambda: asyncio.run(self._main()),
-                daemon=True,
-                name=f"WebRTC-student-{self.student_id}"
-            ).start()
-
-        def stop(self):
-            self._running = False
-
-        async def _main(self):
-            import asyncio
-
-            @self._sio.on("connect")
-            async def on_connect():
-                print(f"[WebRTC] Student {self.student_id} → signaling server connected")
-                await self._sio.emit("webrtc-join-room", {
-                    "room":       self.room_id,
-                    "role":       "student",
-                    "student_id": self.student_id,
-                })
-
-            @self._sio.on("disconnect")
-            async def on_disconnect():
-                print(f"[WebRTC] Student {self.student_id} → signaling disconnected")
-
-            @self._sio.on("webrtc-offer")
-            async def on_offer(data: dict):
-                """
-                Proctor (browser/PeerJS) sent us an SDP offer.
-                We answer with our CameraHub stream — mirrors:
-                  peer.on('call', call => call.answer(stream))
-                in the MockInt browser code.
-                """
-                print(f"[WebRTC] Received offer for room {data.get('room')}")
-                if self._pc:
-                    try:
-                        await self._pc.close()
-                    except Exception:
-                        pass
-
-                self._pc = RTCPeerConnection()
-                self._pc.addTrack(CameraHubTrack(self.hub))
-
-                @self._pc.on("connectionstatechange")
-                async def on_state():
-                    print(f"[WebRTC] Connection state: {self._pc.connectionState}")
-
-                await self._pc.setRemoteDescription(
-                    RTCSessionDescription(sdp=data["sdp"], type=data["type"]))
-                answer = await self._pc.createAnswer()
-                await self._pc.setLocalDescription(answer)
-
-                await self._sio.emit("webrtc-answer", {
-                    "room":        self.room_id,
-                    "student_id":  self.student_id,
-                    "sdp":         self._pc.localDescription.sdp,
-                    "type":        self._pc.localDescription.type,
-                })
-
-            @self._sio.on("webrtc-ice-candidate")
-            async def on_ice(data: dict):
-                if self._pc and data.get("candidate"):
-                    from aiortc import RTCIceCandidate
-                    try:
-                        # Parse candidate string into RTCIceCandidate
-                        cand_str = data["candidate"].get("candidate", "")
-                        if cand_str:
-                            parts = cand_str.split()
-                            candidate = RTCIceCandidate(
-                                component    = int(parts[1]),
-                                foundation   = parts[0].split(":")[1],
-                                ip           = parts[4],
-                                port         = int(parts[5]),
-                                priority     = int(parts[3]),
-                                protocol     = parts[2],
-                                type         = parts[7],
-                                sdpMid       = data["candidate"].get("sdpMid", "0"),
-                                sdpMLineIndex= data["candidate"].get("sdpMLineIndex", 0),
-                            )
-                            await self._pc.addIceCandidate(candidate)
-                    except Exception as e:
-                        print(f"[WebRTC] ICE candidate error: {e}")
-
-            try:
-                await self._sio.connect(
-                    self.server_url,
-                    transports=["websocket", "polling"],
-                    namespaces=["/"],
-                )
-                # Keep alive until stopped
-                while self._running:
-                    await asyncio.sleep(1)
-            except Exception as e:
-                print(f"[WebRTC] Student peer error: {e}")
-            finally:
-                try:
-                    await self._sio.disconnect()
-                except Exception:
-                    pass
-
-
-    class ProctorWebRTCReceiver:
-        """
-        Python-side WebRTC receiver for the proctor.
-        Mirrors PeerJS peer.call(peerId, stream) from MockInt.
-        Initiates an offer to the student and receives their video track.
-
-        On receiving a track, decoded frames are pushed into InterviewHub
-        via set_proctor_frame() so the existing Tkinter display reuses them.
-        """
-        def __init__(self, server_url: str, student_id: str, iv_hub, room_id: str = ""):
-            self.server_url = server_url
-            self.student_id = student_id
-            self.iv_hub     = iv_hub
-            self.room_id    = room_id or student_id
-            self._sio       = _sio_lib.AsyncClient(ssl_verify=False,
-                                                   reconnection=True,
-                                                   reconnection_attempts=5,
-                                                   reconnection_delay=2)
-            self._pc: "RTCPeerConnection | None" = None
-            self._running   = True
-
-        def start(self):
-            import asyncio
-            threading.Thread(
-                target=lambda: asyncio.run(self._main()),
-                daemon=True,
-                name=f"WebRTC-proctor-{self.student_id}"
-            ).start()
-
-        def stop(self):
-            self._running = False
-
-        async def _main(self):
-            import asyncio
-
-            @self._sio.on("connect")
-            async def on_connect():
-                print(f"[WebRTC] Proctor receiver → signaling server connected")
-                await self._sio.emit("webrtc-join-room", {
-                    "room":  self.room_id,
-                    "role":  "proctor",
-                })
-                await self._make_offer()
-
-            @self._sio.on("webrtc-answer")
-            async def on_answer(data: dict):
-                if self._pc:
-                    await self._pc.setRemoteDescription(
-                        RTCSessionDescription(sdp=data["sdp"], type=data["type"]))
-                    print(f"[WebRTC] Proctor receiver got answer → P2P established")
-
-            @self._sio.on("webrtc-ice-candidate")
-            async def on_ice(data: dict):
-                if self._pc and data.get("candidate"):
-                    from aiortc import RTCIceCandidate
-                    try:
-                        cand_str = data["candidate"].get("candidate", "")
-                        if cand_str:
-                            parts = cand_str.split()
-                            candidate = RTCIceCandidate(
-                                component    = int(parts[1]),
-                                foundation   = parts[0].split(":")[1],
-                                ip           = parts[4],
-                                port         = int(parts[5]),
-                                priority     = int(parts[3]),
-                                protocol     = parts[2],
-                                type         = parts[7],
-                                sdpMid       = data["candidate"].get("sdpMid", "0"),
-                                sdpMLineIndex= data["candidate"].get("sdpMLineIndex", 0),
-                            )
-                            await self._pc.addIceCandidate(candidate)
-                    except Exception as e:
-                        print(f"[WebRTC] ICE candidate error: {e}")
-
-            try:
-                await self._sio.connect(
-                    self.server_url,
-                    transports=["websocket", "polling"],
-                )
-                while self._running:
-                    await asyncio.sleep(1)
-            except Exception as e:
-                print(f"[WebRTC] Proctor receiver error: {e}")
-            finally:
-                try:
-                    await self._sio.disconnect()
-                except Exception:
-                    pass
-
-        async def _make_offer(self):
-            """Create an RTCPeerConnection, attach track handler, send SDP offer."""
-            import asyncio
+    async def _main(self):
+        @self._sio.on("offer")
+        async def on_offer(data):
             self._pc = RTCPeerConnection()
+            self._pc.addTrack(CameraHubTrack(self.hub))
+            await self._pc.setRemoteDescription(RTCSessionDescription(sdp=data["sdp"], type=data["type"]))
+            answer = await self._pc.createAnswer()
+            await self._pc.setLocalDescription(answer)
+            await self._sio.emit("answer", {"student_id": self.student_id, "sdp": self._pc.localDescription.sdp, "type": self._pc.localDescription.type})
 
-            @self._pc.on("track")
-            def on_track(track):
-                if track.kind == "video":
-                    asyncio.ensure_future(self._consume_video(track))
-
-            @self._pc.on("connectionstatechange")
-            async def on_state():
-                print(f"[WebRTC] Proctor state: {self._pc.connectionState}")
-
-            offer = await self._pc.createOffer()
-            await self._pc.setLocalDescription(offer)
-
-            await self._sio.emit("webrtc-offer", {
-                "room": self.room_id,
-                "sdp":  self._pc.localDescription.sdp,
-                "type": self._pc.localDescription.type,
-            })
-
-        async def _consume_video(self, track):
-            """Decode incoming video frames → push to InterviewHub."""
-            print("[WebRTC] Proctor: consuming student video track")
-            while self._running:
-                try:
-                    frame = await track.recv()
-                    img = frame.to_ndarray(format="bgr24")
-                    if self.iv_hub:
-                        self.iv_hub.set_proctor_frame(img)
-                except Exception as e:
-                    print(f"[WebRTC] Track recv error: {e}")
-                    break
-
-
-# Global WebRTC peer handles
-_webrtc_peer:     "StudentWebRTCPeer | None"    = None
-_webrtc_proctor:  "ProctorWebRTCReceiver | None" = None
+        await self._sio.connect(self.server_url, transports=["websocket"])
+        await self._sio.emit("student-join", {"student_id": self.student_id})
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  EXAM WINDOW  (student — unchanged)
@@ -1817,14 +1568,8 @@ class ExamWindow:
         global _webrtc_peer
         if _WEBRTC_AVAILABLE:
             try:
-                _webrtc_peer = StudentWebRTCPeer(
-                    server_url=proctor_url or "http://localhost:6000",
-                    student_id=self.sid,
-                    hub=self._my_hub,
-                    room_id=self.sid,
-                )
+                _webrtc_peer = StudentWebRTCPeer("http://localhost:6000", self.sid, self._my_hub)
                 _webrtc_peer.start()
-                print(f"[WebRTC] Student peer started for room '{self.sid}'")
             except Exception as e:
                 print(f"[WebRTC] Could not start peer: {e}")
         self.root=tk.Tk()
@@ -1955,11 +1700,27 @@ class ExamWindow:
         if raw_opts.startswith("correct:"):
             raw_opts = raw_opts.split("|", 1)[1] if "|" in raw_opts else ""
         options = [o for o in raw_opts.split("|") if o]
+
+        # ── Suppress TAB_SWITCH strikes while popup is open ──────────────────
+        global _question_popup_open
+        _question_popup_open += 1
+        # Also clear any focus-lost timer that fired when the popup appeared
+        self._focus_lost_time = None
+
         win = tk.Toplevel(self.root)
         win.title("📌 Proctor Question")
         win.configure(bg="#0d1117")
         win.grab_set()
         win.attributes("-topmost", True)
+
+        def _on_popup_close():
+            global _question_popup_open
+            _question_popup_open = max(0, _question_popup_open - 1)
+            self._focus_lost_time = None   # don't penalise for popup close
+            try: win.destroy()
+            except Exception: pass
+
+        win.protocol("WM_DELETE_WINDOW", _on_popup_close)
 
         tk.Label(win, text="📌 Proctor has sent you a question",
                  font=("Helvetica",10,"bold"), bg="#0d1117", fg="#ffd93d").pack(pady=(16,4))
@@ -1991,7 +1752,7 @@ class ExamWindow:
                                        json={"qid": qid, "answer": ans}, timeout=3)
                     except Exception: pass
                 threading.Thread(target=_do, daemon=True).start()
-                win.destroy()
+                _on_popup_close()
         else:
             # Open-ended mode — text entry
             win.geometry("460x260")
@@ -2011,7 +1772,7 @@ class ExamWindow:
                                        json={"qid": qid, "answer": ans}, timeout=3)
                     except Exception: pass
                 threading.Thread(target=_do, daemon=True).start()
-                win.destroy()
+                _on_popup_close()
 
         tk.Button(win, text="Submit Answer ✓", font=("Helvetica",10,"bold"),
                   bg="#0be881", fg="#0d1117", bd=0, relief="flat", cursor="hand2",
@@ -2042,9 +1803,14 @@ class ExamWindow:
         except Exception: pass
 
     def _on_focus_out(self, event):
+        if _question_popup_open > 0:
+            return   # question popup took focus — not a tab switch
         self._focus_lost_time=time.time()
 
     def _on_focus_in(self, event):
+        if _question_popup_open > 0:
+            self._focus_lost_time = None   # clear timer — popup is closing
+            return
         if self._focus_lost_time:
             lost=time.time()-self._focus_lost_time
             if lost>0.5:
@@ -2359,15 +2125,60 @@ class InterviewStudentWindow:
         self._poll_notes()   # poll for notes pushed by remote proctor
         # ── Two-way voice (WebSocket, low-latency) ─────────────────────────
         global _voice_student
-        if proctor_url and _VOICE_BRIDGE_AVAILABLE and _SOUNDDEVICE_AVAILABLE:
+        if proctor_url and _VOICE_BRIDGE_AVAILABLE and _SOUNDDEVICE_AVAILABLE and _FLASK_SOCK_AVAILABLE:
             ws_url = make_ws_url(proctor_url, ws_port=6001)
             _voice_student = VoiceClient(role="student", bridge_url=ws_url)
             _voice_student.start()
             print(f"[Voice] Student voice client started  ws_url={ws_url}")
+        elif proctor_url:
+            # Voice prerequisites missing — show a clean one-line status, no reconnect spam
+            missing = []
+            if not _VOICE_BRIDGE_AVAILABLE:  missing.append("voice_bridge.py")
+            if not _FLASK_SOCK_AVAILABLE:    missing.append("flask-sock")
+            if not _SOUNDDEVICE_AVAILABLE:   missing.append("sounddevice")
+            reason = ", ".join(missing) if missing else "unavailable"
+            print(f"[Voice] Disabled — install: {reason}")
+            try:
+                self.lbl_status.configure(
+                    text=f"⚠ Voice off ({reason})", fg="#ffaa00")
+            except Exception:
+                pass
         if proctor_url:
             self._push_frame_loop()
             self._push_stats_loop()
             self._poll_runtime_questions()
+            self._poll_proctor_frame_loop()   # student pulls interviewer camera
+
+    # ── Pull interviewer camera from proctor server ──────────────────────────
+    def _poll_proctor_frame_loop(self):
+        """Fetch the proctor's camera JPEG from GET /proctor_frame and inject it
+        into _iv_hub so the student sees the interviewer's camera.
+        This pull-based approach works reliably on localhost and LAN regardless
+        of push-URL registration order."""
+        try:
+            if not self.root.winfo_exists(): return
+        except Exception: return
+        if not self.proctor_url or not _REQUESTS_AVAILABLE: return
+        if getattr(self, "_pro_pull_in_flight", False):
+            self.root.after(80, self._poll_proctor_frame_loop)
+            return
+        def _fetch():
+            try:
+                r = _requests.get(
+                    f"{self.proctor_url}/proctor_frame",
+                    timeout=0.8, stream=False)
+                if r.status_code == 200 and r.content and _iv_hub:
+                    arr   = np.frombuffer(r.content, dtype=np.uint8)
+                    frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+                    if frame is not None:
+                        _iv_hub.set_proctor_frame(frame)
+            except Exception:
+                pass
+            finally:
+                self._pro_pull_in_flight = False
+        self._pro_pull_in_flight = True
+        threading.Thread(target=_fetch, daemon=True).start()
+        self.root.after(80, self._poll_proctor_frame_loop)  # ~12 fps pull
 
     # ── Push student cam frame to proctor server ─────────────────────────────
     def _push_frame_loop(self):
@@ -2467,11 +2278,26 @@ class InterviewStudentWindow:
         if raw_opts.startswith("correct:"):
             raw_opts = raw_opts.split("|", 1)[1] if "|" in raw_opts else ""
         options = [o for o in raw_opts.split("|") if o]
+
+        # ── Suppress TAB_SWITCH strikes while popup is open ──────────────────
+        global _question_popup_open
+        _question_popup_open += 1
+        self._focus_lost = None   # clear any pending focus timer
+
         win = tk.Toplevel(self.root)
         win.title("📌 Interviewer Question")
         win.configure(bg="#0d1117")
         win.grab_set()
         win.attributes("-topmost", True)
+
+        def _on_popup_close():
+            global _question_popup_open
+            _question_popup_open = max(0, _question_popup_open - 1)
+            self._focus_lost = None   # don't penalise for popup close
+            try: win.destroy()
+            except Exception: pass
+
+        win.protocol("WM_DELETE_WINDOW", _on_popup_close)
 
         tk.Label(win, text="📌 Interviewer sent you a question",
                  font=("Helvetica",10,"bold"), bg="#0d1117", fg="#ffd93d").pack(pady=(16,4))
@@ -2502,7 +2328,7 @@ class InterviewStudentWindow:
                                        json={"qid": qid, "answer": ans}, timeout=3)
                     except Exception: pass
                 threading.Thread(target=_do, daemon=True).start()
-                win.destroy()
+                _on_popup_close()
         else:
             win.geometry("460x260")
             tk.Label(win, text="Your Answer:", font=("Helvetica",9,"bold"),
@@ -2521,7 +2347,7 @@ class InterviewStudentWindow:
                                        json={"qid": qid, "answer": ans}, timeout=3)
                     except Exception: pass
                 threading.Thread(target=_do, daemon=True).start()
-                win.destroy()
+                _on_popup_close()
 
         tk.Button(win, text="Submit Answer ✓", font=("Helvetica",10,"bold"),
                   bg="#0be881", fg="#0d1117", bd=0, relief="flat", cursor="hand2",
@@ -2550,8 +2376,15 @@ class InterviewStudentWindow:
             w.after(duration, w.destroy)
         except Exception: pass
 
-    def _focus_out(self,e): self._focus_lost=time.time()
+    def _focus_out(self,e):
+        if _question_popup_open > 0:
+            return   # question popup took focus — not a tab switch
+        self._focus_lost=time.time()
+
     def _focus_in(self,e):
+        if _question_popup_open > 0:
+            self._focus_lost = None   # clear timer — popup is closing
+            return
         if self._focus_lost:
             lost=time.time()-self._focus_lost
             if lost>0.5: self._on_sec("TAB_SWITCH",f"Focus lost {lost:.1f}s")
@@ -2657,20 +2490,19 @@ class InterviewStudentWindow:
 
         # Video tile area — fills body, tiles split 50/50 width, full height
         self._tile_area = tk.Frame(self._body, bg=GM_BG)
-        self._tile_area.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
-        self._tile_area.columnconfigure(0, weight=1)
-        self._tile_area.columnconfigure(1, weight=1)
+        self._tile_area.grid(row=0, column=0, sticky="nsew", padx=4, pady=4)
+        # Both columns equal weight → always 50/50 split regardless of sidebar state
+        self._tile_area.columnconfigure(0, weight=1, uniform="tile")
+        self._tile_area.columnconfigure(1, weight=1, uniform="tile")
         self._tile_area.rowconfigure(0, weight=1)
 
-        # Name-bar height constant (used in resize calc to give camera label correct space)
+        # Name-bar height constant
         _NAME_BAR_H = 28
 
-        # Self tile — always shown; fills full width when no proctor is connected
+        # Self tile — column 0, never spans 2 columns (interviewer always beside you)
         self_tile = tk.Frame(self._tile_area, bg="#1a1a1d",
                              highlightthickness=1, highlightbackground="#3c4043")
-        # Column span: 2 when no proctor URL (full width), else 1 (half width)
-        _self_colspan = 1 if self.proctor_url else 2
-        self_tile.grid(row=0, column=0, columnspan=_self_colspan, sticky="nsew", padx=4, pady=4)
+        self_tile.grid(row=0, column=0, sticky="nsew", padx=4, pady=4)
         self_tile.grid_propagate(False)
 
         # Name bar — packed at BOTTOM so it never pushes the camera label down
@@ -2689,44 +2521,37 @@ class InterviewStudentWindow:
                                   font=("Helvetica",10))
         self.cam_self.pack(side="top", fill="both", expand=True)
 
-        # Interviewer tile — only shown when connected to a remote proctor
-        if self.proctor_url:
-            pro_tile = tk.Frame(self._tile_area, bg="#1a1a1d",
-                                highlightthickness=1, highlightbackground="#3c4043")
-            pro_tile.grid(row=0, column=1, sticky="nsew", padx=4, pady=4)
-            pro_tile.grid_propagate(False)
+        # Interviewer tile — column 1, always shown (placeholder text until proctor joins)
+        pro_tile = tk.Frame(self._tile_area, bg="#1a1a1d",
+                            highlightthickness=1, highlightbackground="#3c4043")
+        pro_tile.grid(row=0, column=1, sticky="nsew", padx=4, pady=4)
+        pro_tile.grid_propagate(False)
 
-            # Name bar at bottom
-            pro_name = tk.Frame(pro_tile, bg="#1a1a1d", height=_NAME_BAR_H)
-            pro_name.pack(side="bottom", fill="x")
-            pro_name.pack_propagate(False)
-            tk.Label(pro_name, text="  Interviewer", font=("Helvetica",9,"bold"),
-                     bg="#1a1a1d", fg="#ffd93d").pack(side="left", padx=8, pady=4)
+        # Name bar at bottom
+        pro_name = tk.Frame(pro_tile, bg="#1a1a1d", height=_NAME_BAR_H)
+        pro_name.pack(side="bottom", fill="x")
+        pro_name.pack_propagate(False)
+        tk.Label(pro_name, text="  Interviewer", font=("Helvetica",9,"bold"),
+                 bg="#1a1a1d", fg="#ffd93d").pack(side="left", padx=8, pady=4)
 
-            # Camera label fills remaining space
-            self.cam_pro = tk.Label(pro_tile, bg="#1a1a1d",
-                                     text="Waiting for interviewer…", fg="#5f6368",
-                                     font=("Helvetica",10))
-            self.cam_pro.pack(side="top", fill="both", expand=True)
-        else:
-            # No proctor connected — cam_pro is a dummy label (never rendered)
-            pro_tile = None
-            self.cam_pro = tk.Label(self._tile_area, bg="#1a1a1d")
+        _pro_wait_text = "Waiting for interviewer…" if self.proctor_url else "No interviewer connected"
+        self.cam_pro = tk.Label(pro_tile, bg="#1a1a1d",
+                                 text=_pro_wait_text, fg="#5f6368",
+                                 font=("Helvetica",10))
+        self.cam_pro.pack(side="top", fill="both", expand=True)
 
-        # Resize handler — set tile dimensions explicitly; camera label fills naturally
+        # Resize handler — both tiles always get exactly equal half-width
         self._s_self_tile = self_tile
         self._s_pro_tile  = pro_tile
         def _on_tile_area_resize(event):
             try:
-                total_h = max(100, event.height - 8)   # full height minus pady
-                if self.proctor_url and self._s_pro_tile is not None:
-                    tw = max(100, (event.width - 16) // 2)  # half width minus padx
-                    self._s_self_tile.configure(width=tw, height=total_h)
-                    self._s_pro_tile.configure(width=tw,  height=total_h)
-                else:
-                    # Student-only view: self tile takes full width
-                    tw = max(100, event.width - 8)
-                    self._s_self_tile.configure(width=tw, height=total_h)
+                total_h = max(100, event.height - 8)
+                # Always 50/50 — uniform="tile" in columnconfigure handles the split,
+                # but we also set explicit dimensions so grid_propagate(False) frames
+                # scale their camera labels correctly.
+                tw = max(100, (event.width - 20) // 2)
+                self._s_self_tile.configure(width=tw, height=total_h)
+                self._s_pro_tile.configure(width=tw,  height=total_h)
             except Exception:
                 pass
         self._tile_area.bind("<Configure>", _on_tile_area_resize)
@@ -2739,6 +2564,23 @@ class InterviewStudentWindow:
         self._sidebar_tab = tk.StringVar(value="chat")
         tab_bar = tk.Frame(self._sidebar_frame, bg=GM_SURF2)
         tab_bar.pack(fill="x")
+
+        def _close_student_sidebar():
+            self._chat_open  = False
+            self._notes_open = False
+            self._sidebar_frame.grid_forget()
+            # Reset sidebar column so tile area expands back to full body width
+            self._body.columnconfigure(1, weight=0, minsize=0)
+            try: self._update_meet_btn(self._btn_chat_ctrl,  "💬", GM_SURF2)
+            except Exception: pass
+            try: self._update_meet_btn(self._btn_notes_ctrl, "📝", GM_SURF2)
+            except Exception: pass
+
+        # ✕ close button right-aligned in the sidebar tab bar
+        tk.Button(tab_bar, text="✕", font=("Helvetica",10,"bold"),
+                  bg=GM_SURF2, fg=GM_MUTED, bd=0, relief="flat",
+                  cursor="hand2", padx=10, pady=8,
+                  command=_close_student_sidebar).pack(side="right")
         def _sw_tab(t):
             self._sidebar_tab.set(t)
             for k, (btn, frm) in self._sidebar_panels.items():
@@ -2858,9 +2700,13 @@ class InterviewStudentWindow:
                 self._body.columnconfigure(1, weight=0, minsize=300)
                 _sw_tab("chat")
                 self._update_meet_btn(self._btn_chat_ctrl, "💬", "#1a73e8")
+                try: self._update_meet_btn(self._btn_notes_ctrl, "📝", GM_SURF2)
+                except Exception: pass
+                # Force tile resize so both tiles remain equal after sidebar appears
+                self.root.after(50, lambda: self._tile_area.event_generate("<Configure>",
+                    width=self._tile_area.winfo_width(), height=self._tile_area.winfo_height()))
             else:
-                self._sidebar_frame.grid_forget()
-                self._update_meet_btn(self._btn_chat_ctrl, "💬", GM_SURF2)
+                _close_student_sidebar()
         self._btn_chat_ctrl = self._make_meet_btn(center, "💬", GM_SURF2, GM_TEXT, _toggle_chat)
         self._btn_chat_ctrl.pack(side="left", padx=8, pady=10)
         tk.Label(center, text="Chat", font=("Helvetica",7), bg=GM_BG,
@@ -2875,41 +2721,16 @@ class InterviewStudentWindow:
                 self._body.columnconfigure(1, weight=0, minsize=300)
                 _sw_tab("notes")
                 self._update_meet_btn(self._btn_notes_ctrl, "📝", "#1a73e8")
+                try: self._update_meet_btn(self._btn_chat_ctrl, "💬", GM_SURF2)
+                except Exception: pass
+                # Force tile resize so both tiles remain equal after sidebar appears
+                self.root.after(50, lambda: self._tile_area.event_generate("<Configure>",
+                    width=self._tile_area.winfo_width(), height=self._tile_area.winfo_height()))
             else:
-                self._sidebar_frame.grid_forget()
-                self._update_meet_btn(self._btn_notes_ctrl, "📝", GM_SURF2)
+                _close_student_sidebar()
         self._btn_notes_ctrl = self._make_meet_btn(center, "📝", GM_SURF2, GM_TEXT, _toggle_notes)
         self._btn_notes_ctrl.pack(side="left", padx=8, pady=10)
         tk.Label(center, text="Notes", font=("Helvetica",7), bg=GM_BG,
-                 fg=GM_MUTED).pack(side="left", padx=(0,8))
-
-        # Open PeerJS Video Call in browser
-        def _open_video_call():
-            import webbrowser
-            room = self.session_code or self.sid or "examshield"
-            # Build base URL from proctor_url or localhost
-            base = self.proctor_url.rstrip("/") if self.proctor_url else "http://127.0.0.1:6000"
-            url  = f"{base}/videocall/{room}"
-            webbrowser.open(url)
-            # Show a tip
-            try:
-                w = tk.Toplevel(self.root)
-                w.title("Video Call")
-                w.geometry("480x160"); w.configure(bg="#202124"); w.grab_set()
-                w.attributes("-topmost", True)
-                tk.Label(w, text="🎥  Video Call Opened in Browser",
-                         font=("Helvetica",12,"bold"), bg="#202124", fg="#8ab4f8").pack(pady=(18,4))
-                tk.Label(w, text=f"URL: {url}\n\nShare your Peer ID with the interviewer, or enter theirs to connect.",
-                         font=("Helvetica",9), bg="#202124", fg="#9aa0a6",
-                         wraplength=440, justify="center").pack(pady=4)
-                tk.Button(w, text="OK", font=("Helvetica",10,"bold"),
-                          bg="#1a73e8", fg="#fff", bd=0, relief="flat", cursor="hand2",
-                          command=w.destroy).pack(pady=12, ipadx=20, ipady=4)
-            except Exception:
-                pass
-        btn_vcall = self._make_meet_btn(center, "🌐", "#1a73e8", "#fff", _open_video_call)
-        btn_vcall.pack(side="left", padx=8, pady=10)
-        tk.Label(center, text="Video", font=("Helvetica",7), bg=GM_BG,
                  fg=GM_MUTED).pack(side="left", padx=(0,8))
 
     @staticmethod
@@ -4070,6 +3891,19 @@ def start_network_server(port=6000):
         _iv_hub.set_proctor_frame(frame)
         return jsonify(ok=True)
 
+    # ── /proctor_frame (GET) — student PULLS proctor cam JPEG ────────────────
+    # Primary delivery path for the interviewer's camera to the student.
+    # Serves the latest JPEG from the module-level _proctor_jpeg_cache which is
+    # written by the proctor capture thread.  Works for both same-machine and
+    # remote sessions without any URL-resolution timing dependency.
+    @app.route("/proctor_frame")
+    def proctor_frame_get():
+        with _proctor_jpeg_lock:
+            jpeg = _proctor_jpeg_cache[0]
+        if jpeg is None:
+            return Response(b"", status=204)
+        return Response(jpeg, mimetype="image/jpeg")
+
     # ── /push_notes (POST) ────────────────────────────────────────────────────
     @app.route("/push_notes", methods=["POST"])
     def push_notes():
@@ -4227,338 +4061,8 @@ def start_network_server(port=6000):
             mode         = "interview" if _iv_hub else "exam",
         )
 
-    # ══════════════════════════════════════════════════════════════════════════
-    #  PeerJS-style SIGNALING SERVER  (Flask-SocketIO)
-    #  Mirrors the Socket.io signaling layer in MockInt.
-    #  Events:
-    #    webrtc-join-room   → client joins a room (student or proctor)
-    #    webrtc-offer       → proctor sends SDP offer to student in room
-    #    webrtc-answer      → student sends SDP answer back
-    #    webrtc-ice-candidate → ICE candidate relay
-    # ══════════════════════════════════════════════════════════════════════════
-    global _socketio_server
-
-    if _FLASK_SOCKETIO_AVAILABLE:
-        from flask_socketio import SocketIO, emit, join_room
-        _socketio_server = SocketIO(app, cors_allowed_origins="*",
-                                    async_mode="threading", logger=False,
-                                    engineio_logger=False)
-
-        @_socketio_server.on("webrtc-join-room")
-        def on_join_room(data):
-            room    = data.get("room", "")
-            role    = data.get("role", "")
-            sid_req = data.get("student_id", "")
-            if not room:
-                return
-            join_room(room)
-            with _signaling_lock:
-                if room not in _signaling_rooms:
-                    _signaling_rooms[room] = {}
-                _signaling_rooms[room][role] = True
-            emit("webrtc-room-joined", {"room": room, "role": role}, room=room)
-            print(f"[Signaling] {role} joined room '{room}'")
-
-        @_socketio_server.on("webrtc-offer")
-        def on_offer(data):
-            room = data.get("room", "")
-            emit("webrtc-offer", data, room=room, include_self=False)
-            print(f"[Signaling] Offer relayed to room '{room}'")
-
-        @_socketio_server.on("webrtc-answer")
-        def on_answer(data):
-            room = data.get("room", "")
-            emit("webrtc-answer", data, room=room, include_self=False)
-            print(f"[Signaling] Answer relayed to room '{room}'")
-
-        @_socketio_server.on("webrtc-ice-candidate")
-        def on_ice(data):
-            room = data.get("room", "")
-            emit("webrtc-ice-candidate", data, room=room, include_self=False)
-
-    # ── /videocall/<room_id> — PeerJS browser video call page ─────────────────
-    # This is the key page inspired by MockInt:
-    #   • Uses navigator.mediaDevices.getUserMedia() for cam/mic
-    #   • Uses PeerJS (CDN) for WebRTC peer-to-peer video
-    #   • Uses Socket.io (CDN) for signaling (room join / offer / answer)
-    # Open this URL in a browser on BOTH machines to get instant P2P video.
-    @app.route("/videocall/<room_id>")
-    def videocall(room_id):
-        _PEERJS_HTML = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ExamShield Video Call — {room_id}</title>
-<style>
-  * {{ margin:0; padding:0; box-sizing:border-box; }}
-  body {{ background:#202124; font-family:'Google Sans',Arial,sans-serif; color:#e8eaed;
-          display:flex; flex-direction:column; height:100vh; overflow:hidden; }}
-  #header {{ background:#292a2d; padding:12px 20px; display:flex;
-              align-items:center; justify-content:space-between; flex-shrink:0; }}
-  #header h2 {{ font-size:16px; color:#8ab4f8; }}
-  #room-badge {{ font-size:11px; background:#3c4043; padding:4px 10px;
-                  border-radius:12px; color:#9aa0a6; }}
-  #status-bar {{ background:#1a1b1e; padding:6px 20px; font-size:12px;
-                 color:#9aa0a6; flex-shrink:0; border-bottom:1px solid #3c4043; }}
-  #video-grid {{ display:flex; flex:1; gap:8px; padding:8px;
-                 overflow:hidden; min-height:0; }}
-  .tile {{ flex:1; background:#1a1a1d; border-radius:12px; position:relative;
-           overflow:hidden; border:1px solid #3c4043; min-width:0; }}
-  .tile video {{ width:100%; height:calc(100% - 36px); object-fit:cover;
-                 display:block; background:#000; }}
-  .tile-label {{ position:absolute; bottom:0; left:0; right:0; height:36px;
-                  background:rgba(0,0,0,.65); display:flex; align-items:center;
-                  padding:0 14px; font-size:13px; font-weight:600; }}
-  .tile-label .mic-icon {{ margin-left:auto; font-size:14px; }}
-  .tile-placeholder {{ display:flex; align-items:center; justify-content:center;
-                        height:calc(100% - 36px); color:#5f6368; font-size:14px; }}
-  #ctrl-bar {{ background:#202124; padding:10px 0 14px;
-               display:flex; justify-content:center; gap:8px; flex-shrink:0; }}
-  .ctrl-wrap {{ display:flex; flex-direction:column; align-items:center; gap:4px; }}
-  .ctrl-btn {{ width:48px; height:48px; border-radius:50%; border:none; cursor:pointer;
-               font-size:18px; transition:filter .15s; display:flex;
-               align-items:center; justify-content:center; }}
-  .ctrl-btn:hover {{ filter:brightness(1.2); }}
-  .ctrl-btn.active {{ background:#ea4335 !important; }}
-  .ctrl-label {{ font-size:10px; color:#9aa0a6; }}
-  #end-btn {{ width:58px; height:48px; border-radius:28px; background:#ea4335; }}
-  #peer-id-display {{ font-size:11px; color:#5f6368; text-align:center;
-                       padding:4px 20px; flex-shrink:0; }}
-  #connect-section {{ background:#292a2d; border-radius:10px; margin:8px 20px;
-                       padding:12px; display:flex; align-items:center; gap:10px;
-                       flex-shrink:0; }}
-  #connect-section input {{ flex:1; background:#3c4043; border:none; border-radius:8px;
-                              padding:8px 12px; color:#e8eaed; font-size:13px; outline:none; }}
-  #connect-section button {{ background:#1a73e8; color:#fff; border:none;
-                               border-radius:8px; padding:8px 16px; cursor:pointer;
-                               font-size:13px; font-weight:600; }}
-  #connect-section button:hover {{ background:#1967d2; }}
-</style>
-</head>
-<body>
-<div id="header">
-  <h2>🎥 ExamShield Interview</h2>
-  <span id="room-badge">Room: {room_id}</span>
-</div>
-<div id="status-bar" id="status">Initialising camera…</div>
-<div id="video-grid">
-  <div class="tile" id="self-tile">
-    <video id="local-video" autoplay muted playsinline></video>
-    <div class="tile-label">
-      <span id="self-name">You</span>
-      <span class="mic-icon" id="self-mic-icon">🎤</span>
-    </div>
-  </div>
-  <div class="tile" id="remote-tile">
-    <div class="tile-placeholder" id="remote-placeholder">Waiting for peer to join…</div>
-    <video id="remote-video" autoplay playsinline style="display:none"></video>
-    <div class="tile-label" style="display:none" id="remote-label">
-      <span id="remote-name">Peer</span>
-      <span class="mic-icon" id="remote-mic-icon">🎤</span>
-    </div>
-  </div>
-</div>
-<div id="connect-section">
-  <span style="font-size:12px;color:#9aa0a6;white-space:nowrap">Connect to Peer ID:</span>
-  <input type="text" id="remote-peer-input" placeholder="Paste remote Peer ID here…">
-  <button onclick="callPeer()">📞 Call</button>
-</div>
-<div id="peer-id-display">Your Peer ID: <strong id="my-peer-id">…</strong>
-  <button onclick="copyPeerId()" style="margin-left:8px;background:#3c4043;border:none;
-    color:#8ab4f8;border-radius:6px;padding:3px 10px;cursor:pointer;font-size:11px;">Copy</button>
-</div>
-<div id="ctrl-bar">
-  <div class="ctrl-wrap">
-    <button class="ctrl-btn" id="mic-btn" style="background:#3c4043"
-            onclick="toggleMic()">🎤</button>
-    <span class="ctrl-label">Mic</span>
-  </div>
-  <div class="ctrl-wrap">
-    <button class="ctrl-btn" id="cam-btn" style="background:#3c4043"
-            onclick="toggleCam()">📹</button>
-    <span class="ctrl-label">Cam</span>
-  </div>
-  <div class="ctrl-wrap">
-    <button class="ctrl-btn" id="end-btn" onclick="endCall()">✆</button>
-    <span class="ctrl-label">Leave</span>
-  </div>
-</div>
-
-<!-- PeerJS (mirrors MockInt's peer-to-peer approach) -->
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script>
-const ROOM_ID = "{room_id}";
-let localStream = null;
-let peer = null;
-let currentCall = null;
-let micMuted = false;
-let camOff = false;
-
-const status      = document.getElementById("status-bar");
-const localVideo  = document.getElementById("local-video");
-const remoteVideo = document.getElementById("remote-video");
-const remotePlaceholder = document.getElementById("remote-placeholder");
-const remoteLabel = document.getElementById("remote-label");
-const myPeerIdEl  = document.getElementById("my-peer-id");
-
-function setStatus(msg, color) {{
-  status.textContent = msg;
-  status.style.color = color || "#9aa0a6";
-}}
-
-// ── Step 1: getUserMedia — exactly as MockInt uses it ──────────────────────
-async function init() {{
-  setStatus("Requesting camera & microphone access…");
-  try {{
-    localStream = await navigator.mediaDevices.getUserMedia({{ video: true, audio: true }});
-    localVideo.srcObject = localStream;
-    setStatus("Camera ready. Connecting to signaling server…", "#34a853");
-    initPeer();
-  }} catch(e) {{
-    setStatus("⚠ Camera/mic access denied: " + e.message, "#ea4335");
-  }}
-}}
-
-// ── Step 2: PeerJS peer — mirrors MockInt's new Peer() ────────────────────
-function initPeer() {{
-  // Connect to PeerJS cloud server (no self-hosted needed)
-  peer = new Peer(undefined, {{
-    debug: 1,
-    config: {{
-      iceServers: [
-        {{ urls: "stun:stun.l.google.com:19302" }},
-        {{ urls: "stun:stun1.l.google.com:19302" }},
-      ]
-    }}
-  }});
-
-  peer.on("open", id => {{
-    myPeerIdEl.textContent = id;
-    setStatus("✅ Ready — share your Peer ID with the other person", "#34a853");
-    console.log("[PeerJS] My peer ID:", id);
-  }});
-
-  // ── Receive incoming call (mirrors peer.on('call') in MockInt) ───────────
-  peer.on("call", call => {{
-    console.log("[PeerJS] Incoming call from", call.peer);
-    currentCall = call;
-    call.answer(localStream);   // answer with our local stream
-
-    call.on("stream", remoteStream => {{
-      showRemoteStream(remoteStream, call.peer);
-    }});
-
-    call.on("close", () => {{
-      hideRemoteStream();
-      setStatus("Call ended by peer", "#ea4335");
-    }});
-    setStatus("📞 In call with " + call.peer, "#ffd93d");
-  }});
-
-  peer.on("error", e => {{
-    setStatus("⚠ Peer error: " + e.message, "#ea4335");
-    console.error("[PeerJS]", e);
-  }});
-
-  peer.on("disconnected", () => {{
-    setStatus("⚠ Disconnected — reconnecting…", "#ffd93d");
-    peer.reconnect();
-  }});
-}}
-
-// ── Step 3: Call remote peer (mirrors peer.call(remotePeerId, stream)) ────
-function callPeer() {{
-  const remoteId = document.getElementById("remote-peer-input").value.trim();
-  if (!remoteId || !peer || !localStream) {{
-    setStatus("⚠ Enter a valid peer ID first", "#ffd93d"); return;
-  }}
-  setStatus("📞 Calling " + remoteId + "…", "#ffd93d");
-  const call = peer.call(remoteId, localStream);
-  currentCall = call;
-
-  call.on("stream", remoteStream => {{
-    showRemoteStream(remoteStream, remoteId);
-    setStatus("📞 In call with " + remoteId, "#34a853");
-  }});
-  call.on("close", () => {{
-    hideRemoteStream();
-    setStatus("Call ended", "#9aa0a6");
-  }});
-  call.on("error", e => {{
-    setStatus("⚠ Call error: " + e.message, "#ea4335");
-  }});
-}}
-
-function showRemoteStream(stream, peerId) {{
-  remoteVideo.srcObject = stream;
-  remoteVideo.style.display = "block";
-  remotePlaceholder.style.display = "none";
-  remoteLabel.style.display = "flex";
-  document.getElementById("remote-name").textContent = peerId.slice(0, 12) + "…";
-}}
-
-function hideRemoteStream() {{
-  remoteVideo.srcObject = null;
-  remoteVideo.style.display = "none";
-  remotePlaceholder.style.display = "flex";
-  remotePlaceholder.textContent = "Call ended";
-  remoteLabel.style.display = "none";
-}}
-
-// ── Controls ──────────────────────────────────────────────────────────────
-function toggleMic() {{
-  micMuted = !micMuted;
-  localStream.getAudioTracks().forEach(t => t.enabled = !micMuted);
-  document.getElementById("mic-btn").textContent  = micMuted ? "🔇" : "🎤";
-  document.getElementById("self-mic-icon").textContent = micMuted ? "🔇" : "🎤";
-  document.getElementById("mic-btn").classList.toggle("active", micMuted);
-}}
-
-function toggleCam() {{
-  camOff = !camOff;
-  localStream.getVideoTracks().forEach(t => t.enabled = !camOff);
-  document.getElementById("cam-btn").textContent = camOff ? "🚫" : "📹";
-  document.getElementById("cam-btn").classList.toggle("active", camOff);
-}}
-
-function endCall() {{
-  if(currentCall) {{ currentCall.close(); currentCall = null; }}
-  if(peer) {{ peer.destroy(); peer = null; }}
-  if(localStream) {{ localStream.getTracks().forEach(t => t.stop()); localStream = null; }}
-  hideRemoteStream();
-  localVideo.srcObject = null;
-  setStatus("Call ended — you can close this tab", "#9aa0a6");
-}}
-
-function copyPeerId() {{
-  const id = myPeerIdEl.textContent;
-  if(id && id !== "…") {{
-    navigator.clipboard.writeText(id).then(() => setStatus("Peer ID copied!", "#34a853"));
-  }}
-}}
-
-// Start on load
-window.addEventListener("load", init);
-</script>
-</body>
-</html>"""
-        from flask import Response as _Response
-        return _Response(_PEERJS_HTML, mimetype="text/html")
-
-    # ── /videocall (GET, no room) — redirects to a room based on session code ──
-    @app.route("/videocall")
-    def videocall_redirect():
-        from flask import redirect
-        room = _PROCTOR_SESSION_CODE or "examshield"
-        return redirect(f"/videocall/{room}")
-
     def _run():
-        if _FLASK_SOCKETIO_AVAILABLE and _socketio_server:
-            _socketio_server.run(app, host="0.0.0.0", port=port,
-                                 allow_unsafe_werkzeug=True, log_output=False)
-        else:
-            app.run(host="0.0.0.0", port=port, threaded=True)
+        app.run(host="0.0.0.0", port=port, threaded=True)
 
     threading.Thread(target=_run, daemon=True).start()
 
@@ -4624,14 +4128,9 @@ window.addEventListener("load", init);
     print(f"\n{'═'*60}")
     print(f"  🌐  ExamShield v3 Network Server started on port {port}")
     print(f"  🎙  Voice Bridge (WebSocket) on port {_voice_bridge_port}")
-    print(f"  🎥  PeerJS Video Call  →  http://{local_ip}:{port}/videocall/<room>")
     print(f"  📡  Local IP  →  {local_ip}:{port}  (LAN only)")
     if _public_url:
         print(f"  🌍  Public URL (cloudflared)  →  {_public_url}")
-    if _FLASK_SOCKETIO_AVAILABLE:
-        print(f"  📡  Socket.io signaling server  →  ACTIVE (PeerJS mode)")
-    else:
-        print(f"  ⚠   Socket.io signaling  →  INACTIVE (pip install flask-socketio)")
     print(f"{'═'*60}\n")
     return local_ip, port
 
@@ -4683,7 +4182,7 @@ class MultiStudentProctorWindow:
 
         # ── Start proctor voice (WebSocket bridge) for interview mode ──────
         global _voice_proctor
-        if mode == "interview" and _VOICE_BRIDGE_AVAILABLE and _SOUNDDEVICE_AVAILABLE:
+        if mode == "interview" and _VOICE_BRIDGE_AVAILABLE and _SOUNDDEVICE_AVAILABLE and _FLASK_SOCK_AVAILABLE:
             # Proctor connects to their OWN bridge server (ws://localhost:6001)
             _voice_proctor = VoiceClient(
                 role="proctor",
@@ -4701,7 +4200,18 @@ class MultiStudentProctorWindow:
             _voice_proctor.start()
             print("[Voice] Proctor voice client started (ws://localhost:6001)")
         elif mode == "interview":
-            print("[Voice] ⚠ voice_bridge or sounddevice not available — audio disabled")
+            missing = []
+            if not _VOICE_BRIDGE_AVAILABLE: missing.append("voice_bridge.py")
+            if not _FLASK_SOCK_AVAILABLE:   missing.append("flask-sock")
+            if not _SOUNDDEVICE_AVAILABLE:  missing.append("sounddevice")
+            reason = ", ".join(missing) if missing else "unavailable"
+            print(f"[Voice] Disabled — install: pip install {' '.join(missing) or 'dependencies'}")
+            try:
+                self._lbl_voice_status.configure(
+                    text=f"⚠ Voice off  (pip install {' '.join(missing) or 'deps'})",
+                    fg="#ffaa00")
+            except Exception:
+                pass
 
         # ── Start proctor camera push for interview mode ──────────────
         if mode == "interview":
@@ -4818,6 +4328,10 @@ class MultiStudentProctorWindow:
                         ok, buf = cv2.imencode(
                             ".jpg", display_frame, [cv2.IMWRITE_JPEG_QUALITY, 45])
                         if ok and _REQUESTS_AVAILABLE:
+                            raw = buf.tobytes()
+                            # Always update the module-level JPEG cache so GET /proctor_frame works
+                            with _proctor_jpeg_lock:
+                                _proctor_jpeg_cache[0] = raw
                             # Collect student URLs: same-machine → 127.0.0.1,
                             # remote students → their stored IP from push_student_frame.
                             # Always include localhost so same-machine mode works.
@@ -4828,7 +4342,6 @@ class MultiStudentProctorWindow:
                                 })
                             if not urls:
                                 urls = ["http://127.0.0.1:6000"]
-                            raw = buf.tobytes()
                             _pro_push_in_flight[0] = True
                             def _push_pro(raw=raw, urls=urls):
                                 try:
@@ -4985,6 +4498,7 @@ class MultiStudentProctorWindow:
         self._pro_cam_muted = False
         self._pro_chat_open = False
         self._pro_ppl_open  = False
+        self._pro_ask_open  = False
 
         # ── Bottom control bar — MUST be packed before the body so side=bottom works ──
         ctrl_bar = tk.Frame(self.root, bg=GM_BG, height=64)
@@ -5033,10 +4547,11 @@ class MultiStudentProctorWindow:
                                            font=("Segoe UI Emoji",10), bg="#1a1a1d", fg=GM_GREEN)
         self._pro_mic_icon_lbl.pack(side="right", padx=8)
 
-        # ── RIGHT: scrollable student tile area ───────────────────────────────
+        # ── RIGHT: student tile area ──────────────────────────────────────────
         right_outer = tk.Frame(body, bg=GM_BG)
         right_outer.grid(row=0, column=1, sticky="nsew", padx=(4,8), pady=8)
-        right_outer.columnconfigure(0, weight=1); right_outer.rowconfigure(1, weight=1)
+        right_outer.columnconfigure(0, weight=1)
+        right_outer.rowconfigure(1, weight=1)
 
         # Top status strip
         status_strip = tk.Frame(right_outer, bg="#2d2e30", height=32)
@@ -5049,20 +4564,32 @@ class MultiStudentProctorWindow:
                 font=("Helvetica",9), bg="#2d2e30", fg=GM_MUTED)
         self._no_students_lbl.pack(side="left", padx=4)
 
-        cam_wrap = tk.Frame(right_outer, bg=GM_BG)
-        cam_wrap.grid(row=1, column=0, sticky="nsew")
-        cam_canvas = tk.Canvas(cam_wrap, bg=GM_BG, highlightthickness=0)
-        scr_y = tk.Scrollbar(cam_wrap, orient="vertical", command=cam_canvas.yview)
-        scr_y.pack(side="right", fill="y")
-        cam_canvas.pack(side="left", fill="both", expand=True)
-        cam_canvas.configure(yscrollcommand=scr_y.set)
-        self._cam_inner = tk.Frame(cam_canvas, bg=GM_BG)
-        self._cam_win_id = cam_canvas.create_window((0,0), window=self._cam_inner, anchor="nw")
-        self._cam_inner.bind("<Configure>",
-            lambda e: cam_canvas.configure(scrollregion=cam_canvas.bbox("all")))
-        cam_canvas.bind("<Configure>", self._on_grid_resize)
-        self._cam_canvas = cam_canvas
-        self._grid_cols  = 1   # one column — full width of right half
+        # In interview mode student tiles fill the full right half — no scrolling needed.
+        # _cam_inner is placed directly (no canvas wrapper) so the tile fills the space.
+        self._cam_inner = tk.Frame(right_outer, bg=GM_BG)
+        self._cam_inner.grid(row=1, column=0, sticky="nsew")
+        self._cam_inner.columnconfigure(0, weight=1)
+        self._cam_inner.rowconfigure(0, weight=1)
+        # Give _cam_canvas a stub so grid-resize code doesn't crash
+        self._cam_canvas = self._cam_inner
+        self._cam_win_id = None
+        self._grid_cols  = 1
+
+        # Keep right_outer height in sync for the resize handler
+        self._right_outer_ref = right_outer
+
+        # Resize handler — called when body resizes; sets both proctor and student
+        # tile to identical dimensions so they look balanced side-by-side.
+        def _on_pro_body_resize(event):
+            try:
+                tw = max(100, (event.width - 24) // 2)
+                th = max(100, event.height - 16)
+                self._pro_tile_ref.configure(width=tw, height=th)
+                for tile in self._student_tiles.values():
+                    tile["card"].configure(width=tw, height=th)
+            except Exception:
+                pass
+        body.bind("<Configure>", _on_pro_body_resize)
 
         # ── Sidebar (hidden by default) ───────────────────────────────────────
         self._pro_sidebar = tk.Frame(body, bg=GM_SURF, width=320)
@@ -5071,6 +4598,21 @@ class MultiStudentProctorWindow:
         tab_bar_s = tk.Frame(self._pro_sidebar, bg=GM_SURF2)
         tab_bar_s.pack(fill="x")
 
+        def _close_sidebar():
+            """Close the sidebar and reset all toggle button states."""
+            self._pro_chat_open = False
+            self._pro_ppl_open  = False
+            self._pro_ask_open  = False
+            self._pro_sidebar.grid_forget()
+            body.columnconfigure(2, weight=0, minsize=0)
+            try: self._update_meet_btn_p(self._pbtn_chat, "💬", GM_SURF2)
+            except Exception: pass
+            try: self._update_meet_btn_p(self._pbtn_ppl,  "👥", GM_SURF2)
+            except Exception: pass
+            try: self._update_meet_btn_p(self._pbtn_ask,  "❓", GM_SURF2)
+            except Exception: pass
+        self._close_sidebar = _close_sidebar
+
         def _sw_pro_tab(t):
             for k, (btn, frm) in self._pro_sidebar_panels.items():
                 active = (k == t)
@@ -5078,6 +4620,12 @@ class MultiStudentProctorWindow:
                                fg=GM_TEXT if active else GM_MUTED)
                 frm.pack_forget()
             self._pro_sidebar_panels[t][1].pack(fill="both", expand=True)
+
+        # ✕ close button — right-aligned in tab bar
+        tk.Button(tab_bar_s, text="✕", font=("Helvetica",10,"bold"),
+                  bg=GM_SURF2, fg=GM_MUTED, bd=0, relief="flat",
+                  cursor="hand2", padx=10, pady=8,
+                  command=_close_sidebar).pack(side="right")
 
         for tab_key, tab_label in [("chat","Chat"), ("participants","Participants"), ("question","Ask")]:
             btn = tk.Button(tab_bar_s, text=tab_label, font=("Helvetica",9,"bold"),
@@ -5157,6 +4705,13 @@ class MultiStudentProctorWindow:
         notes_frm_p = self._pro_sidebar_panels["participants"][1]  # reuse same ref kept separate
         # Question / Ask panel
         ask_frm = self._pro_sidebar_panels["question"][1]
+        # Header row with close button for the Ask panel
+        ask_hdr = tk.Frame(ask_frm, bg=GM_SURF); ask_hdr.pack(fill="x", padx=0, pady=0)
+        tk.Label(ask_hdr, text="📌  Send Question",
+                 font=("Helvetica",10,"bold"), bg=GM_SURF, fg="#ffd93d").pack(side="left", padx=10, pady=8)
+        tk.Button(ask_hdr, text="✕", font=("Helvetica",10,"bold"),
+                  bg=GM_SURF, fg=GM_MUTED, bd=0, relief="flat", cursor="hand2",
+                  command=lambda: self._close_sidebar()).pack(side="right", padx=8)
         self._build_runtime_q_panel_interview(ask_frm)
 
         _sw_pro_tab("chat")
@@ -5214,14 +4769,18 @@ class MultiStudentProctorWindow:
         def _toggle_pro_chat():
             self._pro_chat_open = not self._pro_chat_open
             self._pro_ppl_open  = False
+            self._pro_ask_open  = False
             if self._pro_chat_open:
                 self._pro_sidebar.grid(row=0, column=2, sticky="nsew", padx=(0,8), pady=0)
                 body.columnconfigure(2, weight=0, minsize=320)
                 _sw_pro_tab("chat")
                 self._update_meet_btn_p(self._pbtn_chat, "💬", "#1a73e8")
+                try: self._update_meet_btn_p(self._pbtn_ppl, "👥", GM_SURF2)
+                except Exception: pass
+                try: self._update_meet_btn_p(self._pbtn_ask, "❓", GM_SURF2)
+                except Exception: pass
             else:
-                self._pro_sidebar.grid_forget()
-                self._update_meet_btn_p(self._pbtn_chat, "💬", GM_SURF2)
+                self._close_sidebar()
         self._pbtn_chat = self._make_meet_btn_p(center_p, "💬", GM_SURF2, GM_TEXT, _toggle_pro_chat)
         self._pbtn_chat.pack(side="left", padx=8, pady=10)
         tk.Label(center_p, text="Chat", font=("Helvetica",7), bg=GM_BG, fg=GM_MUTED).pack(side="left", padx=(0,8))
@@ -5230,26 +4789,38 @@ class MultiStudentProctorWindow:
         def _toggle_ppl():
             self._pro_ppl_open  = not self._pro_ppl_open
             self._pro_chat_open = False
+            self._pro_ask_open  = False
             if self._pro_ppl_open:
                 self._pro_sidebar.grid(row=0, column=2, sticky="nsew", padx=(0,8), pady=0)
                 body.columnconfigure(2, weight=0, minsize=320)
                 _sw_pro_tab("participants")
                 self._update_meet_btn_p(self._pbtn_ppl, "👥", "#1a73e8")
+                try: self._update_meet_btn_p(self._pbtn_chat, "💬", GM_SURF2)
+                except Exception: pass
+                try: self._update_meet_btn_p(self._pbtn_ask, "❓", GM_SURF2)
+                except Exception: pass
             else:
-                self._pro_sidebar.grid_forget()
-                self._update_meet_btn_p(self._pbtn_ppl, "👥", GM_SURF2)
+                self._close_sidebar()
         self._pbtn_ppl = self._make_meet_btn_p(center_p, "👥", GM_SURF2, GM_TEXT, _toggle_ppl)
         self._pbtn_ppl.pack(side="left", padx=8, pady=18)
         tk.Label(center_p, text="People", font=("Helvetica",7), bg=GM_BG, fg=GM_MUTED).pack(side="left", padx=(0,8))
 
-        # Ask question toggle
+        # Ask question toggle — opens/closes sidebar to question tab
         def _toggle_ask():
-            # opens sidebar to "question" tab
-            self._pro_chat_open = False; self._pro_ppl_open = False
-            self._pro_sidebar.grid(row=0, column=2, sticky="nsew", padx=(0,8), pady=0)
-            body.columnconfigure(2, weight=0, minsize=320)
-            _sw_pro_tab("question")
-            self._update_meet_btn_p(self._pbtn_ask, "❓", "#1a73e8")
+            self._pro_ask_open  = not self._pro_ask_open
+            self._pro_chat_open = False
+            self._pro_ppl_open  = False
+            if self._pro_ask_open:
+                self._pro_sidebar.grid(row=0, column=2, sticky="nsew", padx=(0,8), pady=0)
+                body.columnconfigure(2, weight=0, minsize=320)
+                _sw_pro_tab("question")
+                self._update_meet_btn_p(self._pbtn_ask, "❓", "#1a73e8")
+                try: self._update_meet_btn_p(self._pbtn_chat, "💬", GM_SURF2)
+                except Exception: pass
+                try: self._update_meet_btn_p(self._pbtn_ppl, "👥", GM_SURF2)
+                except Exception: pass
+            else:
+                self._close_sidebar()
         self._pbtn_ask = self._make_meet_btn_p(center_p, "❓", GM_SURF2, GM_TEXT, _toggle_ask)
         self._pbtn_ask.pack(side="left", padx=8, pady=18)
         tk.Label(center_p, text="Ask", font=("Helvetica",7), bg=GM_BG, fg=GM_MUTED).pack(side="left", padx=(0,8))
@@ -5258,10 +4829,15 @@ class MultiStudentProctorWindow:
         def _open_notes_push():
             win = tk.Toplevel(self.root)
             win.title("Push Notes to Candidates")
-            win.geometry("440x280"); win.configure(bg="#202124")
+            win.geometry("440x310"); win.configure(bg="#202124")
             win.attributes("-topmost", True)
-            tk.Label(win, text="Notes / Feedback for candidates",
-                     font=("Helvetica",10,"bold"), bg="#202124", fg=GM_TEXT).pack(anchor="w", padx=12, pady=(12,4))
+            # ── Title bar with close button ──────────────────────────────────
+            title_bar = tk.Frame(win, bg="#202124"); title_bar.pack(fill="x", padx=12, pady=(12,4))
+            tk.Label(title_bar, text="Notes / Feedback for candidates",
+                     font=("Helvetica",10,"bold"), bg="#202124", fg=GM_TEXT).pack(side="left")
+            tk.Button(title_bar, text="✕ Close", font=("Helvetica",8),
+                      bg="#3a3a3a", fg="#c9d1d9", bd=0, relief="flat", cursor="hand2",
+                      command=win.destroy).pack(side="right", ipady=3, ipadx=6)
             nb = tk.Text(win, font=("Helvetica",10), bg="#292a2d", fg=GM_TEXT,
                          insertbackground=GM_TEXT, bd=0, relief="flat", wrap="word")
             nb.pack(fill="both", expand=True, padx=12, pady=(0,4))
@@ -5282,38 +4858,6 @@ class MultiStudentProctorWindow:
         btn_notes_p = self._make_meet_btn_p(center_p, "📝", GM_SURF2, GM_TEXT, _open_notes_push)
         btn_notes_p.pack(side="left", padx=8, pady=18)
         tk.Label(center_p, text="Notes", font=("Helvetica",7), bg=GM_BG, fg=GM_MUTED).pack(side="left", padx=(0,8))
-
-        # Open PeerJS Video Call in browser (proctor side)
-        def _open_pro_video_call():
-            import webbrowser, socket as _sock
-            room = _PROCTOR_SESSION_CODE or "examshield"
-            try:
-                s2 = _sock.socket(_sock.AF_INET, _sock.SOCK_DGRAM)
-                s2.connect(("8.8.8.8", 80)); local_ip = s2.getsockname()[0]; s2.close()
-            except Exception:
-                local_ip = "127.0.0.1"
-            url = _public_url.rstrip("/") + f"/videocall/{room}" if _public_url \
-                  else f"http://{local_ip}:6000/videocall/{room}"
-            webbrowser.open(url)
-            try:
-                w2 = tk.Toplevel(self.root)
-                w2.title("Video Call"); w2.geometry("500x170")
-                w2.configure(bg="#202124"); w2.attributes("-topmost", True)
-                tk.Label(w2, text="🎥  Video Call Opened in Browser",
-                         font=("Helvetica",12,"bold"), bg="#202124", fg="#8ab4f8").pack(pady=(16,4))
-                tk.Label(w2, text=f"URL: {url}\n\n"
-                         "Share this URL + your Peer ID with the candidate.\n"
-                         "Both sides must open the page and exchange Peer IDs to connect P2P.",
-                         font=("Helvetica",9), bg="#202124", fg="#9aa0a6",
-                         wraplength=460, justify="center").pack()
-                tk.Button(w2, text="OK", font=("Helvetica",10,"bold"),
-                          bg="#1a73e8", fg="#fff", bd=0, relief="flat", cursor="hand2",
-                          command=w2.destroy).pack(pady=10, ipadx=20, ipady=4)
-            except Exception:
-                pass
-        btn_vcall_p = self._make_meet_btn_p(center_p, "🌐", "#1a73e8", "#fff", _open_pro_video_call)
-        btn_vcall_p.pack(side="left", padx=8, pady=18)
-        tk.Label(center_p, text="Video", font=("Helvetica",7), bg=GM_BG, fg=GM_MUTED).pack(side="left", padx=(0,8))
 
         # Volume
         vol_frame = tk.Frame(ctrl_bar, bg=GM_BG); vol_frame.pack(side="right", padx=16)
@@ -5457,8 +5001,10 @@ class MultiStudentProctorWindow:
 
     # ── Grid layout helpers ───────────────────────────────────────────────────
     def _on_grid_resize(self, event):
-        """Re-flow grid columns when canvas width changes."""
+        """Re-flow grid columns when canvas width changes (exam mode only)."""
         try:
+            if self._cam_win_id is None:
+                return   # interview mode — no canvas, resize handled by body Configure
             self._cam_canvas.itemconfig(self._cam_win_id, width=event.width)
             tile_min_w = 260
             cols = max(1, event.width // tile_min_w)
@@ -5510,6 +5056,9 @@ class MultiStudentProctorWindow:
         card.grid_propagate(False)   # tile controls its own size, not child content
         for col in range(self._grid_cols):
             self._cam_inner.columnconfigure(col, weight=1)
+        # In interview mode make the row expand to fill the available height
+        if _is_meet:
+            self._cam_inner.rowconfigure(r, weight=1)
 
         # ── Header row ──
         hdr = tk.Frame(card, bg=_hdr_bg); hdr.pack(fill="x", padx=4, pady=(4,0))
@@ -6400,13 +5949,6 @@ if __name__ == "__main__":
         print("[⚠] 'cloudflared' not found in PATH — internet (cross-network) proctoring disabled")
         print("    Fix: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/")
         print("    No account or token needed — just download and place cloudflared in PATH")
-    if not _FLASK_SOCKETIO_AVAILABLE:
-        print("[⚠] 'flask-socketio' not installed — Socket.io signaling server disabled")
-        print("    Fix: pip install flask-socketio  (needed for PeerJS video call signaling)")
-    if not _WEBRTC_AVAILABLE:
-        print("[ℹ] 'aiortc'/'socketio' not installed — Python-side WebRTC peer disabled")
-        print("    The browser-based PeerJS video call (/videocall/<room>) still works without this")
-        print("    Fix (optional): pip install aiortc python-socketio")
     try:
         import win32gui
     except ImportError:

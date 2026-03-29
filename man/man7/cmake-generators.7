@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "CMAKE-GENERATORS" "7" "Jan 26, 2026" "3.31.11" "CMake"
+.TH "CMAKE-GENERATORS" "7" "Mar 17, 2026" "4.3.0" "CMake"
 .SH NAME
 cmake-generators \- CMake Generators Reference
 .SH INTRODUCTION
@@ -40,10 +40,10 @@ as a variant of some of the \fI\%Command\-Line Build Tool Generators\fP to
 produce project files for an auxiliary IDE.
 .sp
 CMake Generators are platform\-specific so each may be available only
-on certain platforms.  The \X'tty: link #manual:cmake(1)'\fI\%cmake(1)\fP\X'tty: link' command\-line tool
-\X'tty: link #cmdoption-cmake-h'\fI\%\-\-help\fP\X'tty: link' output lists available generators on the
-current platform.  Use its \X'tty: link #cmdoption-cmake-G'\fI\%\-G\fP\X'tty: link' option to specify the
-generator for a new build tree. The \X'tty: link #manual:cmake-gui(1)'\fI\%cmake\-gui(1)\fP\X'tty: link' offers
+on certain platforms.  The \fI\%cmake(1)\fP command\-line tool
+\fI\%\-\-help\fP output lists available generators on the
+current platform.  Use its \fI\%\-G\fP option to specify the
+generator for a new build tree. The \fI\%cmake\-gui(1)\fP offers
 interactive selection of a generator when creating a new build tree.
 .SH CMAKE GENERATORS
 .SS Command\-Line Build Tool Generators
@@ -65,7 +65,7 @@ tool.  The generated makefiles use \fB/bin/sh\fP as the shell to launch build
 rules.  They are not compatible with a Windows command prompt.
 .sp
 To build under a Windows command prompt, use the
-\X'tty: link #generator:MinGW Makefiles'\fI\%MinGW Makefiles\fP\X'tty: link' generator.
+\fI\%MinGW Makefiles\fP generator.
 .SS MinGW Makefiles
 .sp
 Generates makefiles for use with \fBmingw32\-make\fP under a Windows command
@@ -77,7 +77,7 @@ and using \fBmingw32\-make\fP as the build tool.  The generated makefiles use
 \fBcmd.exe\fP as the shell to launch build rules.  They are not compatible with
 MSYS or a unix shell.
 .sp
-To build under the MSYS shell, use the \X'tty: link #generator:MSYS Makefiles'\fI\%MSYS Makefiles\fP\X'tty: link' generator.
+To build under the MSYS shell, use the \fI\%MSYS Makefiles\fP generator.
 .SS NMake Makefiles
 .sp
 Generates NMake makefiles.
@@ -85,7 +85,7 @@ Generates NMake makefiles.
 .sp
 Generates JOM makefiles.
 .sp
-Added in version 3.8: \X'tty: link #generator:CodeBlocks'\fI\%CodeBlocks\fP\X'tty: link' generator can be used as an extra generator.
+Added in version 3.8: \fI\%CodeBlocks\fP generator can be used as an extra generator.
 
 .SS Unix Makefiles
 .sp
@@ -132,7 +132,7 @@ Generates a \fBbuild.ninja\fP file into the build tree.
 .INDENT 0.0
 .INDENT 3.5
 Depends on all targets required by the project, except those with
-\X'tty: link #prop_tgt:EXCLUDE_FROM_ALL'\fI\%EXCLUDE_FROM_ALL\fP\X'tty: link' set to true.
+\fI\%EXCLUDE_FROM_ALL\fP set to true.
 .UNINDENT
 .UNINDENT
 .sp
@@ -157,7 +157,7 @@ removes symbols information from generated binaries.
 \fBinstall/parallel\fP
 .INDENT 0.0
 .INDENT 3.5
-Added in version 3.30: Created only if the \X'tty: link #prop_gbl:INSTALL_PARALLEL'\fI\%INSTALL_PARALLEL\fP\X'tty: link' global property is \fBON\fP\&.
+Added in version 3.30: Created only if the \fI\%INSTALL_PARALLEL\fP global property is \fBON\fP\&.
 Runs the install step for each subdirectory independently and in parallel.
 
 .UNINDENT
@@ -222,7 +222,7 @@ The Swift support is experimental, not considered stable, and may change
 in future releases of CMake.
 .SS See Also
 .sp
-Added in version 3.17: The \X'tty: link #generator:Ninja Multi-Config'\fI\%Ninja Multi\-Config\fP\X'tty: link' generator is similar to the \fBNinja\fP
+Added in version 3.17: The \fI\%Ninja Multi\-Config\fP generator is similar to the \fBNinja\fP
 generator, but generates multiple configurations at once.
 
 .SS Ninja Multi\-Config
@@ -232,23 +232,23 @@ Added in version 3.17.
 .sp
 Generates multiple \fBbuild\-<Config>.ninja\fP files.
 .sp
-This generator is very much like the \X'tty: link #generator:Ninja'\fI\%Ninja\fP\X'tty: link' generator, but with
+This generator is very much like the \fI\%Ninja\fP generator, but with
 some key differences. Only these differences will be discussed in this
 document.
 .sp
-Unlike the \X'tty: link #generator:Ninja'\fI\%Ninja\fP\X'tty: link' generator, \fBNinja Multi\-Config\fP generates
-multiple configurations at once with \X'tty: link #variable:CMAKE_CONFIGURATION_TYPES'\fI\%CMAKE_CONFIGURATION_TYPES\fP\X'tty: link'
-instead of only one configuration with \X'tty: link #variable:CMAKE_BUILD_TYPE'\fI\%CMAKE_BUILD_TYPE\fP\X'tty: link'\&. One
+Unlike the \fI\%Ninja\fP generator, \fBNinja Multi\-Config\fP generates
+multiple configurations at once with \fI\%CMAKE_CONFIGURATION_TYPES\fP
+instead of only one configuration with \fI\%CMAKE_BUILD_TYPE\fP\&. One
 \fBbuild\-<Config>.ninja\fP file will be generated for each of these
 configurations (with \fB<Config>\fP being the configuration name.) These files
 are intended to be run with \fBninja \-f build\-<Config>.ninja\fP\&. A
 \fBbuild.ninja\fP file is also generated, using the configuration from either
-\X'tty: link #variable:CMAKE_DEFAULT_BUILD_TYPE'\fI\%CMAKE_DEFAULT_BUILD_TYPE\fP\X'tty: link' or the first item from
-\X'tty: link #variable:CMAKE_CONFIGURATION_TYPES'\fI\%CMAKE_CONFIGURATION_TYPES\fP\X'tty: link'\&.
+\fI\%CMAKE_DEFAULT_BUILD_TYPE\fP or the first item from
+\fI\%CMAKE_CONFIGURATION_TYPES\fP\&.
 .sp
 \fBcmake \-\-build . \-\-config <Config>\fP will always use \fBbuild\-<Config>.ninja\fP
-to build. If no \X'tty: link #cmdoption-cmake-build-config'\fI\%\-\-config\fP\X'tty: link' argument is
-specified, \X'tty: link #cmdoption-cmake-build'\fI\%cmake \-\-build .\fP\X'tty: link' will use \fBbuild.ninja\fP\&.
+to build. If no \fI\%\-\-config\fP argument is
+specified, \fI\%cmake \-\-build .\fP will use \fBbuild.ninja\fP\&.
 .sp
 Each \fBbuild\-<Config>.ninja\fP file contains \fB<target>\fP targets as well as
 \fB<target>:<Config>\fP targets, where \fB<Config>\fP is the same as the
@@ -261,20 +261,20 @@ below for how to enable cross\-config mode.
 The \fBNinja Multi\-Config\fP generator recognizes the following variables:
 .INDENT 0.0
 .TP
-.B \X'tty: link #variable:CMAKE_CONFIGURATION_TYPES'\fI\%CMAKE_CONFIGURATION_TYPES\fP\X'tty: link'
+.B \fI\%CMAKE_CONFIGURATION_TYPES\fP
 Specifies the total set of configurations to build. Unlike with other
 multi\-config generators, this variable has a value of
 \fBDebug;Release;RelWithDebInfo\fP by default.
 .TP
-.B \X'tty: link #variable:CMAKE_CROSS_CONFIGS'\fI\%CMAKE_CROSS_CONFIGS\fP\X'tty: link'
-Specifies a \X'tty: link #cmake-language-lists'\fI\%semicolon\-separated list\fP\X'tty: link' of
+.B \fI\%CMAKE_CROSS_CONFIGS\fP
+Specifies a \fI\%semicolon\-separated list\fP of
 configurations available from all \fBbuild\-<Config>.ninja\fP files.
 .TP
-.B \X'tty: link #variable:CMAKE_DEFAULT_BUILD_TYPE'\fI\%CMAKE_DEFAULT_BUILD_TYPE\fP\X'tty: link'
+.B \fI\%CMAKE_DEFAULT_BUILD_TYPE\fP
 Specifies the configuration to use by default in a \fBbuild.ninja\fP file.
 .TP
-.B \X'tty: link #variable:CMAKE_DEFAULT_CONFIGS'\fI\%CMAKE_DEFAULT_CONFIGS\fP\X'tty: link'
-Specifies a \X'tty: link #cmake-language-lists'\fI\%semicolon\-separated list\fP\X'tty: link' of
+.B \fI\%CMAKE_DEFAULT_CONFIGS\fP
+Specifies a \fI\%semicolon\-separated list\fP of
 configurations to build for a target in \fBbuild.ninja\fP
 if no \fB:<Config>\fP suffix is specified.
 .UNINDENT
@@ -283,16 +283,14 @@ Consider the following example:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 cmake_minimum_required(VERSION 3.16)
 project(MultiConfigNinja C)
 
 add_executable(generator generator.c)
 add_custom_command(OUTPUT generated.c COMMAND generator generated.c)
 add_library(generated ${CMAKE_BINARY_DIR}/generated.c)
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -301,13 +299,11 @@ the following commands:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 ninja \-f build\-Debug.ninja generated
 # OR
 cmake \-\-build . \-\-config Debug \-\-target generated
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -315,18 +311,16 @@ This would build the \fBDebug\fP configuration of \fBgenerator\fP, which would b
 used to generate \fBgenerated.c\fP, which would be used to build the \fBDebug\fP
 configuration of \fBgenerated\fP\&.
 .sp
-But if \X'tty: link #variable:CMAKE_CROSS_CONFIGS'\fI\%CMAKE_CROSS_CONFIGS\fP\X'tty: link' is set to \fBall\fP, and you run the
+But if \fI\%CMAKE_CROSS_CONFIGS\fP is set to \fBall\fP, and you run the
 following instead:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 ninja \-f build\-Release.ninja generated:Debug
 # OR
 cmake \-\-build . \-\-config Release \-\-target generated:Debug
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -341,7 +335,7 @@ Added in version 3.20.
 
 .sp
 The \fBNinja Multi\-Config\fP generator adds extra capabilities to
-\X'tty: link #command:add_custom_command'\fI\%add_custom_command()\fP\X'tty: link' and \X'tty: link #command:add_custom_target'\fI\%add_custom_target()\fP\X'tty: link' through its
+\fI\%add_custom_command()\fP and \fI\%add_custom_target()\fP through its
 cross\-config mode. The \fBCOMMAND\fP, \fBDEPENDS\fP, and \fBWORKING_DIRECTORY\fP
 arguments can be evaluated in the context of either the \(dqcommand config\(dq (the
 \(dqnative\(dq configuration of the \fBbuild\-<Config>.ninja\fP file in use) or the
@@ -352,22 +346,21 @@ If either \fBOUTPUT\fP or \fBBYPRODUCTS\fP names a path that is common to
 more than one configuration (e.g. it does not use any generator expressions),
 all arguments are evaluated in the command config by default.
 If all \fBOUTPUT\fP and \fBBYPRODUCTS\fP paths are unique to each configuration
-(e.g. by using the \X'tty: link #genex:CONFIG'\fI\%$<CONFIG>\fP\X'tty: link' generator expression), the first argument of
+(e.g. by using the \fI\%$<CONFIG>\fP generator expression), the first argument of
 \fBCOMMAND\fP is still evaluated in the command config by default, while all
 subsequent arguments, as well as the arguments to \fBDEPENDS\fP and
 \fBWORKING_DIRECTORY\fP, are evaluated in the output config. These defaults can
-be overridden with the \X'tty: link #genex:OUTPUT_CONFIG'\fI\%$<OUTPUT_CONFIG:...>\fP\X'tty: link' and \X'tty: link #genex:COMMAND_CONFIG'\fI\%$<COMMAND_CONFIG:...>\fP\X'tty: link'
+be overridden with the \fI\%$<OUTPUT_CONFIG:...>\fP and \fI\%$<COMMAND_CONFIG:...>\fP
 generator\-expressions. Note that if a target is specified by its name in
 \fBDEPENDS\fP, or as the first argument of \fBCOMMAND\fP, it is always evaluated
-in the command config, even if it is wrapped in \X'tty: link #genex:OUTPUT_CONFIG'\fI\%$<OUTPUT_CONFIG:...>\fP\X'tty: link'
+in the command config, even if it is wrapped in \fI\%$<OUTPUT_CONFIG:...>\fP
 (because its plain name is not a generator expression).
 .sp
 As an example, consider the following:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 add_custom_command(
   OUTPUT \(dq$<CONFIG>.txt\(dq
   COMMAND
@@ -380,8 +373,7 @@ add_custom_command(
     \(dq$<OUTPUT_CONFIG:$<TARGET_FILE:tgt3>>\(dq
     \(dq$<COMMAND_CONFIG:$<TARGET_FILE:tgt4>>\(dq
   )
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -399,8 +391,7 @@ the \fBbuild\-Release.ninja\fP file) unless they have no \fBBYPRODUCTS\fP or the
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 add_executable(exe main.c)
 add_custom_command(
   TARGET exe
@@ -424,8 +415,7 @@ add_custom_command(
     \(dqRunning common\-byproduct command for $<CONFIG>\(dq
   BYPRODUCTS exe.txt
   )
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -433,6 +423,146 @@ In this example, if you build \fBexe:Debug\fP in \fBbuild\-Release.ninja\fP, the
 first and second custom commands get run, since their byproducts are unique
 per\-config, but the last custom command does not. However, if you build
 \fBexe:Release\fP in \fBbuild\-Release.ninja\fP, all three custom commands get run.
+.SS FASTBuild Generator
+.SS FASTBuild
+.sp
+Added in version 4.2.
+
+.sp
+Generates a \fBfbuild.bff\fP file, which can be used to build the project with
+\X'tty: link https://www.fastbuild.org/docs/home.html'\fI\%FASTBuild\fP\X'tty: link'\&.
+.SS Usage
+.sp
+Specify the generator when invoking \fI\%cmake(1)\fP:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+cmake [<options>] \-G FASTBuild \-B <path\-to\-build> [\-S <path\-to\-source>]
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+This writes a FASTBuild configuration file named \fBfbuild.bff\fP into
+\fB<path\-to\-build>\fP\&.
+.sp
+\fBNOTE:\fP
+.INDENT 0.0
+.INDENT 3.5
+This generator also produces IDE project files for Visual Studio and Xcode,
+which are placed under:
+.INDENT 0.0
+.IP \(bu 2
+\fB<path\-to\-build>/VisualStudio\fP – Visual Studio solution and projects
+.IP \(bu 2
+\fB<path\-to\-build>/XCode\fP – Xcode workspace and projects
+.UNINDENT
+.sp
+These IDE files can be generated by building \fBxcode\fP or \fBsolution\fP targets
+and will build using FASTBuild as the backend.
+.UNINDENT
+.UNINDENT
+.SS Caching
+.sp
+To enable FASTBuild caching, set the cache path using the
+\fI\%CMAKE_FASTBUILD_CACHE_PATH\fP variable or the
+\fBFASTBUILD_CACHE_PATH\fP environment variable.
+.sp
+Then build with the \fB\-cache\fP flag:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+cmake \-\-build <path\-to\-build> \-\- \-cache
+.EE
+.UNINDENT
+.UNINDENT
+.SS Compiler Behavior Variables
+.sp
+The following variables control how compiler nodes are emitted in the generated
+\fBfbuild.bff\fP\&. These settings may affect build determinism, debug info paths,
+include handling, and compiler argument formatting:
+.INDENT 0.0
+.IP \(bu 2
+\fI\%CMAKE_FASTBUILD_ALLOW_RESPONSE_FILE\fP
+.IP \(bu 2
+\fI\%CMAKE_FASTBUILD_CLANG_GCC_UPDATE_XLANG_ARG\fP
+.IP \(bu 2
+\fI\%CMAKE_FASTBUILD_CLANG_REWRITE_INCLUDES\fP
+.IP \(bu 2
+\fI\%CMAKE_FASTBUILD_COMPILER_EXTRA_FILES\fP
+.IP \(bu 2
+\fI\%CMAKE_FASTBUILD_FORCE_RESPONSE_FILE\fP
+.IP \(bu 2
+\fI\%CMAKE_FASTBUILD_SOURCE_MAPPING\fP
+.IP \(bu 2
+\fI\%CMAKE_FASTBUILD_USE_DETERMINISTIC_PATHS\fP
+.IP \(bu 2
+\fI\%CMAKE_FASTBUILD_USE_LIGHTCACHE\fP
+.IP \(bu 2
+\fI\%CMAKE_FASTBUILD_USE_RELATIVE_PATHS\fP
+.UNINDENT
+.SS Configuration Variables
+.sp
+The following variables can be used to configure this generator:
+.INDENT 0.0
+.IP \(bu 2
+\fI\%CMAKE_FASTBUILD_CACHE_PATH\fP
+.IP \(bu 2
+\fI\%CMAKE_FASTBUILD_CAPTURE_SYSTEM_ENV\fP
+.IP \(bu 2
+\fI\%CMAKE_FASTBUILD_ENV_OVERRIDES\fP
+.IP \(bu 2
+\fI\%CMAKE_FASTBUILD_IDE_ARGS\fP
+.IP \(bu 2
+\fI\%CMAKE_FASTBUILD_TRACK_BYPRODUCTS_AS_OUTPUT\fP
+.IP \(bu 2
+\fI\%CMAKE_FASTBUILD_VERBOSE_GENERATOR\fP
+.UNINDENT
+.SS Target Properties
+.sp
+The following target properties can be used to fine\-tune behavior on a
+per\-target basis:
+.INDENT 0.0
+.IP \(bu 2
+\fI\%FASTBUILD_CACHING\fP –
+disables caching for a specific target.
+.IP \(bu 2
+\fI\%FASTBUILD_DISTRIBUTION\fP –
+disables distributed compilation for a specific target.
+.UNINDENT
+.SS Notes
+.INDENT 0.0
+.IP \(bu 2
+This generator does not support directories as outputs of custom commands.
+If you do specify a directory as an output, it should be marked with the
+\fBSYMBOLIC\fP property to avoid incorrect behavior.
+.IP \(bu 2
+It is highly advised to use custom commands with only one output.
+If multiple outputs are specified, the generator will emit an additional
+rule to check the outputs at build time. This adds overhead and is necessary
+because FASTBuild natively supports only a single output per custom step.
+.UNINDENT
+.SS Example
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+cmake [<options>] \-G FASTBuild \-B <path\-to\-build> \-DCMAKE_BUILD_TYPE=Release
+cmake \-\-build <path\-to\-build> \-\-target my_app
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+This generates \fBfbuild.bff\fP in \fB<path\-to\-build>\fP and uses FASTBuild
+to build the \fBmy_app\fP target.
+.SS See Also
+.INDENT 0.0
+.IP \(bu 2
+\fI\%cmake\-generators(7)\fP
+.IP \(bu 2
+\X'tty: link https://www.fastbuild.org/docs/documentation.html'\fI\%FASTBuild Documentation\fP\X'tty: link'
+.UNINDENT
 .SS IDE Build Tool Generators
 .sp
 These generators support Integrated Development Environment (IDE)
@@ -443,55 +573,62 @@ one may launch CMake from any environment.
 .sp
 Removed.  This once generated Visual Studio 6 project files, but the
 generator has been removed since CMake 3.6.  It is still possible to
-build with VS 6 tools using the \X'tty: link #generator:NMake Makefiles'\fI\%NMake Makefiles\fP\X'tty: link' generator.
+build with VS 6 tools using the \fI\%NMake Makefiles\fP generator.
 .SS Visual Studio 7
 .sp
 Removed.  This once generated Visual Studio .NET 2002 project files, but
 the generator has been removed since CMake 3.6.  It is still possible to
-build with VS 7.0 tools using the \X'tty: link #generator:NMake Makefiles'\fI\%NMake Makefiles\fP\X'tty: link' generator.
+build with VS 7.0 tools using the \fI\%NMake Makefiles\fP generator.
 .SS Visual Studio 7 .NET 2003
 .sp
 Removed.  This once generated Visual Studio .NET 2003 project files, but
 the generator has been removed since CMake 3.9.  It is still possible to
-build with VS 7.1 tools using the \X'tty: link #generator:NMake Makefiles'\fI\%NMake Makefiles\fP\X'tty: link' generator.
+build with VS 7.1 tools using the \fI\%NMake Makefiles\fP generator.
 .SS Visual Studio 8 2005
 .sp
 Removed.  This once generated Visual Studio 8 2005 project files, but
 the generator has been removed since CMake 3.12.  It is still possible to
-build with VS 2005 tools using the \X'tty: link #generator:NMake Makefiles'\fI\%NMake Makefiles\fP\X'tty: link' generator.
+build with VS 2005 tools using the \fI\%NMake Makefiles\fP generator.
 .SS Visual Studio 9 2008
 .sp
 Removed.  This once generated Visual Studio 9 2008 project files, but
 the generator has been removed since CMake 3.30.  It is still possible
 to build with the VS 9 2008 toolset by also installing VS 10 2010 and
-VS 2015 (or above) and using the \X'tty: link #generator:Visual Studio 14 2015'\fI\%Visual Studio 14 2015\fP\X'tty: link'
-generator (or above) with \X'tty: link #variable:CMAKE_GENERATOR_TOOLSET'\fI\%CMAKE_GENERATOR_TOOLSET\fP\X'tty: link' set to \fBv90\fP,
-or by using the \X'tty: link #generator:NMake Makefiles'\fI\%NMake Makefiles\fP\X'tty: link' generator.
+VS 2017 (or above) and using the \fI\%Visual Studio 15 2017\fP
+generator (or above) with \fI\%CMAKE_GENERATOR_TOOLSET\fP set to \fBv90\fP,
+or by using the \fI\%NMake Makefiles\fP generator.
 .SS Visual Studio 10 2010
 .sp
 Removed.  This once generated Visual Studio 10 2010 project files, but
 the generator has been removed since CMake 3.25.  It is still possible
-to build with the VS 10 2010 toolset by also installing VS 2015 (or above)
-and using the \X'tty: link #generator:Visual Studio 14 2015'\fI\%Visual Studio 14 2015\fP\X'tty: link' (or above) generator with
-\X'tty: link #variable:CMAKE_GENERATOR_TOOLSET'\fI\%CMAKE_GENERATOR_TOOLSET\fP\X'tty: link' set to \fBv100\fP,
-or by using the \X'tty: link #generator:NMake Makefiles'\fI\%NMake Makefiles\fP\X'tty: link' generator.
+to build with the VS 10 2010 toolset by also installing VS 2017 (or above)
+and using the \fI\%Visual Studio 15 2017\fP (or above) generator with
+\fI\%CMAKE_GENERATOR_TOOLSET\fP set to \fBv100\fP,
+or by using the \fI\%NMake Makefiles\fP generator.
 .SS Visual Studio 11 2012
 .sp
 Removed.  This once generated Visual Studio 11 2012 project files, but
 the generator has been removed since CMake 3.28.  It is still possible
-to build with the VS 11 2012 toolset by also installing VS 2015 (or above)
-and using the \X'tty: link #generator:Visual Studio 14 2015'\fI\%Visual Studio 14 2015\fP\X'tty: link' (or above) generator with
-\X'tty: link #variable:CMAKE_GENERATOR_TOOLSET'\fI\%CMAKE_GENERATOR_TOOLSET\fP\X'tty: link' set to \fBv110\fP,
-or by using the \X'tty: link #generator:NMake Makefiles'\fI\%NMake Makefiles\fP\X'tty: link' generator.
+to build with the VS 11 2012 toolset by also installing VS 2017 (or above)
+and using the \fI\%Visual Studio 15 2017\fP (or above) generator with
+\fI\%CMAKE_GENERATOR_TOOLSET\fP set to \fBv110\fP,
+or by using the \fI\%NMake Makefiles\fP generator.
 .SS Visual Studio 12 2013
 .sp
 Removed.  This once generated Visual Studio 12 2013 project files, but
 the generator has been removed since CMake 3.31.  It is still possible
-to build with the VS 12 2013 toolset by also installing VS 2015 (or above)
-and using the \X'tty: link #generator:Visual Studio 14 2015'\fI\%Visual Studio 14 2015\fP\X'tty: link' (or above) generator with
-\X'tty: link #variable:CMAKE_GENERATOR_TOOLSET'\fI\%CMAKE_GENERATOR_TOOLSET\fP\X'tty: link' set to \fBv120\fP,
-or by using the \X'tty: link #generator:NMake Makefiles'\fI\%NMake Makefiles\fP\X'tty: link' generator.
+to build with the VS 12 2013 toolset by also installing VS 2017 (or above)
+and using the \fI\%Visual Studio 15 2017\fP (or above) generator with
+\fI\%CMAKE_GENERATOR_TOOLSET\fP set to \fBv120\fP,
+or by using the \fI\%NMake Makefiles\fP generator.
 .SS Visual Studio 14 2015
+.sp
+Deprecated since version 4.2: This generator is deprecated and will be removed in a future version
+of CMake.  It will still be possible to build with VS 14 2015 tools
+using the \fI\%Visual Studio 15 2017\fP (or above) generator
+with \fI\%CMAKE_GENERATOR_TOOLSET\fP set to \fBv140\fP, or by
+using the \fI\%NMake Makefiles\fP generator.
+
 .sp
 Added in version 3.1.
 
@@ -506,8 +643,8 @@ Powershell, Python, etc.) are not supported.
 .sp
 The default target platform name (architecture) is \fBWin32\fP\&.
 .sp
-The \X'tty: link #variable:CMAKE_GENERATOR_PLATFORM'\fI\%CMAKE_GENERATOR_PLATFORM\fP\X'tty: link' variable may be set, perhaps
-via the \X'tty: link #cmdoption-cmake-A'\fI\%cmake \-A\fP\X'tty: link' option, to specify a target platform
+The \fI\%CMAKE_GENERATOR_PLATFORM\fP variable may be set, perhaps
+via the \fI\%cmake \-A\fP option, to specify a target platform
 name (architecture).  For example:
 .INDENT 0.0
 .IP \(bu 2
@@ -518,9 +655,10 @@ name (architecture).  For example:
 \fBcmake \-G \(dqVisual Studio 14 2015\(dq \-A ARM\fP
 .UNINDENT
 .sp
-For compatibility with CMake versions prior to 3.1, one may specify
-a target platform name optionally at the end of the generator name.
-This is supported only for:
+Changed in version 4.0: Previously, for compatibility with CMake versions prior to 3.1,
+one could specify a target platform name optionally at the
+end of the generator name.  This has been removed.
+This was supported only for:
 .INDENT 0.0
 .TP
 .B \fBVisual Studio 14 2015 Win64\fP
@@ -529,11 +667,12 @@ Specify target platform \fBx64\fP\&.
 .B \fBVisual Studio 14 2015 ARM\fP
 Specify target platform \fBARM\fP\&.
 .UNINDENT
+
 .SS Toolset Selection
 .sp
 The \fBv140\fP toolset that comes with Visual Studio 14 2015 is selected by
-default.  The \X'tty: link #variable:CMAKE_GENERATOR_TOOLSET'\fI\%CMAKE_GENERATOR_TOOLSET\fP\X'tty: link' option may be set, perhaps
-via the \X'tty: link #cmdoption-cmake-T'\fI\%cmake \-T\fP\X'tty: link' option, to specify another toolset.
+default.  The \fI\%CMAKE_GENERATOR_TOOLSET\fP option may be set, perhaps
+via the \fI\%cmake \-T\fP option, to specify another toolset.
 .sp
 Added in version 3.8: For each toolset that comes with this version of Visual Studio, there are
 variants that are themselves compiled for 32\-bit (\fBx86\fP) and
@@ -541,7 +680,7 @@ variants that are themselves compiled for 32\-bit (\fBx86\fP) and
 By default this generator uses the 32\-bit variant even on a 64\-bit host.
 One may explicitly request use of either the 32\-bit or 64\-bit host tools
 by adding either \fBhost=x86\fP or \fBhost=x64\fP to the toolset specification.
-See the \X'tty: link #variable:CMAKE_GENERATOR_TOOLSET'\fI\%CMAKE_GENERATOR_TOOLSET\fP\X'tty: link' variable for details.
+See the \fI\%CMAKE_GENERATOR_TOOLSET\fP variable for details.
 
 .sp
 Added in version 3.14: Added support for \fBhost=x86\fP option.
@@ -558,8 +697,8 @@ automatically ignores Windows 10 SDKs beyond \fB10.0.14393.0\fP\&.
 .sp
 However, there are other recommendations for certain driver/Win32 builds that
 indicate otherwise.  A user can override this behavior by either setting the
-\X'tty: link #variable:CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION_MAXIMUM'\fI\%CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION_MAXIMUM\fP\X'tty: link' to a false value
-or setting the \X'tty: link #variable:CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION_MAXIMUM'\fI\%CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION_MAXIMUM\fP\X'tty: link' to
+\fI\%CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION_MAXIMUM\fP to a false value
+or setting the \fI\%CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION_MAXIMUM\fP to
 the string value of the required maximum (e.g. \fB10.0.15063.0\fP).
 .SS Visual Studio 15 2017
 .sp
@@ -578,13 +717,13 @@ Added in version 3.11.
 
 .sp
 VS 2017 supports multiple installations on the same machine.  The
-\X'tty: link #variable:CMAKE_GENERATOR_INSTANCE'\fI\%CMAKE_GENERATOR_INSTANCE\fP\X'tty: link' variable may be used to select one.
+\fI\%CMAKE_GENERATOR_INSTANCE\fP variable may be used to select one.
 .SS Platform Selection
 .sp
 The default target platform name (architecture) is \fBWin32\fP\&.
 .sp
-The \X'tty: link #variable:CMAKE_GENERATOR_PLATFORM'\fI\%CMAKE_GENERATOR_PLATFORM\fP\X'tty: link' variable may be set, perhaps
-via the \X'tty: link #cmdoption-cmake-A'\fI\%cmake \-A\fP\X'tty: link' option, to specify a target platform
+The \fI\%CMAKE_GENERATOR_PLATFORM\fP variable may be set, perhaps
+via the \fI\%cmake \-A\fP option, to specify a target platform
 name (architecture).  For example:
 .INDENT 0.0
 .IP \(bu 2
@@ -597,9 +736,10 @@ name (architecture).  For example:
 \fBcmake \-G \(dqVisual Studio 15 2017\(dq \-A ARM64\fP
 .UNINDENT
 .sp
-For compatibility with CMake versions prior to 3.1, one may specify
-a target platform name optionally at the end of the generator name.
-This is supported only for:
+Changed in version 4.0: Previously, for compatibility with CMake versions prior to 3.1,
+one could specify a target platform name optionally at the
+end of the generator name.  This has been removed.
+This was supported only for:
 .INDENT 0.0
 .TP
 .B \fBVisual Studio 15 2017 Win64\fP
@@ -608,11 +748,12 @@ Specify target platform \fBx64\fP\&.
 .B \fBVisual Studio 15 2017 ARM\fP
 Specify target platform \fBARM\fP\&.
 .UNINDENT
+
 .SS Toolset Selection
 .sp
 The \fBv141\fP toolset that comes with Visual Studio 15 2017 is selected by
-default.  The \X'tty: link #variable:CMAKE_GENERATOR_TOOLSET'\fI\%CMAKE_GENERATOR_TOOLSET\fP\X'tty: link' option may be set, perhaps
-via the \X'tty: link #cmdoption-cmake-T'\fI\%cmake \-T\fP\X'tty: link' option, to specify another toolset.
+default.  The \fI\%CMAKE_GENERATOR_TOOLSET\fP option may be set, perhaps
+via the \fI\%cmake \-T\fP option, to specify another toolset.
 .sp
 Added in version 3.8: For each toolset that comes with this version of Visual Studio, there are
 variants that are themselves compiled for 32\-bit (\fBx86\fP) and
@@ -620,7 +761,7 @@ variants that are themselves compiled for 32\-bit (\fBx86\fP) and
 By default this generator uses the 32\-bit variant even on a 64\-bit host.
 One may explicitly request use of either the 32\-bit or 64\-bit host tools
 by adding either \fBhost=x86\fP or \fBhost=x64\fP to the toolset specification.
-See the \X'tty: link #variable:CMAKE_GENERATOR_TOOLSET'\fI\%CMAKE_GENERATOR_TOOLSET\fP\X'tty: link' variable for details.
+See the \fI\%CMAKE_GENERATOR_TOOLSET\fP variable for details.
 
 .sp
 Added in version 3.14: Added support for \fBhost=x86\fP option.
@@ -639,14 +780,14 @@ Powershell, Python, etc.) are not supported.
 .SS Instance Selection
 .sp
 VS 2019 supports multiple installations on the same machine.  The
-\X'tty: link #variable:CMAKE_GENERATOR_INSTANCE'\fI\%CMAKE_GENERATOR_INSTANCE\fP\X'tty: link' variable may be used to select one.
+\fI\%CMAKE_GENERATOR_INSTANCE\fP variable may be used to select one.
 .SS Platform Selection
 .sp
 The default target platform name (architecture) is that of the host
-and is provided in the \X'tty: link #variable:CMAKE_VS_PLATFORM_NAME_DEFAULT'\fI\%CMAKE_VS_PLATFORM_NAME_DEFAULT\fP\X'tty: link' variable.
+and is provided in the \fI\%CMAKE_VS_PLATFORM_NAME_DEFAULT\fP variable.
 .sp
-The \X'tty: link #variable:CMAKE_GENERATOR_PLATFORM'\fI\%CMAKE_GENERATOR_PLATFORM\fP\X'tty: link' variable may be set, perhaps
-via the \X'tty: link #cmdoption-cmake-A'\fI\%cmake \-A\fP\X'tty: link' option, to specify a target platform
+The \fI\%CMAKE_GENERATOR_PLATFORM\fP variable may be set, perhaps
+via the \fI\%cmake \-A\fP option, to specify a target platform
 name (architecture).  For example:
 .INDENT 0.0
 .IP \(bu 2
@@ -661,8 +802,8 @@ name (architecture).  For example:
 .SS Toolset Selection
 .sp
 The \fBv142\fP toolset that comes with Visual Studio 16 2019 is selected by
-default.  The \X'tty: link #variable:CMAKE_GENERATOR_TOOLSET'\fI\%CMAKE_GENERATOR_TOOLSET\fP\X'tty: link' option may be set, perhaps
-via the \X'tty: link #cmdoption-cmake-T'\fI\%cmake \-T\fP\X'tty: link' option, to specify another toolset.
+default.  The \fI\%CMAKE_GENERATOR_TOOLSET\fP option may be set, perhaps
+via the \fI\%cmake \-T\fP option, to specify another toolset.
 .sp
 For each toolset that comes with this version of Visual Studio, there are
 variants that are themselves compiled for 32\-bit (\fBx86\fP) and
@@ -671,7 +812,7 @@ By default this generator uses the 64\-bit variant on x64 hosts and
 the 32\-bit variant otherwise.
 One may explicitly request use of either the 32\-bit or 64\-bit host tools
 by adding either \fBhost=x86\fP or \fBhost=x64\fP to the toolset specification.
-See the \X'tty: link #variable:CMAKE_GENERATOR_TOOLSET'\fI\%CMAKE_GENERATOR_TOOLSET\fP\X'tty: link' variable for details.
+See the \fI\%CMAKE_GENERATOR_TOOLSET\fP variable for details.
 .SS Visual Studio 17 2022
 .sp
 Added in version 3.21.
@@ -686,14 +827,14 @@ Powershell, Python, etc.) are not supported.
 .SS Instance Selection
 .sp
 VS 2022 supports multiple installations on the same machine.  The
-\X'tty: link #variable:CMAKE_GENERATOR_INSTANCE'\fI\%CMAKE_GENERATOR_INSTANCE\fP\X'tty: link' variable may be used to select one.
+\fI\%CMAKE_GENERATOR_INSTANCE\fP variable may be used to select one.
 .SS Platform Selection
 .sp
 The default target platform name (architecture) is that of the host
-and is provided in the \X'tty: link #variable:CMAKE_VS_PLATFORM_NAME_DEFAULT'\fI\%CMAKE_VS_PLATFORM_NAME_DEFAULT\fP\X'tty: link' variable.
+and is provided in the \fI\%CMAKE_VS_PLATFORM_NAME_DEFAULT\fP variable.
 .sp
-The \X'tty: link #variable:CMAKE_GENERATOR_PLATFORM'\fI\%CMAKE_GENERATOR_PLATFORM\fP\X'tty: link' variable may be set, perhaps
-via the \X'tty: link #cmdoption-cmake-A'\fI\%cmake \-A\fP\X'tty: link' option, to specify a target platform
+The \fI\%CMAKE_GENERATOR_PLATFORM\fP variable may be set, perhaps
+via the \fI\%cmake \-A\fP option, to specify a target platform
 name (architecture).  For example:
 .INDENT 0.0
 .IP \(bu 2
@@ -708,8 +849,8 @@ name (architecture).  For example:
 .SS Toolset Selection
 .sp
 The \fBv143\fP toolset that comes with VS 17 2022 is selected by default.
-The \X'tty: link #variable:CMAKE_GENERATOR_TOOLSET'\fI\%CMAKE_GENERATOR_TOOLSET\fP\X'tty: link' option may be set, perhaps
-via the \X'tty: link #cmdoption-cmake-T'\fI\%cmake \-T\fP\X'tty: link' option, to specify another toolset.
+The \fI\%CMAKE_GENERATOR_TOOLSET\fP option may be set, perhaps
+via the \fI\%cmake \-T\fP option, to specify another toolset.
 .sp
 For each toolset that comes with this version of Visual Studio, there are
 variants that are themselves compiled for 32\-bit (\fBx86\fP) and
@@ -718,7 +859,54 @@ By default this generator uses the 64\-bit variant on x64 hosts and
 the 32\-bit variant otherwise.
 One may explicitly request use of either the 32\-bit or 64\-bit host tools
 by adding either \fBhost=x86\fP or \fBhost=x64\fP to the toolset specification.
-See the \X'tty: link #variable:CMAKE_GENERATOR_TOOLSET'\fI\%CMAKE_GENERATOR_TOOLSET\fP\X'tty: link' variable for details.
+See the \fI\%CMAKE_GENERATOR_TOOLSET\fP variable for details.
+.SS Visual Studio 18 2026
+.sp
+Added in version 4.2.
+
+.sp
+Generates Visual Studio 18 (VS 2026) project files.
+.SS Project Types
+.sp
+Only Visual C++ and C# projects may be generated (and Fortran with
+Intel compiler integration).  Other types of projects (JavaScript,
+Powershell, Python, etc.) are not supported.
+.SS Instance Selection
+.sp
+VS 2026 supports multiple installations on the same machine.  The
+\fI\%CMAKE_GENERATOR_INSTANCE\fP variable may be used to select one.
+.SS Platform Selection
+.sp
+The default target platform name (architecture) is that of the host
+and is provided in the \fI\%CMAKE_VS_PLATFORM_NAME_DEFAULT\fP variable.
+.sp
+The \fI\%CMAKE_GENERATOR_PLATFORM\fP variable may be set, perhaps
+via the \fI\%cmake \-A\fP option, to specify a target platform
+name (architecture).  For example:
+.INDENT 0.0
+.IP \(bu 2
+\fBcmake \-G \(dqVisual Studio 18 2026\(dq \-A Win32\fP
+.IP \(bu 2
+\fBcmake \-G \(dqVisual Studio 18 2026\(dq \-A x64\fP
+.IP \(bu 2
+\fBcmake \-G \(dqVisual Studio 18 2026\(dq \-A ARM\fP
+.IP \(bu 2
+\fBcmake \-G \(dqVisual Studio 18 2026\(dq \-A ARM64\fP
+.UNINDENT
+.SS Toolset Selection
+.sp
+The \fBv145\fP toolset that comes with VS 18 2026 is selected by default.
+The \fI\%CMAKE_GENERATOR_TOOLSET\fP option may be set, perhaps
+via the \fI\%cmake \-T\fP option, to specify another toolset.
+.sp
+For each toolset that comes with this version of Visual Studio, there are
+variants that are themselves compiled for 32\-bit (\fBx86\fP) and
+64\-bit (\fBx64\fP) hosts (independent of the architecture they target).
+By default this generator uses the 64\-bit variant on x64 hosts and
+the 32\-bit variant otherwise.
+One may explicitly request use of either the 32\-bit or 64\-bit host tools
+by adding either \fBhost=x86\fP or \fBhost=x64\fP to the toolset specification.
+See the \fI\%CMAKE_GENERATOR_TOOLSET\fP variable for details.
 .SS Other Generators
 .SS Green Hills MULTI
 .sp
@@ -732,7 +920,7 @@ Generates Green Hills MULTI project files (experimental, work\-in\-progress).
 .INDENT 0.0
 .INDENT 3.5
 The buildsystem has predetermined build\-configuration settings that can be controlled
-via the \X'tty: link #variable:CMAKE_BUILD_TYPE'\fI\%CMAKE_BUILD_TYPE\fP\X'tty: link' variable.
+via the \fI\%CMAKE_BUILD_TYPE\fP variable.
 .UNINDENT
 .UNINDENT
 .SS Platform Selection
@@ -756,18 +944,18 @@ For example:
 \fBcmake \-G \(dqGreen Hills MULTI\(dq \-D GHS_PRIMARY_TARGET=ppc_integrity.tgt\fP
 .UNINDENT
 .sp
-Otherwise the \fBprimaryTarget\fP will be composed from the values of \X'tty: link #variable:CMAKE_GENERATOR_PLATFORM'\fI\%CMAKE_GENERATOR_PLATFORM\fP\X'tty: link'
+Otherwise the \fBprimaryTarget\fP will be composed from the values of \fI\%CMAKE_GENERATOR_PLATFORM\fP
 and \fBGHS_TARGET_PLATFORM\fP\&. Defaulting to the value of \fBarm_integrity.tgt\fP
 .INDENT 0.0
 .IP \(bu 2
-The \X'tty: link #variable:CMAKE_GENERATOR_PLATFORM'\fI\%CMAKE_GENERATOR_PLATFORM\fP\X'tty: link' variable may be set, perhaps
-via the \X'tty: link #cmdoption-cmake-A'\fI\%cmake \-A\fP\X'tty: link' option.
+The \fI\%CMAKE_GENERATOR_PLATFORM\fP variable may be set, perhaps
+via the \fI\%cmake \-A\fP option.
 .nf
 Typical values of \fBarm\fP, \fBppc\fP, \fB86\fP, etcetera, are used.
 .fi
 .sp
 .IP \(bu 2
-The variable \fBGHS_TARGET_PLATFORM\fP may be set, perhaps via the \X'tty: link #cmdoption-cmake-D'\fI\%cmake \-D\fP\X'tty: link'
+The variable \fBGHS_TARGET_PLATFORM\fP may be set, perhaps via the \fI\%cmake \-D\fP
 option.
 .nf
 Defaults to \fBintegrity\fP\&.
@@ -797,11 +985,11 @@ The generator searches for the latest compiler or can be given a location to use
 \fBGHS_TOOLSET_ROOT\fP is the directory that is checked for the latest compiler.
 .INDENT 0.0
 .IP \(bu 2
-The \X'tty: link #variable:CMAKE_GENERATOR_TOOLSET'\fI\%CMAKE_GENERATOR_TOOLSET\fP\X'tty: link' option may be set, perhaps
-via the \X'tty: link #cmdoption-cmake-T'\fI\%cmake \-T\fP\X'tty: link' option, to specify the location of the toolset.
+The \fI\%CMAKE_GENERATOR_TOOLSET\fP option may be set, perhaps
+via the \fI\%cmake \-T\fP option, to specify the location of the toolset.
 Both absolute and relative paths are valid. Paths are relative to \fBGHS_TOOLSET_ROOT\fP\&.
 .IP \(bu 2
-The variable \fBGHS_TOOLSET_ROOT\fP may be set, perhaps via the \X'tty: link #cmdoption-cmake-D'\fI\%cmake \-D\fP\X'tty: link'
+The variable \fBGHS_TOOLSET_ROOT\fP may be set, perhaps via the \fI\%cmake \-D\fP
 option.
 .nf
 Root path for toolset searches and relative paths.
@@ -833,7 +1021,7 @@ For example, searching for latest compiler:
 \fBNOTE:\fP
 .INDENT 0.0
 .INDENT 3.5
-The \X'tty: link #variable:CMAKE_GENERATOR_TOOLSET'\fI\%CMAKE_GENERATOR_TOOLSET\fP\X'tty: link' should use CMake style paths.
+The \fI\%CMAKE_GENERATOR_TOOLSET\fP should use CMake style paths.
 .UNINDENT
 .UNINDENT
 .SS OS and BSP Selection
@@ -910,9 +1098,9 @@ Added in version 3.14.
 The following properties are available:
 .INDENT 0.0
 .IP \(bu 2
-\X'tty: link #prop_tgt:GHS_INTEGRITY_APP'\fI\%GHS_INTEGRITY_APP\fP\X'tty: link'
+\fI\%GHS_INTEGRITY_APP\fP
 .IP \(bu 2
-\X'tty: link #prop_tgt:GHS_NO_SOURCE_GROUP_FILE'\fI\%GHS_NO_SOURCE_GROUP_FILE\fP\X'tty: link'
+\fI\%GHS_NO_SOURCE_GROUP_FILE\fP
 .UNINDENT
 .SS MULTI Project Variables
 .sp
@@ -931,7 +1119,7 @@ variables:
 \fBNOTE:\fP
 .INDENT 0.0
 .INDENT 3.5
-This generator is deemed experimental as of CMake 3.31.11
+This generator is deemed experimental as of CMake 4.3.0
 and is still a work in progress.  Future versions of CMake
 may make breaking changes as the generator matures.
 .UNINDENT
@@ -945,8 +1133,8 @@ Changed in version 3.15: This generator supports Xcode 5.0 and above.
 .SS Toolset and Build System Selection
 .sp
 By default Xcode is allowed to select its own default toolchain.
-The \X'tty: link #variable:CMAKE_GENERATOR_TOOLSET'\fI\%CMAKE_GENERATOR_TOOLSET\fP\X'tty: link' option may be set, perhaps
-via the \X'tty: link #cmdoption-cmake-T'\fI\%cmake \-T\fP\X'tty: link' option, to specify another toolset.
+The \fI\%CMAKE_GENERATOR_TOOLSET\fP option may be set, perhaps
+via the \fI\%cmake \-T\fP option, to specify another toolset.
 .sp
 Added in version 3.19: This generator supports toolset specification using one of these forms:
 
@@ -960,7 +1148,7 @@ Added in version 3.19: This generator supports toolset specification using one o
 .UNINDENT
 .sp
 The \fBtoolset\fP specifies the toolset name.  The selected toolset name
-is provided in the \X'tty: link #variable:CMAKE_XCODE_PLATFORM_TOOLSET'\fI\%CMAKE_XCODE_PLATFORM_TOOLSET\fP\X'tty: link' variable.
+is provided in the \fI\%CMAKE_XCODE_PLATFORM_TOOLSET\fP variable.
 .sp
 The \fBkey=value\fP pairs form a comma\-separated list of options to
 specify generator\-specific details of the toolset selection.
@@ -969,10 +1157,10 @@ Supported pairs are:
 .TP
 .B \fBbuildsystem=<variant>\fP
 Specify the buildsystem variant to use.
-See the \X'tty: link #variable:CMAKE_XCODE_BUILD_SYSTEM'\fI\%CMAKE_XCODE_BUILD_SYSTEM\fP\X'tty: link' variable for allowed values.
+See the \fI\%CMAKE_XCODE_BUILD_SYSTEM\fP variable for allowed values.
 .sp
 For example, to select the original build system under Xcode 12,
-run \X'tty: link #manual:cmake(1)'\fI\%cmake(1)\fP\X'tty: link' with the option \X'tty: link #cmdoption-cmake-T'\fI\%\-T buildsystem=1\fP\X'tty: link'\&.
+run \fI\%cmake(1)\fP with the option \fI\%\-T buildsystem=1\fP\&.
 .UNINDENT
 .SS Swift Support
 .sp
@@ -980,8 +1168,8 @@ Added in version 3.4.
 
 .sp
 When using the \fBXcode\fP generator with Xcode 6.1 or higher,
-one may enable the \fBSwift\fP language with the \X'tty: link #command:enable_language'\fI\%enable_language()\fP\X'tty: link'
-command or the \X'tty: link #command:project'\fI\%project()\fP\X'tty: link'\&.
+one may enable the \fBSwift\fP language with the \fI\%enable_language()\fP
+command or the \fI\%project()\fP\&.
 .SS Limitations
 .sp
 The Xcode generator does not support per\-configuration sources.
@@ -989,29 +1177,27 @@ Code like the following will result in a generation error:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 add_executable(MyApp mymain\-$<CONFIG>.cpp)
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .SH EXTRA GENERATORS
 .sp
 Deprecated since version 3.27: Support for \(dqExtra Generators\(dq is deprecated and will be removed from
-a future version of CMake.  IDEs may use the \X'tty: link #manual:cmake-file-api(7)'\fI\%cmake\-file\-api(7)\fP\X'tty: link'
+a future version of CMake.  IDEs may use the \fI\%cmake\-file\-api(7)\fP
 to view CMake\-generated project build trees.
 
 .sp
-Some of the \fI\%CMake Generators\fP listed in the \X'tty: link #manual:cmake(1)'\fI\%cmake(1)\fP\X'tty: link'
-command\-line tool \X'tty: link #cmdoption-cmake-h'\fI\%\-\-help\fP\X'tty: link' output may have
+Some of the \fI\%CMake Generators\fP listed in the \fI\%cmake(1)\fP
+command\-line tool \fI\%\-\-help\fP output may have
 variants that specify an extra generator for an auxiliary IDE tool.
 Such generator names have the form \fB<extra\-generator> \- <main\-generator>\fP\&.
 The following extra generators are known to CMake.
 .SS CodeBlocks
 .sp
-Deprecated since version 3.27: Support for \X'tty: link #extra-generators'\fI\%Extra Generators\fP\X'tty: link' is deprecated and will be removed from
-a future version of CMake.  IDEs may use the \X'tty: link #manual:cmake-file-api(7)'\fI\%cmake\-file\-api(7)\fP\X'tty: link'
+Deprecated since version 3.27: Support for \fI\%Extra Generators\fP is deprecated and will be removed from
+a future version of CMake.  IDEs may use the \fI\%cmake\-file\-api(7)\fP
 to view CMake\-generated project build trees.
 
 .sp
@@ -1019,13 +1205,13 @@ Generates CodeBlocks project files.
 .sp
 Project files for CodeBlocks will be created in the top directory and
 in every subdirectory which features a \fBCMakeLists.txt\fP file containing
-a \X'tty: link #command:project'\fI\%project()\fP\X'tty: link' call.  Additionally a hierarchy of makefiles is generated
+a \fI\%project()\fP call.  Additionally a hierarchy of makefiles is generated
 into the build tree.
 The appropriate make program can build the
 project through the default \fBall\fP target.  An \fBinstall\fP target is
 also provided.
 .sp
-Added in version 3.10: The \X'tty: link #variable:CMAKE_CODEBLOCKS_EXCLUDE_EXTERNAL_FILES'\fI\%CMAKE_CODEBLOCKS_EXCLUDE_EXTERNAL_FILES\fP\X'tty: link' variable may
+Added in version 3.10: The \fI\%CMAKE_CODEBLOCKS_EXCLUDE_EXTERNAL_FILES\fP variable may
 be set to \fBON\fP to exclude any files which are located outside of
 the project root directory.
 
@@ -1034,25 +1220,25 @@ This \(dqextra\(dq generator may be specified as:
 .INDENT 0.0
 .TP
 .B \fBCodeBlocks \- MinGW Makefiles\fP
-Generate with \X'tty: link #generator:MinGW Makefiles'\fI\%MinGW Makefiles\fP\X'tty: link'\&.
+Generate with \fI\%MinGW Makefiles\fP\&.
 .TP
 .B \fBCodeBlocks \- NMake Makefiles\fP
-Generate with \X'tty: link #generator:NMake Makefiles'\fI\%NMake Makefiles\fP\X'tty: link'\&.
+Generate with \fI\%NMake Makefiles\fP\&.
 .TP
 .B \fBCodeBlocks \- NMake Makefiles JOM\fP
-Added in version 3.8: Generate with \X'tty: link #generator:NMake Makefiles JOM'\fI\%NMake Makefiles JOM\fP\X'tty: link'\&.
+Added in version 3.8: Generate with \fI\%NMake Makefiles JOM\fP\&.
 
 .TP
 .B \fBCodeBlocks \- Ninja\fP
-Generate with \X'tty: link #generator:Ninja'\fI\%Ninja\fP\X'tty: link'\&.
+Generate with \fI\%Ninja\fP\&.
 .TP
 .B \fBCodeBlocks \- Unix Makefiles\fP
-Generate with \X'tty: link #generator:Unix Makefiles'\fI\%Unix Makefiles\fP\X'tty: link'\&.
+Generate with \fI\%Unix Makefiles\fP\&.
 .UNINDENT
 .SS CodeLite
 .sp
-Deprecated since version 3.27: Support for \X'tty: link #extra-generators'\fI\%Extra Generators\fP\X'tty: link' is deprecated and will be removed from
-a future version of CMake.  IDEs may use the \X'tty: link #manual:cmake-file-api(7)'\fI\%cmake\-file\-api(7)\fP\X'tty: link'
+Deprecated since version 3.27: Support for \fI\%Extra Generators\fP is deprecated and will be removed from
+a future version of CMake.  IDEs may use the \fI\%cmake\-file\-api(7)\fP
 to view CMake\-generated project build trees.
 
 .sp
@@ -1060,12 +1246,12 @@ Generates CodeLite project files.
 .sp
 Project files for CodeLite will be created in the top directory and
 in every subdirectory which features a CMakeLists.txt file containing
-a \X'tty: link #command:project'\fI\%project()\fP\X'tty: link' call.
+a \fI\%project()\fP call.
 The appropriate make program can build the
 project through the default \fBall\fP target.  An \fBinstall\fP target
 is also provided.
 .sp
-Added in version 3.7: The \X'tty: link #variable:CMAKE_CODELITE_USE_TARGETS'\fI\%CMAKE_CODELITE_USE_TARGETS\fP\X'tty: link' variable may be set to \fBON\fP
+Added in version 3.7: The \fI\%CMAKE_CODELITE_USE_TARGETS\fP variable may be set to \fBON\fP
 to change the default behavior from projects to targets as the basis
 for project files.
 
@@ -1074,21 +1260,21 @@ This \(dqextra\(dq generator may be specified as:
 .INDENT 0.0
 .TP
 .B \fBCodeLite \- MinGW Makefiles\fP
-Generate with \X'tty: link #generator:MinGW Makefiles'\fI\%MinGW Makefiles\fP\X'tty: link'\&.
+Generate with \fI\%MinGW Makefiles\fP\&.
 .TP
 .B \fBCodeLite \- NMake Makefiles\fP
-Generate with \X'tty: link #generator:NMake Makefiles'\fI\%NMake Makefiles\fP\X'tty: link'\&.
+Generate with \fI\%NMake Makefiles\fP\&.
 .TP
 .B \fBCodeLite \- Ninja\fP
-Generate with \X'tty: link #generator:Ninja'\fI\%Ninja\fP\X'tty: link'\&.
+Generate with \fI\%Ninja\fP\&.
 .TP
 .B \fBCodeLite \- Unix Makefiles\fP
-Generate with \X'tty: link #generator:Unix Makefiles'\fI\%Unix Makefiles\fP\X'tty: link'\&.
+Generate with \fI\%Unix Makefiles\fP\&.
 .UNINDENT
 .SS Eclipse CDT4
 .sp
-Deprecated since version 3.27: Support for \X'tty: link #extra-generators'\fI\%Extra Generators\fP\X'tty: link' is deprecated and will be removed from
-a future version of CMake.  IDEs may use the \X'tty: link #manual:cmake-file-api(7)'\fI\%cmake\-file\-api(7)\fP\X'tty: link'
+Deprecated since version 3.27: Support for \fI\%Extra Generators\fP is deprecated and will be removed from
+a future version of CMake.  IDEs may use the \fI\%cmake\-file\-api(7)\fP
 to view CMake\-generated project build trees.
 
 .sp
@@ -1105,21 +1291,21 @@ This \(dqextra\(dq generator may be specified as:
 .INDENT 0.0
 .TP
 .B \fBEclipse CDT4 \- MinGW Makefiles\fP
-Generate with \X'tty: link #generator:MinGW Makefiles'\fI\%MinGW Makefiles\fP\X'tty: link'\&.
+Generate with \fI\%MinGW Makefiles\fP\&.
 .TP
 .B \fBEclipse CDT4 \- NMake Makefiles\fP
-Generate with \X'tty: link #generator:NMake Makefiles'\fI\%NMake Makefiles\fP\X'tty: link'\&.
+Generate with \fI\%NMake Makefiles\fP\&.
 .TP
 .B \fBEclipse CDT4 \- Ninja\fP
-Generate with \X'tty: link #generator:Ninja'\fI\%Ninja\fP\X'tty: link'\&.
+Generate with \fI\%Ninja\fP\&.
 .TP
 .B \fBEclipse CDT4 \- Unix Makefiles\fP
-Generate with \X'tty: link #generator:Unix Makefiles'\fI\%Unix Makefiles\fP\X'tty: link'\&.
+Generate with \fI\%Unix Makefiles\fP\&.
 .UNINDENT
 .SS Kate
 .sp
-Deprecated since version 3.27: Support for \X'tty: link #extra-generators'\fI\%Extra Generators\fP\X'tty: link' is deprecated and will be removed from
-a future version of CMake.  IDEs may use the \X'tty: link #manual:cmake-file-api(7)'\fI\%cmake\-file\-api(7)\fP\X'tty: link'
+Deprecated since version 3.27: Support for \fI\%Extra Generators\fP is deprecated and will be removed from
+a future version of CMake.  IDEs may use the \fI\%cmake\-file\-api(7)\fP
 to view CMake\-generated project build trees.
 
 .sp
@@ -1137,24 +1323,24 @@ This \(dqextra\(dq generator may be specified as:
 .INDENT 0.0
 .TP
 .B \fBKate \- MinGW Makefiles\fP
-Generate with \X'tty: link #generator:MinGW Makefiles'\fI\%MinGW Makefiles\fP\X'tty: link'\&.
+Generate with \fI\%MinGW Makefiles\fP\&.
 .TP
 .B \fBKate \- NMake Makefiles\fP
-Generate with \X'tty: link #generator:NMake Makefiles'\fI\%NMake Makefiles\fP\X'tty: link'\&.
+Generate with \fI\%NMake Makefiles\fP\&.
 .TP
 .B \fBKate \- Ninja\fP
-Generate with \X'tty: link #generator:Ninja'\fI\%Ninja\fP\X'tty: link'\&.
+Generate with \fI\%Ninja\fP\&.
 .TP
 .B \fBKate \- Ninja Multi\-Config\fP
-Generate with \X'tty: link #generator:Ninja Multi-Config'\fI\%Ninja Multi\-Config\fP\X'tty: link'\&.
+Generate with \fI\%Ninja Multi\-Config\fP\&.
 .TP
 .B \fBKate \- Unix Makefiles\fP
-Generate with \X'tty: link #generator:Unix Makefiles'\fI\%Unix Makefiles\fP\X'tty: link'\&.
+Generate with \fI\%Unix Makefiles\fP\&.
 .UNINDENT
 .SS Sublime Text 2
 .sp
-Deprecated since version 3.27: Support for \X'tty: link #extra-generators'\fI\%Extra Generators\fP\X'tty: link' is deprecated and will be removed from
-a future version of CMake.  IDEs may use the \X'tty: link #manual:cmake-file-api(7)'\fI\%cmake\-file\-api(7)\fP\X'tty: link'
+Deprecated since version 3.27: Support for \fI\%Extra Generators\fP is deprecated and will be removed from
+a future version of CMake.  IDEs may use the \fI\%cmake\-file\-api(7)\fP
 to view CMake\-generated project build trees.
 
 .sp
@@ -1162,7 +1348,7 @@ Generates Sublime Text 2 project files.
 .sp
 Project files for Sublime Text 2 will be created in the top directory
 and in every subdirectory which features a \fBCMakeLists.txt\fP file
-containing a \X'tty: link #command:project'\fI\%project()\fP\X'tty: link' call.  Additionally \fBMakefiles\fP
+containing a \fI\%project()\fP call.  Additionally \fBMakefiles\fP
 (or \fBbuild.ninja\fP files) are generated into the build tree.
 The appropriate make program can build the project through the default \fBall\fP
 target.  An \fBinstall\fP target is also provided.
@@ -1171,18 +1357,18 @@ This \(dqextra\(dq generator may be specified as:
 .INDENT 0.0
 .TP
 .B \fBSublime Text 2 \- MinGW Makefiles\fP
-Generate with \X'tty: link #generator:MinGW Makefiles'\fI\%MinGW Makefiles\fP\X'tty: link'\&.
+Generate with \fI\%MinGW Makefiles\fP\&.
 .TP
 .B \fBSublime Text 2 \- NMake Makefiles\fP
-Generate with \X'tty: link #generator:NMake Makefiles'\fI\%NMake Makefiles\fP\X'tty: link'\&.
+Generate with \fI\%NMake Makefiles\fP\&.
 .TP
 .B \fBSublime Text 2 \- Ninja\fP
-Generate with \X'tty: link #generator:Ninja'\fI\%Ninja\fP\X'tty: link'\&.
+Generate with \fI\%Ninja\fP\&.
 .TP
 .B \fBSublime Text 2 \- Unix Makefiles\fP
-Generate with \X'tty: link #generator:Unix Makefiles'\fI\%Unix Makefiles\fP\X'tty: link'\&.
+Generate with \fI\%Unix Makefiles\fP\&.
 .UNINDENT
 .SH COPYRIGHT
-2000-2024 Kitware, Inc. and Contributors
+2000-2026 Kitware, Inc. and Contributors
 .\" Generated by docutils manpage writer.
 .

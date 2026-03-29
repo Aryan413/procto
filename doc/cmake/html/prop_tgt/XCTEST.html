@@ -5,13 +5,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <title>XCTEST &mdash; CMake 3.31.11 Documentation</title>
+  <title>XCTEST &mdash; CMake 4.3.0 Documentation</title>
 
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a2c47e09" />
-    <link rel="stylesheet" type="text/css" href="../_static/cmake.css?v=3e562cf9" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a3862c66" />
+    <link rel="stylesheet" type="text/css" href="../_static/cmake.css?v=d27bb136" />
     
-    <script src="../_static/documentation_options.js?v=5746678a"></script>
-    <script src="../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../_static/documentation_options.js?v=a17b270f"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     
     <link rel="icon" href="../_static/cmake-favicon.ico"/>
@@ -22,8 +22,12 @@
  
 
   </head><body>
+    <input id="sidebar-check" type="checkbox" />
+    <label id="sidebar-overlay" for="sidebar-check"></label>
 
-    <div class="related" role="navigation" aria-label="related navigation">
+
+
+    <div class="related relbar1" role="navigation" aria-label="Related">
       <h3>Navigation</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
@@ -36,14 +40,15 @@
           <a href="XCODE_XCCONFIG.html" title="XCODE_XCCONFIG"
              accesskey="P">previous</a> |</li>
   <li>
-    <img src="../_static/cmake-logo-16.png" alt=""
-         style="vertical-align: middle; margin-top: -2px" />
+    <label class="sidebar-toggle" for="sidebar-check"></label>
+  </li>
+  <li class="rootlink">
+    <img src="../_static/cmake-logo-16.png" width="16" height="16" alt=""/>
+    <a href="https://cmake.org/">CMake 4.3.0</a>
+    <span class="reldelim1"> &#187;</span>
   </li>
   <li>
-    <a href="https://cmake.org/">CMake</a> &#187;
-  </li>
-  <li>
-    <a href="../index.html">3.31.11 Documentation</a> &#187;
+    <a href="../index.html">Documentation</a> &#187;
   </li>
 
           <li class="nav-item nav-item-1"><a href="../manual/cmake-properties.7.html" accesskey="U">cmake-properties(7)</a> &#187;</li>
@@ -61,13 +66,14 @@
 <div class="versionadded">
 <p><span class="versionmodified added">Added in version 3.3.</span></p>
 </div>
-<p>This target is a XCTest CFBundle on the Mac.</p>
-<p>This property will usually get set via the <span class="target" id="index-0-command:xctest_add_bundle"></span><a class="reference internal" href="../module/FindXCTest.html#command:xctest_add_bundle" title="xctest_add_bundle"><code class="xref cmake cmake-command docutils literal notranslate"><span class="pre">xctest_add_bundle()</span></code></a>
-macro in <span class="target" id="index-0-module:FindXCTest"></span><a class="reference internal" href="../module/FindXCTest.html#module:FindXCTest" title="FindXCTest"><code class="xref cmake cmake-module docutils literal notranslate"><span class="pre">FindXCTest</span></code></a> module.</p>
-<p>If a module library target has this property set to true it will be
-built as a CFBundle when built on the Mac.  It will have the directory
-structure required for a CFBundle.</p>
-<p>This property depends on <span class="target" id="index-0-prop_tgt:BUNDLE"></span><a class="reference internal" href="BUNDLE.html#prop_tgt:BUNDLE" title="BUNDLE"><code class="xref cmake cmake-prop_tgt docutils literal notranslate"><span class="pre">BUNDLE</span></code></a> to be effective.</p>
+<p>Boolean target property that indicates whether a target is an XCTest CFBundle
+(Core Foundation Bundle) on Apple systems.</p>
+<p>This property is usually set automatically by the <span class="target" id="index-0-command:xctest_add_bundle"></span><a class="reference internal" href="../module/FindXCTest.html#command:xctest_add_bundle" title="xctest_add_bundle"><code class="xref cmake cmake-command docutils literal notranslate"><span class="pre">xctest_add_bundle()</span></code></a>
+command provided by the <span class="target" id="index-0-module:FindXCTest"></span><a class="reference internal" href="../module/FindXCTest.html#module:FindXCTest" title="FindXCTest"><code class="xref cmake cmake-module docutils literal notranslate"><span class="pre">FindXCTest</span></code></a> module.</p>
+<p>If a module library target has this property set to boolean true, it will be
+built as a CFBundle when built on Apple system, with the required CFBundle
+directory structure.</p>
+<p>This property depends on <span class="target" id="index-0-prop_tgt:BUNDLE"></span><a class="reference internal" href="BUNDLE.html#prop_tgt:BUNDLE" title="BUNDLE"><code class="xref cmake cmake-prop_tgt docutils literal notranslate"><span class="pre">BUNDLE</span></code></a> target property to be effective.</p>
 </section>
 
 
@@ -75,7 +81,7 @@ structure required for a CFBundle.</p>
           </div>
         </div>
       </div>
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
         <div class="sphinxsidebarwrapper">
   <div>
     <h4>Previous topic</h4>
@@ -108,7 +114,7 @@ structure required for a CFBundle.</p>
       </div>
       <div class="clearer"></div>
     </div>
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>Navigation</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
@@ -121,14 +127,15 @@ structure required for a CFBundle.</p>
           <a href="XCODE_XCCONFIG.html" title="XCODE_XCCONFIG"
              >previous</a> |</li>
   <li>
-    <img src="../_static/cmake-logo-16.png" alt=""
-         style="vertical-align: middle; margin-top: -2px" />
+    <label class="sidebar-toggle" for="sidebar-check"></label>
+  </li>
+  <li class="rootlink">
+    <img src="../_static/cmake-logo-16.png" width="16" height="16" alt=""/>
+    <a href="https://cmake.org/">CMake 4.3.0</a>
+    <span class="reldelim1"> &#187;</span>
   </li>
   <li>
-    <a href="https://cmake.org/">CMake</a> &#187;
-  </li>
-  <li>
-    <a href="../index.html">3.31.11 Documentation</a> &#187;
+    <a href="../index.html">Documentation</a> &#187;
   </li>
 
           <li class="nav-item nav-item-1"><a href="../manual/cmake-properties.7.html" >cmake-properties(7)</a> &#187;</li>
@@ -137,8 +144,17 @@ structure required for a CFBundle.</p>
     </div>
 
     <div class="footer" role="contentinfo">
-    &#169; Copyright 2000-2024 Kitware, Inc. and Contributors.
-      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.3.7.
+    &#169; Copyright 2000-2026 Kitware, Inc. and Contributors.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3.
     </div>
+<script type="text/javascript">
+(function() {
+  "use strict";
+  const hide = () => document.getElementById("sidebar-check").checked = false;
+  addEventListener("keydown", e => (e.key === "Escape") && hide());
+  addEventListener("click", e => (e.target.tagName === "A") && hide());
+  addEventListener("hashchange", hide)
+})();
+</script>
   </body>
 </html>

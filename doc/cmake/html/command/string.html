@@ -5,13 +5,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <title>string &mdash; CMake 3.31.11 Documentation</title>
+  <title>string &mdash; CMake 4.3.0 Documentation</title>
 
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a2c47e09" />
-    <link rel="stylesheet" type="text/css" href="../_static/cmake.css?v=3e562cf9" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a3862c66" />
+    <link rel="stylesheet" type="text/css" href="../_static/cmake.css?v=d27bb136" />
     
-    <script src="../_static/documentation_options.js?v=5746678a"></script>
-    <script src="../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../_static/documentation_options.js?v=a17b270f"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     
     <link rel="icon" href="../_static/cmake-favicon.ico"/>
@@ -22,8 +22,12 @@
  
 
   </head><body>
+    <input id="sidebar-check" type="checkbox" />
+    <label id="sidebar-overlay" for="sidebar-check"></label>
 
-    <div class="related" role="navigation" aria-label="related navigation">
+
+
+    <div class="related relbar1" role="navigation" aria-label="Related">
       <h3>Navigation</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
@@ -36,14 +40,15 @@
           <a href="site_name.html" title="site_name"
              accesskey="P">previous</a> |</li>
   <li>
-    <img src="../_static/cmake-logo-16.png" alt=""
-         style="vertical-align: middle; margin-top: -2px" />
+    <label class="sidebar-toggle" for="sidebar-check"></label>
+  </li>
+  <li class="rootlink">
+    <img src="../_static/cmake-logo-16.png" width="16" height="16" alt=""/>
+    <a href="https://cmake.org/">CMake 4.3.0</a>
+    <span class="reldelim1"> &#187;</span>
   </li>
   <li>
-    <a href="https://cmake.org/">CMake</a> &#187;
-  </li>
-  <li>
-    <a href="../index.html">3.31.11 Documentation</a> &#187;
+    <a href="../index.html">Documentation</a> &#187;
   </li>
 
           <li class="nav-item nav-item-1"><a href="../manual/cmake-commands.7.html" accesskey="U">cmake-commands(7)</a> &#187;</li>
@@ -80,6 +85,7 @@
   string(<a class="reference internal" href="#strip">STRIP</a> &lt;string&gt; &lt;out-var&gt;)
   string(<a class="reference internal" href="#genex-strip">GENEX_STRIP</a> &lt;string&gt; &lt;out-var&gt;)
   string(<a class="reference internal" href="#repeat">REPEAT</a> &lt;string&gt; &lt;count&gt; &lt;out-var&gt;)
+  string(<a class="reference internal" href="#regex-quote">REGEX QUOTE</a> &lt;out-var&gt; &lt;input&gt;...)
 
 <a class="reference internal" href="#comparison">Comparison</a>
   string(<a class="reference internal" href="#compare">COMPARE</a> &lt;op&gt; &lt;string1&gt; &lt;string2&gt; &lt;out-var&gt;)
@@ -98,7 +104,10 @@
 
 <a class="reference internal" href="#json">JSON</a>
   string(JSON &lt;out-var&gt; [ERROR_VARIABLE &lt;error-var&gt;]
-         {<a class="reference internal" href="#json-get">GET</a> | <a class="reference internal" href="#json-type">TYPE</a> | <a class="reference internal" href="#json-length">LENGTH</a> | <a class="reference internal" href="#json-remove">REMOVE</a>}
+         {<a class="reference internal" href="#json-get">GET</a> | <a class="reference internal" href="#json-get-raw">GET_RAW</a> | <a class="reference internal" href="#json-type">TYPE</a> | <a class="reference internal" href="#json-length">LENGTH</a>}
+         &lt;json-string&gt; [&lt;member|index&gt; ...])
+  string(JSON &lt;out-var&gt; [ERROR_VARIABLE &lt;error-var&gt;]
+         <a class="reference internal" href="#json-remove">REMOVE</a>
          &lt;json-string&gt; &lt;member|index&gt; [&lt;member|index&gt; ...])
   string(JSON &lt;out-var&gt; [ERROR_VARIABLE &lt;error-var&gt;]
          <a class="reference internal" href="#json-member">MEMBER</a> &lt;json-string&gt;
@@ -107,7 +116,9 @@
          <a class="reference internal" href="#json-set">SET</a> &lt;json-string&gt;
          &lt;member|index&gt; [&lt;member|index&gt; ...] &lt;value&gt;)
   string(JSON &lt;out-var&gt; [ERROR_VARIABLE &lt;error-var&gt;]
-         <a class="reference internal" href="#json-equal">EQUAL</a> &lt;json-string1&gt; &lt;json-string2&gt;)</pre>
+         <a class="reference internal" href="#json-equal">EQUAL</a> &lt;json-string1&gt; &lt;json-string2&gt;)
+  string(JSON &lt;out-var&gt; [ERROR_VARIABLE &lt;error-var&gt;]
+         <a class="reference internal" href="#string-encode">STRING_ENCODE</a> &lt;string&gt;)</pre>
 </section>
 <section id="search-and-replace">
 <h2>Search and Replace<a class="headerlink" href="#search-and-replace" title="Link to this heading">¶</a></h2>
@@ -165,6 +176,15 @@ two backslashes (<code class="docutils literal notranslate"><span class="pre">\\
 through argument parsing.</p>
 </dd></dl>
 
+<div class="versionchanged">
+<p><span class="versionmodified changed">Changed in version 4.1: </span>The <code class="docutils literal notranslate"><span class="pre">^</span></code> anchor now matches only at the beginning of the input
+string instead of the beginning of each repeated search.
+See policy <span class="target" id="index-0-policy:CMP0186"></span><a class="reference internal" href="../policy/CMP0186.html#policy:CMP0186" title="CMP0186"><code class="xref cmake cmake-policy docutils literal notranslate"><span class="pre">CMP0186</span></code></a>.</p>
+<p>Zero-length matches are allowed in <code class="docutils literal notranslate"><span class="pre">MATCHALL</span></code> and <code class="docutils literal notranslate"><span class="pre">REPLACE</span></code>.
+Previously, they triggered an error.</p>
+<p>The replacement expression may contain references to subexpressions that
+didn't match anything. Previously, such references triggered an error.</p>
+</div>
 </section>
 <section id="regex-specification">
 <span id="id1"></span><h3>Regex Specification<a class="headerlink" href="#regex-specification" title="Link to this heading">¶</a></h3>
@@ -333,6 +353,18 @@ in the <code class="docutils literal notranslate"><span class="pre">&lt;output_v
 </div>
 <p>Produce the output string as the input <code class="docutils literal notranslate"><span class="pre">&lt;string&gt;</span></code>
 repeated <code class="docutils literal notranslate"><span class="pre">&lt;count&gt;</span></code> times.</p>
+</dd></dl>
+
+<dl class="cmake signature">
+<dt class="sig sig-object cmake" id="regex-quote">
+<span class="code cmake highlight sig-name descname"><span class="nf"><span class="pre">string(</span></span><span class="no"><span class="pre">REGEX</span></span><span class="w"> </span><span class="no"><span class="pre">QUOTE</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;out-var&gt;</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;input&gt;...</span></span><span class="nf"><span class="pre">)</span></span></span><a class="headerlink" href="#regex-quote" title="Link to this definition">¶</a></dt>
+<dd><div class="versionadded">
+<p><span class="versionmodified added">Added in version 4.2.</span></p>
+</div>
+<p>Store in an <code class="docutils literal notranslate"><span class="pre">&lt;out-var&gt;</span></code> a regular expression matching the <code class="docutils literal notranslate"><span class="pre">&lt;input&gt;</span></code>.
+All characters that have special meaning in a regular expression are
+escaped, such that the output string can be used as part of a regular
+expression to match the input literally.</p>
 </dd></dl>
 
 </section>
@@ -526,10 +558,10 @@ with format <code class="docutils literal notranslate"><span class="pre">+hhmm</
 <p>Unknown format specifiers will be ignored and copied to the output
 as-is.</p>
 <p>If no explicit <code class="docutils literal notranslate"><span class="pre">&lt;format_string&gt;</span></code> is given, it will default to:</p>
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>%Y-%m-%dT%H:%M:%S    for local time.
-%Y-%m-%dT%H:%M:%SZ   for UTC.
-</pre></div>
-</div>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">%Y-%m-%dT%H:%M:%S</span></code> for local time.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">%Y-%m-%dT%H:%M:%SZ</span></code> for UTC.</p></li>
+</ul>
 <div class="versionadded">
 <p><span class="versionmodified added">Added in version 3.8: </span>If the <code class="docutils literal notranslate"><span class="pre">SOURCE_DATE_EPOCH</span></code> environment variable is set,
 its value will be used instead of the current time.
@@ -539,7 +571,7 @@ See <a class="reference external" href="https://reproducible-builds.org/specs/so
 
 <dl class="cmake signature">
 <dt class="sig sig-object cmake" id="uuid">
-<span class="code cmake highlight sig-name descname"><span class="nf"><span class="pre">string(</span></span><span class="no"><span class="pre">UUID</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;output_variable&gt;</span></span><span class="w"> </span><span class="no"><span class="pre">NAMESPACE</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;namespace&gt;</span></span><span class="w"> </span><span class="no"><span class="pre">NAME</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;name&gt;</span></span><span class="w"> </span><span class="no"><span class="pre">TYPE</span></span><span class="w"> </span><span class="o"><span class="pre">&lt;</span></span><span class="no"><span class="pre">MD5</span></span><span class="p"><span class="pre">|</span></span><span class="no"><span class="pre">SHA1</span></span><span class="o"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">[</span></span><span class="no"><span class="pre">UPPER</span></span><span class="p"><span class="pre">]</span></span><span class="nf"><span class="pre">)</span></span></span><a class="headerlink" href="#uuid" title="Link to this definition">¶</a></dt>
+<span class="code cmake highlight sig-name descname"><span class="nf"><span class="pre">string(</span></span><span class="no"><span class="pre">UUID</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;output_variable&gt;</span></span><span class="w"> </span><span class="no"><span class="pre">NAMESPACE</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;namespace&gt;</span></span><span class="w"> </span><span class="no"><span class="pre">NAME</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;name&gt;</span></span><span class="w"> </span><span class="no"><span class="pre">TYPE</span></span><span class="w"> </span><span class="p"><span class="pre">&lt;</span></span><span class="no"><span class="pre">MD5</span></span><span class="p"><span class="pre">|</span></span><span class="no"><span class="pre">SHA1</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">[</span></span><span class="no"><span class="pre">UPPER</span></span><span class="p"><span class="pre">]</span></span><span class="nf"><span class="pre">)</span></span></span><a class="headerlink" href="#uuid" title="Link to this definition">¶</a></dt>
 <dd><div class="versionadded">
 <p><span class="versionmodified added">Added in version 3.1.</span></p>
 </div>
@@ -572,9 +604,12 @@ is no relevant path.  If an error occurs but the <code class="docutils literal n
 option is not present, a fatal error message is generated.  If no error
 occurs, the <code class="docutils literal notranslate"><span class="pre">&lt;error-variable&gt;</span></code> will be set to <code class="docutils literal notranslate"><span class="pre">NOTFOUND</span></code>.</p>
 </div>
+<p>In the following subcommands, the <code class="docutils literal notranslate"><span class="pre">&lt;json-string&gt;</span></code> argument should
+be written as a <a class="reference internal" href="../manual/cmake-language.7.html#quoted-argument"><span class="std std-ref">Quoted Argument</span></a> to ensure the entire JSON
+string is passed as a single argument even if it contains semicolons.</p>
 <dl class="cmake signature">
 <dt class="sig sig-object cmake" id="json-get">
-<span class="code cmake highlight sig-name descname"><span class="nf"><span class="pre">string(</span></span><span class="no"><span class="pre">JSON</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;out-var&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">[</span></span><span class="no"><span class="pre">ERROR_VARIABLE</span></span><span class="nbsp"> </span><span class="nv"><span class="pre">&lt;error-variable&gt;</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="no"><span class="pre">GET</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;json-string&gt;</span></span><span class="w"> </span><span class="o"><span class="pre">&lt;</span></span><span class="nb"><span class="pre">member</span></span><span class="p"><span class="pre">|</span></span><span class="nb"><span class="pre">index</span></span><span class="o"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">[</span></span><span class="o"><span class="pre">&lt;</span></span><span class="nb"><span class="pre">member</span></span><span class="p"><span class="pre">|</span></span><span class="nb"><span class="pre">index</span></span><span class="o"><span class="pre">&gt;</span></span><span class="nbsp"> </span><span class="p"><span class="pre">...]</span></span><span class="nf"><span class="pre">)</span></span></span><a class="headerlink" href="#json-get" title="Link to this definition">¶</a></dt>
+<span class="code cmake highlight sig-name descname"><span class="nf"><span class="pre">string(</span></span><span class="no"><span class="pre">JSON</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;out-var&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">[</span></span><span class="no"><span class="pre">ERROR_VARIABLE</span></span><span class="nbsp"> </span><span class="nv"><span class="pre">&lt;error-variable&gt;</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="no"><span class="pre">GET</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;json-string&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">[&lt;</span></span><span class="nb"><span class="pre">member</span></span><span class="p"><span class="pre">|</span></span><span class="nb"><span class="pre">index</span></span><span class="p"><span class="pre">&gt;</span></span><span class="nbsp"> </span><span class="p"><span class="pre">...]</span></span><span class="nf"><span class="pre">)</span></span></span><a class="headerlink" href="#json-get" title="Link to this definition">¶</a></dt>
 <dd><p>Get an element from <code class="docutils literal notranslate"><span class="pre">&lt;json-string&gt;</span></code> at the location given
 by the list of <code class="docutils literal notranslate"><span class="pre">&lt;member|index&gt;</span></code> arguments.
 Array and object elements will be returned as a JSON string.
@@ -584,8 +619,20 @@ Number and string types will be returned as strings.</p>
 </dd></dl>
 
 <dl class="cmake signature">
+<dt class="sig sig-object cmake" id="json-get-raw">
+<span class="code cmake highlight sig-name descname"><span class="nf"><span class="pre">string(</span></span><span class="no"><span class="pre">JSON</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;out-var&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">[</span></span><span class="no"><span class="pre">ERROR_VARIABLE</span></span><span class="nbsp"> </span><span class="nv"><span class="pre">&lt;error-variable&gt;</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="no"><span class="pre">GET_RAW</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;json-string&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">[&lt;</span></span><span class="nb"><span class="pre">member</span></span><span class="p"><span class="pre">|</span></span><span class="nb"><span class="pre">index</span></span><span class="p"><span class="pre">&gt;</span></span><span class="nbsp"> </span><span class="p"><span class="pre">...]</span></span><span class="nf"><span class="pre">)</span></span></span><a class="headerlink" href="#json-get-raw" title="Link to this definition">¶</a></dt>
+<dd><div class="versionadded">
+<p><span class="versionmodified added">Added in version 4.3.</span></p>
+</div>
+<p>Get an element from <code class="docutils literal notranslate"><span class="pre">&lt;json-string&gt;</span></code> at the location given
+by the list of <code class="docutils literal notranslate"><span class="pre">&lt;member|index&gt;</span></code> arguments. Similar to
+<a class="reference internal" href="#json-get"><code class="cmake literal docutils notranslate"><span class="pre">GET</span></code></a>, but does not convert number, string,
+boolean, or null elements.</p>
+</dd></dl>
+
+<dl class="cmake signature">
 <dt class="sig sig-object cmake" id="json-type">
-<span class="code cmake highlight sig-name descname"><span class="nf"><span class="pre">string(</span></span><span class="no"><span class="pre">JSON</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;out-var&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">[</span></span><span class="no"><span class="pre">ERROR_VARIABLE</span></span><span class="nbsp"> </span><span class="nv"><span class="pre">&lt;error-variable&gt;</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="no"><span class="pre">TYPE</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;json-string&gt;</span></span><span class="w"> </span><span class="o"><span class="pre">&lt;</span></span><span class="nb"><span class="pre">member</span></span><span class="p"><span class="pre">|</span></span><span class="nb"><span class="pre">index</span></span><span class="o"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">[</span></span><span class="o"><span class="pre">&lt;</span></span><span class="nb"><span class="pre">member</span></span><span class="p"><span class="pre">|</span></span><span class="nb"><span class="pre">index</span></span><span class="o"><span class="pre">&gt;</span></span><span class="nbsp"> </span><span class="p"><span class="pre">...]</span></span><span class="nf"><span class="pre">)</span></span></span><a class="headerlink" href="#json-type" title="Link to this definition">¶</a></dt>
+<span class="code cmake highlight sig-name descname"><span class="nf"><span class="pre">string(</span></span><span class="no"><span class="pre">JSON</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;out-var&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">[</span></span><span class="no"><span class="pre">ERROR_VARIABLE</span></span><span class="nbsp"> </span><span class="nv"><span class="pre">&lt;error-variable&gt;</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="no"><span class="pre">TYPE</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;json-string&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">[&lt;</span></span><span class="nb"><span class="pre">member</span></span><span class="p"><span class="pre">|</span></span><span class="nb"><span class="pre">index</span></span><span class="p"><span class="pre">&gt;</span></span><span class="nbsp"> </span><span class="p"><span class="pre">...]</span></span><span class="nf"><span class="pre">)</span></span></span><a class="headerlink" href="#json-type" title="Link to this definition">¶</a></dt>
 <dd><p>Get the type of an element in <code class="docutils literal notranslate"><span class="pre">&lt;json-string&gt;</span></code> at the location
 given by the list of <code class="docutils literal notranslate"><span class="pre">&lt;member|index&gt;</span></code> arguments. The <code class="docutils literal notranslate"><span class="pre">&lt;out-var&gt;</span></code>
 will be set to one of <code class="docutils literal notranslate"><span class="pre">NULL</span></code>, <code class="docutils literal notranslate"><span class="pre">NUMBER</span></code>, <code class="docutils literal notranslate"><span class="pre">STRING</span></code>, <code class="docutils literal notranslate"><span class="pre">BOOLEAN</span></code>,
@@ -594,7 +641,7 @@ will be set to one of <code class="docutils literal notranslate"><span class="pr
 
 <dl class="cmake signature">
 <dt class="sig sig-object cmake" id="json-member">
-<span class="code cmake highlight sig-name descname"><span class="nf"><span class="pre">string(</span></span><span class="no"><span class="pre">JSON</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;out-var&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">[</span></span><span class="no"><span class="pre">ERROR_VARIABLE</span></span><span class="nbsp"> </span><span class="nv"><span class="pre">&lt;error-var&gt;</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="no"><span class="pre">MEMBER</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;json-string&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">[</span></span><span class="o"><span class="pre">&lt;</span></span><span class="nb"><span class="pre">member</span></span><span class="p"><span class="pre">|</span></span><span class="nb"><span class="pre">index</span></span><span class="o"><span class="pre">&gt;</span></span><span class="nbsp"> </span><span class="p"><span class="pre">...]</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;index&gt;</span></span><span class="nf"><span class="pre">)</span></span></span><a class="headerlink" href="#json-member" title="Link to this definition">¶</a></dt>
+<span class="code cmake highlight sig-name descname"><span class="nf"><span class="pre">string(</span></span><span class="no"><span class="pre">JSON</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;out-var&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">[</span></span><span class="no"><span class="pre">ERROR_VARIABLE</span></span><span class="nbsp"> </span><span class="nv"><span class="pre">&lt;error-var&gt;</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="no"><span class="pre">MEMBER</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;json-string&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">[&lt;</span></span><span class="nb"><span class="pre">member</span></span><span class="p"><span class="pre">|</span></span><span class="nb"><span class="pre">index</span></span><span class="p"><span class="pre">&gt;</span></span><span class="nbsp"> </span><span class="p"><span class="pre">...]</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;index&gt;</span></span><span class="nf"><span class="pre">)</span></span></span><a class="headerlink" href="#json-member" title="Link to this definition">¶</a></dt>
 <dd><p>Get the name of the <code class="docutils literal notranslate"><span class="pre">&lt;index&gt;</span></code>-th member in <code class="docutils literal notranslate"><span class="pre">&lt;json-string&gt;</span></code>
 at the location given by the list of <code class="docutils literal notranslate"><span class="pre">&lt;member|index&gt;</span></code> arguments.
 Requires an element of object type.</p>
@@ -602,7 +649,7 @@ Requires an element of object type.</p>
 
 <dl class="cmake signature">
 <dt class="sig sig-object cmake" id="json-length">
-<span class="code cmake highlight sig-name descname"><span class="nf"><span class="pre">string(</span></span><span class="no"><span class="pre">JSON</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;out-var&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">[</span></span><span class="no"><span class="pre">ERROR_VARIABLE</span></span><span class="nbsp"> </span><span class="nv"><span class="pre">&lt;error-variable&gt;</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="no"><span class="pre">LENGTH</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;json-string&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">[</span></span><span class="o"><span class="pre">&lt;</span></span><span class="nb"><span class="pre">member</span></span><span class="p"><span class="pre">|</span></span><span class="nb"><span class="pre">index</span></span><span class="o"><span class="pre">&gt;</span></span><span class="nbsp"> </span><span class="p"><span class="pre">...]</span></span><span class="nf"><span class="pre">)</span></span></span><a class="headerlink" href="#json-length" title="Link to this definition">¶</a></dt>
+<span class="code cmake highlight sig-name descname"><span class="nf"><span class="pre">string(</span></span><span class="no"><span class="pre">JSON</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;out-var&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">[</span></span><span class="no"><span class="pre">ERROR_VARIABLE</span></span><span class="nbsp"> </span><span class="nv"><span class="pre">&lt;error-variable&gt;</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="no"><span class="pre">LENGTH</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;json-string&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">[&lt;</span></span><span class="nb"><span class="pre">member</span></span><span class="p"><span class="pre">|</span></span><span class="nb"><span class="pre">index</span></span><span class="p"><span class="pre">&gt;</span></span><span class="nbsp"> </span><span class="p"><span class="pre">...]</span></span><span class="nf"><span class="pre">)</span></span></span><a class="headerlink" href="#json-length" title="Link to this definition">¶</a></dt>
 <dd><p>Get the length of an element in <code class="docutils literal notranslate"><span class="pre">&lt;json-string&gt;</span></code> at the location
 given by the list of <code class="docutils literal notranslate"><span class="pre">&lt;member|index&gt;</span></code> arguments.
 Requires an element of array or object type.</p>
@@ -610,7 +657,7 @@ Requires an element of array or object type.</p>
 
 <dl class="cmake signature">
 <dt class="sig sig-object cmake" id="json-remove">
-<span class="code cmake highlight sig-name descname"><span class="nf"><span class="pre">string(</span></span><span class="no"><span class="pre">JSON</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;out-var&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">[</span></span><span class="no"><span class="pre">ERROR_VARIABLE</span></span><span class="nbsp"> </span><span class="nv"><span class="pre">&lt;error-variable&gt;</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="no"><span class="pre">REMOVE</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;json-string&gt;</span></span><span class="w"> </span><span class="o"><span class="pre">&lt;</span></span><span class="nb"><span class="pre">member</span></span><span class="p"><span class="pre">|</span></span><span class="nb"><span class="pre">index</span></span><span class="o"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">[</span></span><span class="o"><span class="pre">&lt;</span></span><span class="nb"><span class="pre">member</span></span><span class="p"><span class="pre">|</span></span><span class="nb"><span class="pre">index</span></span><span class="o"><span class="pre">&gt;</span></span><span class="nbsp"> </span><span class="p"><span class="pre">...]</span></span><span class="nf"><span class="pre">)</span></span></span><a class="headerlink" href="#json-remove" title="Link to this definition">¶</a></dt>
+<span class="code cmake highlight sig-name descname"><span class="nf"><span class="pre">string(</span></span><span class="no"><span class="pre">JSON</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;out-var&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">[</span></span><span class="no"><span class="pre">ERROR_VARIABLE</span></span><span class="nbsp"> </span><span class="nv"><span class="pre">&lt;error-variable&gt;</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="no"><span class="pre">REMOVE</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;json-string&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&lt;</span></span><span class="nb"><span class="pre">member</span></span><span class="p"><span class="pre">|</span></span><span class="nb"><span class="pre">index</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">[&lt;</span></span><span class="nb"><span class="pre">member</span></span><span class="p"><span class="pre">|</span></span><span class="nb"><span class="pre">index</span></span><span class="p"><span class="pre">&gt;</span></span><span class="nbsp"> </span><span class="p"><span class="pre">...]</span></span><span class="nf"><span class="pre">)</span></span></span><a class="headerlink" href="#json-remove" title="Link to this definition">¶</a></dt>
 <dd><p>Remove an element from <code class="docutils literal notranslate"><span class="pre">&lt;json-string&gt;</span></code> at the location
 given by the list of <code class="docutils literal notranslate"><span class="pre">&lt;member|index&gt;</span></code> arguments. The JSON string
 without the removed element will be stored in <code class="docutils literal notranslate"><span class="pre">&lt;out-var&gt;</span></code>.</p>
@@ -618,7 +665,7 @@ without the removed element will be stored in <code class="docutils literal notr
 
 <dl class="cmake signature">
 <dt class="sig sig-object cmake" id="json-set">
-<span class="code cmake highlight sig-name descname"><span class="nf"><span class="pre">string(</span></span><span class="no"><span class="pre">JSON</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;out-var&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">[</span></span><span class="no"><span class="pre">ERROR_VARIABLE</span></span><span class="nbsp"> </span><span class="nv"><span class="pre">&lt;error-variable&gt;</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="no"><span class="pre">SET</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;json-string&gt;</span></span><span class="w"> </span><span class="o"><span class="pre">&lt;</span></span><span class="nb"><span class="pre">member</span></span><span class="p"><span class="pre">|</span></span><span class="nb"><span class="pre">index</span></span><span class="o"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">[</span></span><span class="o"><span class="pre">&lt;</span></span><span class="nb"><span class="pre">member</span></span><span class="p"><span class="pre">|</span></span><span class="nb"><span class="pre">index</span></span><span class="o"><span class="pre">&gt;</span></span><span class="nbsp"> </span><span class="p"><span class="pre">...]</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;value&gt;</span></span><span class="nf"><span class="pre">)</span></span></span><a class="headerlink" href="#json-set" title="Link to this definition">¶</a></dt>
+<span class="code cmake highlight sig-name descname"><span class="nf"><span class="pre">string(</span></span><span class="no"><span class="pre">JSON</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;out-var&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">[</span></span><span class="no"><span class="pre">ERROR_VARIABLE</span></span><span class="nbsp"> </span><span class="nv"><span class="pre">&lt;error-variable&gt;</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="no"><span class="pre">SET</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;json-string&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&lt;</span></span><span class="nb"><span class="pre">member</span></span><span class="p"><span class="pre">|</span></span><span class="nb"><span class="pre">index</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">[&lt;</span></span><span class="nb"><span class="pre">member</span></span><span class="p"><span class="pre">|</span></span><span class="nb"><span class="pre">index</span></span><span class="p"><span class="pre">&gt;</span></span><span class="nbsp"> </span><span class="p"><span class="pre">...]</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;value&gt;</span></span><span class="nf"><span class="pre">)</span></span></span><a class="headerlink" href="#json-set" title="Link to this definition">¶</a></dt>
 <dd><p>Set an element in <code class="docutils literal notranslate"><span class="pre">&lt;json-string&gt;</span></code> at the location
 given by the list of <code class="docutils literal notranslate"><span class="pre">&lt;member|index&gt;</span></code> arguments to <code class="docutils literal notranslate"><span class="pre">&lt;value&gt;</span></code>.
 The contents of <code class="docutils literal notranslate"><span class="pre">&lt;value&gt;</span></code> should be valid JSON.
@@ -637,6 +684,16 @@ will be set to a true value if the JSON objects are considered equal,
 or a false value otherwise.</p>
 </dd></dl>
 
+<dl class="cmake signature">
+<dt class="sig sig-object cmake" id="string-encode">
+<span class="code cmake highlight sig-name descname"><span class="nf"><span class="pre">string(</span></span><span class="no"><span class="pre">JSON</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;out-var&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">[</span></span><span class="no"><span class="pre">ERROR_VARIABLE</span></span><span class="nbsp"> </span><span class="nv"><span class="pre">&lt;error-var&gt;</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="no"><span class="pre">STRING_ENCODE</span></span><span class="w"> </span><span class="nv"><span class="pre">&lt;string&gt;</span></span><span class="nf"><span class="pre">)</span></span></span><a class="headerlink" href="#string-encode" title="Link to this definition">¶</a></dt>
+<dd><div class="versionadded">
+<p><span class="versionmodified added">Added in version 4.3.</span></p>
+</div>
+<p>Turn a raw string into a JSON string surrounded by quotes. Special characters
+will be properly escaped inside the JSON string.</p>
+</dd></dl>
+
 </section>
 </section>
 
@@ -645,10 +702,10 @@ or a false value otherwise.</p>
           </div>
         </div>
       </div>
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
         <div class="sphinxsidebarwrapper">
   <div>
-    <h3><a href="../index.html">Table of Contents</a></h3>
+    <h3>Table of Contents</h3>
     <ul>
 <li><a class="reference internal" href="#">string</a><ul>
 <li><a class="reference internal" href="#synopsis">Synopsis</a></li>
@@ -699,7 +756,7 @@ or a false value otherwise.</p>
       </div>
       <div class="clearer"></div>
     </div>
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>Navigation</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
@@ -712,14 +769,15 @@ or a false value otherwise.</p>
           <a href="site_name.html" title="site_name"
              >previous</a> |</li>
   <li>
-    <img src="../_static/cmake-logo-16.png" alt=""
-         style="vertical-align: middle; margin-top: -2px" />
+    <label class="sidebar-toggle" for="sidebar-check"></label>
+  </li>
+  <li class="rootlink">
+    <img src="../_static/cmake-logo-16.png" width="16" height="16" alt=""/>
+    <a href="https://cmake.org/">CMake 4.3.0</a>
+    <span class="reldelim1"> &#187;</span>
   </li>
   <li>
-    <a href="https://cmake.org/">CMake</a> &#187;
-  </li>
-  <li>
-    <a href="../index.html">3.31.11 Documentation</a> &#187;
+    <a href="../index.html">Documentation</a> &#187;
   </li>
 
           <li class="nav-item nav-item-1"><a href="../manual/cmake-commands.7.html" >cmake-commands(7)</a> &#187;</li>
@@ -728,8 +786,17 @@ or a false value otherwise.</p>
     </div>
 
     <div class="footer" role="contentinfo">
-    &#169; Copyright 2000-2024 Kitware, Inc. and Contributors.
-      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.3.7.
+    &#169; Copyright 2000-2026 Kitware, Inc. and Contributors.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3.
     </div>
+<script type="text/javascript">
+(function() {
+  "use strict";
+  const hide = () => document.getElementById("sidebar-check").checked = false;
+  addEventListener("keydown", e => (e.key === "Escape") && hide());
+  addEventListener("click", e => (e.target.tagName === "A") && hide());
+  addEventListener("hashchange", hide)
+})();
+</script>
   </body>
 </html>

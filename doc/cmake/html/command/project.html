@@ -5,25 +5,29 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <title>project &mdash; CMake 3.31.11 Documentation</title>
+  <title>project &mdash; CMake 4.3.0 Documentation</title>
 
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a2c47e09" />
-    <link rel="stylesheet" type="text/css" href="../_static/cmake.css?v=3e562cf9" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a3862c66" />
+    <link rel="stylesheet" type="text/css" href="../_static/cmake.css?v=d27bb136" />
     
-    <script src="../_static/documentation_options.js?v=5746678a"></script>
-    <script src="../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../_static/documentation_options.js?v=a17b270f"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     
     <link rel="icon" href="../_static/cmake-favicon.ico"/>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="remove_definitions" href="remove_definitions.html" />
-    <link rel="prev" title="load_cache" href="load_cache.html" />
+    <link rel="prev" title="link_libraries" href="link_libraries.html" />
  
 
   </head><body>
+    <input id="sidebar-check" type="checkbox" />
+    <label id="sidebar-overlay" for="sidebar-check"></label>
 
-    <div class="related" role="navigation" aria-label="related navigation">
+
+
+    <div class="related relbar1" role="navigation" aria-label="Related">
       <h3>Navigation</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
@@ -33,17 +37,18 @@
           <a href="remove_definitions.html" title="remove_definitions"
              accesskey="N">next</a> |</li>
         <li class="right" >
-          <a href="load_cache.html" title="load_cache"
+          <a href="link_libraries.html" title="link_libraries"
              accesskey="P">previous</a> |</li>
   <li>
-    <img src="../_static/cmake-logo-16.png" alt=""
-         style="vertical-align: middle; margin-top: -2px" />
+    <label class="sidebar-toggle" for="sidebar-check"></label>
+  </li>
+  <li class="rootlink">
+    <img src="../_static/cmake-logo-16.png" width="16" height="16" alt=""/>
+    <a href="https://cmake.org/">CMake 4.3.0</a>
+    <span class="reldelim1"> &#187;</span>
   </li>
   <li>
-    <a href="https://cmake.org/">CMake</a> &#187;
-  </li>
-  <li>
-    <a href="../index.html">3.31.11 Documentation</a> &#187;
+    <a href="../index.html">Documentation</a> &#187;
   </li>
 
           <li class="nav-item nav-item-1"><a href="../manual/cmake-commands.7.html" accesskey="U">cmake-commands(7)</a> &#187;</li>
@@ -64,7 +69,9 @@
 <div class="highlight-cmake notranslate"><div class="highlight"><pre><span></span><span class="nf">project(</span><span class="nv">&lt;PROJECT-NAME&gt;</span><span class="w"> </span><span class="p">[</span><span class="nv">&lt;language-name&gt;...</span><span class="p">]</span><span class="nf">)</span>
 <span class="nf">project(</span><span class="nv">&lt;PROJECT-NAME&gt;</span>
 <span class="w">        </span><span class="p">[</span><span class="no">VERSION</span><span class="w"> </span><span class="nv">&lt;major&gt;</span><span class="p">[.</span><span class="nv">&lt;minor&gt;</span><span class="p">[.</span><span class="nv">&lt;patch&gt;</span><span class="p">[.</span><span class="nv">&lt;tweak&gt;</span><span class="p">]]]]</span>
-<span class="w">        </span><span class="p">[</span><span class="no">DESCRIPTION</span><span class="w"> </span><span class="nv">&lt;project-description-string&gt;</span><span class="p">]</span>
+<span class="w">        </span><span class="p">[</span><span class="no">COMPAT_VERSION</span><span class="w"> </span><span class="nv">&lt;major&gt;</span><span class="p">[.</span><span class="nv">&lt;minor&gt;</span><span class="p">[.</span><span class="nv">&lt;patch&gt;</span><span class="p">[.</span><span class="nv">&lt;tweak&gt;</span><span class="p">]]]]</span>
+<span class="w">        </span><span class="p">[</span><span class="no">SPDX_LICENSE</span><span class="w"> </span><span class="nv">&lt;license-string&gt;</span><span class="p">]</span>
+<span class="w">        </span><span class="p">[</span><span class="no">DESCRIPTION</span><span class="w"> </span><span class="nv">&lt;description-string&gt;</span><span class="p">]</span>
 <span class="w">        </span><span class="p">[</span><span class="no">HOMEPAGE_URL</span><span class="w"> </span><span class="nv">&lt;url-string&gt;</span><span class="p">]</span>
 <span class="w">        </span><span class="p">[</span><span class="no">LANGUAGES</span><span class="w"> </span><span class="nv">&lt;language-name&gt;...</span><span class="p">]</span><span class="nf">)</span>
 </pre></div>
@@ -135,7 +142,52 @@ and sets the variables</p>
 <span class="target" id="index-0-variable:CMAKE_PROJECT_VERSION"></span><a class="reference internal" href="../variable/CMAKE_PROJECT_VERSION.html#variable:CMAKE_PROJECT_VERSION" title="CMAKE_PROJECT_VERSION"><code class="xref cmake cmake-variable docutils literal notranslate"><span class="pre">CMAKE_PROJECT_VERSION</span></code></a>.</p>
 </div>
 </dd>
-<dt><code class="docutils literal notranslate"><span class="pre">DESCRIPTION</span> <span class="pre">&lt;project-description-string&gt;</span></code></dt><dd><div class="versionadded">
+<dt><code class="docutils literal notranslate"><span class="pre">COMPAT_VERSION</span> <span class="pre">&lt;version&gt;</span></code></dt><dd><div class="versionadded">
+<p><span class="versionmodified added">Added in version 4.3.</span></p>
+</div>
+<p>Optional; requires <code class="docutils literal notranslate"><span class="pre">VERSION</span></code> also be set.</p>
+<p>Takes a <code class="docutils literal notranslate"><span class="pre">&lt;version&gt;</span></code> argument composed of non-negative integer components,
+i.e. <code class="docutils literal notranslate"><span class="pre">&lt;major&gt;[.&lt;minor&gt;[.&lt;patch&gt;[.&lt;tweak&gt;]]]</span></code>,
+and sets the variables</p>
+<ul class="simple">
+<li><p><span class="target" id="index-0-variable:PROJECT_COMPAT_VERSION"></span><a class="reference internal" href="../variable/PROJECT_COMPAT_VERSION.html#variable:PROJECT_COMPAT_VERSION" title="PROJECT_COMPAT_VERSION"><code class="xref cmake cmake-variable docutils literal notranslate"><span class="pre">PROJECT_COMPAT_VERSION</span></code></a>,
+<span class="target" id="index-0-variable:&lt;PROJECT-NAME&gt;_COMPAT_VERSION"></span><a class="reference internal" href="../variable/PROJECT-NAME_COMPAT_VERSION.html#variable:&lt;PROJECT-NAME&gt;_COMPAT_VERSION" title="&lt;PROJECT-NAME&gt;_COMPAT_VERSION"><code class="xref cmake cmake-variable docutils literal notranslate"><span class="pre">&lt;PROJECT-NAME&gt;_COMPAT_VERSION</span></code></a>.</p></li>
+</ul>
+<p>When the <code class="docutils literal notranslate"><span class="pre">project()</span></code> command is called from the top-level
+<code class="docutils literal notranslate"><span class="pre">CMakeLists.txt</span></code>, then the compatibility version is also stored in the
+variable <span class="target" id="index-0-variable:CMAKE_PROJECT_COMPAT_VERSION"></span><a class="reference internal" href="../variable/CMAKE_PROJECT_COMPAT_VERSION.html#variable:CMAKE_PROJECT_COMPAT_VERSION" title="CMAKE_PROJECT_COMPAT_VERSION"><code class="xref cmake cmake-variable docutils literal notranslate"><span class="pre">CMAKE_PROJECT_COMPAT_VERSION</span></code></a>.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">SPDX_LICENSE</span> <span class="pre">&lt;license-string&gt;</span></code></dt><dd><div class="versionadded">
+<p><span class="versionmodified added">Added in version 4.3.</span></p>
+</div>
+<p>Optional.
+Sets the variables</p>
+<ul class="simple">
+<li><p><span class="target" id="index-0-variable:PROJECT_SPDX_LICENSE"></span><a class="reference internal" href="../variable/PROJECT_SPDX_LICENSE.html#variable:PROJECT_SPDX_LICENSE" title="PROJECT_SPDX_LICENSE"><code class="xref cmake cmake-variable docutils literal notranslate"><span class="pre">PROJECT_SPDX_LICENSE</span></code></a>,
+<span class="target" id="index-0-variable:&lt;PROJECT-NAME&gt;_SPDX_LICENSE"></span><a class="reference internal" href="../variable/PROJECT-NAME_SPDX_LICENSE.html#variable:&lt;PROJECT-NAME&gt;_SPDX_LICENSE" title="&lt;PROJECT-NAME&gt;_SPDX_LICENSE"><code class="xref cmake cmake-variable docutils literal notranslate"><span class="pre">&lt;PROJECT-NAME&gt;_SPDX_LICENSE</span></code></a></p></li>
+</ul>
+<p>to <code class="docutils literal notranslate"><span class="pre">&lt;license-string&gt;</span></code>, which shall be a <a class="reference external" href="https://spdx.dev/">System Package Data Exchange</a> (SPDX)
+<a class="reference external" href="https://spdx.github.io/spdx-spec/v3.0.1/annexes/spdx-license-expressions/">License Expression</a> that describes the license(s) of the project as a
+whole, including documentation, resources, or other materials distributed
+with the project, in addition to software artifacts. See the SPDX
+<a class="reference external" href="https://spdx.org/licenses/">License List</a> for a list of commonly used licenses and their identifiers.
+See the <span class="target" id="index-0-prop_tgt:SPDX_LICENSE"></span><a class="reference internal" href="../prop_tgt/SPDX_LICENSE.html#prop_tgt:SPDX_LICENSE" title="SPDX_LICENSE"><code class="xref cmake cmake-prop_tgt docutils literal notranslate"><span class="pre">SPDX_LICENSE</span></code></a> property for specifying the license(s) on
+individual software artifacts.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The project license is <em>not</em> used to initialize the
+<span class="target" id="index-1-prop_tgt:SPDX_LICENSE"></span><a class="reference internal" href="../prop_tgt/SPDX_LICENSE.html#prop_tgt:SPDX_LICENSE" title="SPDX_LICENSE"><code class="xref cmake cmake-prop_tgt docutils literal notranslate"><span class="pre">SPDX_LICENSE</span></code></a> property of individual targets.  This allows the
+package license and default component license, which are specified when
+exporting package information, to be meaningful.  Only Common Package Specification exports make
+use of this information.</p>
+<p>The project license <em>is</em> inherited as the package license in some cases.
+Refer to the <code class="docutils literal notranslate"><span class="pre">PROJECT</span></code> option and related documentation of the
+<span class="target" id="index-0-command:export"></span><a class="reference internal" href="export.html#command:export" title="export"><code class="xref cmake cmake-command docutils literal notranslate"><span class="pre">export()</span></code></a> and <span class="target" id="index-0-command:install"></span><a class="reference internal" href="install.html#command:install" title="install"><code class="xref cmake cmake-command docutils literal notranslate"><span class="pre">install()</span></code></a> commands for more information.</p>
+</div>
+</dd>
+</dl>
+<dl>
+<dt><code class="docutils literal notranslate"><span class="pre">DESCRIPTION</span> <span class="pre">&lt;description-string&gt;</span></code></dt><dd><div class="versionadded">
 <p><span class="versionmodified added">Added in version 3.9.</span></p>
 </div>
 <p>Optional.
@@ -143,7 +195,7 @@ Sets the variables</p>
 <ul class="simple">
 <li><p><span class="target" id="index-0-variable:PROJECT_DESCRIPTION"></span><a class="reference internal" href="../variable/PROJECT_DESCRIPTION.html#variable:PROJECT_DESCRIPTION" title="PROJECT_DESCRIPTION"><code class="xref cmake cmake-variable docutils literal notranslate"><span class="pre">PROJECT_DESCRIPTION</span></code></a>, <span class="target" id="index-0-variable:&lt;PROJECT-NAME&gt;_DESCRIPTION"></span><a class="reference internal" href="../variable/PROJECT-NAME_DESCRIPTION.html#variable:&lt;PROJECT-NAME&gt;_DESCRIPTION" title="&lt;PROJECT-NAME&gt;_DESCRIPTION"><code class="xref cmake cmake-variable docutils literal notranslate"><span class="pre">&lt;PROJECT-NAME&gt;_DESCRIPTION</span></code></a></p></li>
 </ul>
-<p>to <code class="docutils literal notranslate"><span class="pre">&lt;project-description-string&gt;</span></code>.
+<p>to <code class="docutils literal notranslate"><span class="pre">&lt;description-string&gt;</span></code>.
 It is recommended that this description is a relatively short string,
 usually no more than a few words.</p>
 <p>When the <code class="docutils literal notranslate"><span class="pre">project()</span></code> command is called from the top-level <code class="docutils literal notranslate"><span class="pre">CMakeLists.txt</span></code>,
@@ -197,8 +249,11 @@ compilers for other languages like <code class="docutils literal notranslate"><s
 <p>By default <code class="docutils literal notranslate"><span class="pre">C</span></code> and <code class="docutils literal notranslate"><span class="pre">CXX</span></code> are enabled if no language options are given.
 Specify language <code class="docutils literal notranslate"><span class="pre">NONE</span></code>, or use the <code class="docutils literal notranslate"><span class="pre">LANGUAGES</span></code> keyword and list no languages,
 to skip enabling any languages.</p>
-<p>The variables set through the <code class="docutils literal notranslate"><span class="pre">VERSION</span></code>, <code class="docutils literal notranslate"><span class="pre">DESCRIPTION</span></code> and <code class="docutils literal notranslate"><span class="pre">HOMEPAGE_URL</span></code>
-options are intended for use as default values in package metadata and documentation.</p>
+<p>The variables set through the <code class="docutils literal notranslate"><span class="pre">VERSION</span></code>, <code class="docutils literal notranslate"><span class="pre">COMPAT_VERSION</span></code>,
+<code class="docutils literal notranslate"><span class="pre">SPDX_LICENSE</span></code>, <code class="docutils literal notranslate"><span class="pre">DESCRIPTION</span></code> and <code class="docutils literal notranslate"><span class="pre">HOMEPAGE_URL</span></code> options are
+intended for use as default values in package metadata and documentation.
+The <span class="target" id="index-1-command:export"></span><a class="reference internal" href="export.html#command:export" title="export"><code class="xref cmake cmake-command docutils literal notranslate"><span class="pre">export()</span></code></a> and <span class="target" id="index-1-command:install"></span><a class="reference internal" href="install.html#command:install" title="install"><code class="xref cmake cmake-command docutils literal notranslate"><span class="pre">install()</span></code></a> commands use these accordingly
+when generating Common Package Specification package descriptions.</p>
 </section>
 <section id="code-injection">
 <span id="id1"></span><h2>Code Injection<a class="headerlink" href="#code-injection" title="Link to this heading">¶</a></h2>
@@ -276,10 +331,10 @@ See also policy <span class="target" id="index-0-policy:CMP0000"></span><a class
           </div>
         </div>
       </div>
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
         <div class="sphinxsidebarwrapper">
   <div>
-    <h3><a href="../index.html">Table of Contents</a></h3>
+    <h3>Table of Contents</h3>
     <ul>
 <li><a class="reference internal" href="#">project</a><ul>
 <li><a class="reference internal" href="#synopsis">Synopsis</a></li>
@@ -293,8 +348,8 @@ See also policy <span class="target" id="index-0-policy:CMP0000"></span><a class
   </div>
   <div>
     <h4>Previous topic</h4>
-    <p class="topless"><a href="load_cache.html"
-                          title="previous chapter">load_cache</a></p>
+    <p class="topless"><a href="link_libraries.html"
+                          title="previous chapter">link_libraries</a></p>
   </div>
   <div>
     <h4>Next topic</h4>
@@ -322,7 +377,7 @@ See also policy <span class="target" id="index-0-policy:CMP0000"></span><a class
       </div>
       <div class="clearer"></div>
     </div>
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>Navigation</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
@@ -332,17 +387,18 @@ See also policy <span class="target" id="index-0-policy:CMP0000"></span><a class
           <a href="remove_definitions.html" title="remove_definitions"
              >next</a> |</li>
         <li class="right" >
-          <a href="load_cache.html" title="load_cache"
+          <a href="link_libraries.html" title="link_libraries"
              >previous</a> |</li>
   <li>
-    <img src="../_static/cmake-logo-16.png" alt=""
-         style="vertical-align: middle; margin-top: -2px" />
+    <label class="sidebar-toggle" for="sidebar-check"></label>
+  </li>
+  <li class="rootlink">
+    <img src="../_static/cmake-logo-16.png" width="16" height="16" alt=""/>
+    <a href="https://cmake.org/">CMake 4.3.0</a>
+    <span class="reldelim1"> &#187;</span>
   </li>
   <li>
-    <a href="https://cmake.org/">CMake</a> &#187;
-  </li>
-  <li>
-    <a href="../index.html">3.31.11 Documentation</a> &#187;
+    <a href="../index.html">Documentation</a> &#187;
   </li>
 
           <li class="nav-item nav-item-1"><a href="../manual/cmake-commands.7.html" >cmake-commands(7)</a> &#187;</li>
@@ -351,8 +407,17 @@ See also policy <span class="target" id="index-0-policy:CMP0000"></span><a class
     </div>
 
     <div class="footer" role="contentinfo">
-    &#169; Copyright 2000-2024 Kitware, Inc. and Contributors.
-      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.3.7.
+    &#169; Copyright 2000-2026 Kitware, Inc. and Contributors.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3.
     </div>
+<script type="text/javascript">
+(function() {
+  "use strict";
+  const hide = () => document.getElementById("sidebar-check").checked = false;
+  addEventListener("keydown", e => (e.key === "Escape") && hide());
+  addEventListener("click", e => (e.target.tagName === "A") && hide());
+  addEventListener("hashchange", hide)
+})();
+</script>
   </body>
 </html>
