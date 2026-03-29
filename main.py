@@ -1,6 +1,6 @@
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                         ExamShield  v2.1                                    ║
+║                              IRIS  v2.1                                      ║
 ║                  AI-Powered Secure Assessment Platform                       ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║  Run:   python main.py          (on BOTH machines — student AND proctor)    ║
@@ -230,17 +230,41 @@ def init_db():
     except: pass
     if c.execute("SELECT COUNT(*) FROM questions").fetchone()[0] == 0:
         seed = [
-            ("What does CPU stand for?","Central Processing Unit","Central Program Unit",
+            # ── User-provided questions ──────────────────────────────────────
+            ("Which of the following is an operating system?",
+             "Microsoft Word","Windows","Google Chrome","VLC Media Player","B",1,"General"),
+            ("Which of the following is a programming language?",
+             "HTML","HTTP","FTP","IP","A",1,"CS"),
+            ("Which memory is temporary?",
+             "ROM","Hard Disk","RAM","CD","C",1,"CS"),
+            ("Which device is used to input data into a computer?",
+             "Monitor","Printer","Keyboard","Speaker","C",1,"General"),
+            ("Which technology is commonly used for real-time video communication?",
+             "HTTP","FTP","WebRTC","SMTP","C",1,"Networks"),
+            # ── Additional technical questions ───────────────────────────────
+            ("What does CPU stand for?",
+             "Central Processing Unit","Central Program Unit",
              "Computer Personal Unit","Control Processing Unit","A",1,"CS"),
-            ("Which language is used for web pages?","Python","Java","HTML","C++","C",1,"Web"),
-            ("What is 2^10?","512","1024","2048","256","B",1,"Math"),
-            ("Who invented the World Wide Web?","Bill Gates","Tim Berners-Lee",
-             "Steve Jobs","Linus Torvalds","B",1,"General"),
-            ("What does RAM stand for?","Random Access Memory","Read Access Module",
+            ("What does RAM stand for?",
+             "Random Access Memory","Read Access Module",
              "Remote Access Memory","Rapid Access Module","A",1,"CS"),
-            ("Which data structure uses LIFO?","Queue","Stack","Tree","Graph","B",1,"CS"),
-            ("Binary of decimal 5?","101","110","100","111","A",1,"Math"),
-            ("Protocol used to send emails?","HTTP","FTP","SMTP","SSH","C",1,"Networks"),
+            ("Which protocol is used to send emails?",
+             "HTTP","FTP","SMTP","SSH","C",1,"Networks"),
+            ("Who invented the World Wide Web?",
+             "Bill Gates","Tim Berners-Lee","Steve Jobs","Linus Torvalds","B",1,"General"),
+            ("Which data structure uses LIFO (Last In First Out)?",
+             "Queue","Stack","Tree","Graph","B",1,"CS"),
+            ("What is the binary representation of decimal 5?",
+             "101","110","100","111","A",1,"Math"),
+            ("What is 2^10 (2 to the power of 10)?",
+             "512","1024","2048","256","B",1,"Math"),
+            ("Which layer of the OSI model is responsible for routing packets?",
+             "Data Link","Transport","Network","Application","C",1,"Networks"),
+            ("What does SQL stand for?",
+             "Structured Query Language","Simple Query Language",
+             "Standard Query Logic","Sequential Query Language","A",1,"CS"),
+            ("Which sorting algorithm has the best average-case time complexity?",
+             "Bubble Sort","Insertion Sort","Quick Sort","Selection Sort","C",1,"CS"),
         ]
         c.executemany(
             "INSERT INTO questions(question,opt_a,opt_b,opt_c,opt_d,answer,marks,category)"
@@ -477,10 +501,10 @@ class SecurityMonitor:
                 except ImportError:
                     pass
 
-            exam_has_focus = "examshield" in fg_title or fg_title == ""
+            exam_has_focus = "iris" in fg_title or fg_title == ""
 
             # Also treat a question-popup Toplevel as "in focus" — its title
-            # won't contain "examshield" so we suppress via the global counter.
+            # won't contain "iris" so we suppress via the global counter.
             if _question_popup_open > 0:
                 exam_has_focus = True
 
@@ -1412,7 +1436,7 @@ def _ask_session_code(parent_root, student_id):
 class MainLogin(BaseWindow):
     def __init__(self):
         self.root=tk.Tk()
-        self.root.title("ExamShield v2 — Login")
+        self.root.title("IRIS v2 — Login")
         self.root.geometry("540x700"); self.root.resizable(True,True); self.root.minsize(440,600)
         self.is_dark=True; self.theme=DARK
         self.role=tk.StringVar(value="student")
@@ -1427,8 +1451,8 @@ class MainLogin(BaseWindow):
         self.ui_frame=tk.Frame(self.root,bg=t["card_bg"],bd=0,highlightthickness=0)
         self.ui_frame.place(x=70,y=110,width=400)
 
-        tk.Label(self.ui_frame,text="🛡️",font=("Segoe UI Emoji",28),bg=t["card_bg"]).pack(pady=(16,0))
-        tk.Label(self.ui_frame,text="ExamShield",font=("Helvetica",20,"bold"),
+        tk.Label(self.ui_frame,text="👁️",font=("Segoe UI Emoji",28),bg=t["card_bg"]).pack(pady=(16,0))
+        tk.Label(self.ui_frame,text="IRIS",font=("Helvetica",20,"bold"),
                  bg=t["card_bg"],fg=t["title_fg"]).pack()
         tk.Label(self.ui_frame,text="Secure AI Assessment Platform",
                  font=("Helvetica",9),bg=t["card_bg"],fg=t["subtitle_fg"]).pack(pady=(2,12))
@@ -1661,7 +1685,7 @@ class ExamWindow:
             except Exception as e:
                 print(f"[WebRTC] Could not start peer: {e}")
         self.root=tk.Tk()
-        self.root.title("ExamShield — Exam in Progress 🔒")
+        self.root.title("IRIS — Exam in Progress 🔒")
         self.root.geometry("860x680"); self.root.resizable(True,True)
         self.root.minsize(660,540); self.root.configure(bg="#0d1117")
         self.root.state("zoomed") if platform.system()=="Windows" else None
@@ -1941,7 +1965,7 @@ class ExamWindow:
 
     def _build(self):
         bar=tk.Frame(self.root,bg="#161b22",height=56); bar.pack(fill="x"); bar.pack_propagate(False)
-        tk.Label(bar,text="🛡️  ExamShield — EXAM MODE  🔒",font=("Helvetica",13,"bold"),
+        tk.Label(bar,text="👁️  IRIS — EXAM MODE  🔒",font=("Helvetica",13,"bold"),
                  bg="#161b22",fg="#58d6d6").pack(side="left",padx=16,pady=12)
         self.lbl_timer=tk.Label(bar,text="⏱ 00:00",font=("Helvetica",11,"bold"),
                                  bg="#161b22",fg="#0be881")
@@ -2209,7 +2233,7 @@ class InterviewStudentWindow:
         self.session_code=session_code
         self._runtime_qs_seen=set()
         self.root=tk.Tk()
-        self.root.title("ExamShield — Interview Mode 🎙")
+        self.root.title("IRIS — Interview Mode 🎙")
         self.root.geometry("1100x680"); self.root.resizable(True,True)
         self.root.minsize(900,560); self.root.configure(bg="#0d1117")
         self.root.state("zoomed") if platform.system()=="Windows" else None
@@ -2591,7 +2615,7 @@ class InterviewStudentWindow:
         topbar = tk.Frame(self.root, bg=GM_BG, height=56)
         topbar.pack(fill="x", side="top"); topbar.pack_propagate(False)
 
-        tk.Label(topbar, text="ExamShield Interview",
+        tk.Label(topbar, text="IRIS Interview",
                  font=("Helvetica",13,"bold"), bg=GM_BG, fg=GM_TEXT
                  ).pack(side="left", padx=18, pady=12)
         self.lbl_timer = tk.Label(topbar, text="00:00",
@@ -3119,7 +3143,7 @@ class ProctorWindow:
 
         self.root = tk.Tk()
         self.root.title(
-            f"ExamShield — Proctor Dashboard  [{proctor_id}]  "
+            f"IRIS — Proctor Dashboard  [{proctor_id}]  "
             f"{'📝 EXAM' if mode=='exam' else '🎙 INTERVIEW'}"
             + (f"  🌐 REMOTE {remote_url}" if remote_url else "  💻 LOCAL")
         )
@@ -3836,7 +3860,7 @@ def start_network_server(port=6000):
         print("[⚠] flask not installed — remote proctor disabled. Run: pip install flask")
         return
 
-    app = Flask("ExamShieldServer")
+    app = Flask("IRISServer")
     import logging
     logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
@@ -4376,7 +4400,7 @@ def start_network_server(port=6000):
         print("[⚠] flask-sock not installed — voice chat disabled. Run: pip install flask-sock")
 
     print(f"\n{'═'*60}")
-    print(f"  🌐  ExamShield v3 Network Server started on port {port}")
+    print(f"  🌐  IRIS v3 Network Server started on port {port}")
     print(f"  🎙  Voice relay at ws://...:{port}/ws/voice (same port as main app)")
     print(f"  📡  Local IP  →  {local_ip}:{port}  (LAN only)")
     if _public_url:
@@ -4404,7 +4428,7 @@ class MultiStudentProctorWindow:
         self.theme    = DARK if is_dark else LIGHT
 
         self.root = tk.Tk()
-        self.root.title(f"ExamShield v3 — Proctor Dashboard  [{proctor_id}]  "
+        self.root.title(f"IRIS v3 — Proctor Dashboard  [{proctor_id}]  "
                         f"{'📝 EXAM' if mode=='exam' else '🎙 INTERVIEW'}"
                         f"  |  Session: {_PROCTOR_SESSION_CODE}")
         self.root.geometry("1280x800")
