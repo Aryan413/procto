@@ -755,6 +755,31 @@ except ImportError:
 _voice_student: "VoiceClient | None" = None
 _voice_proctor: "VoiceClient | None" = None
 
+def _build_voice_ws_url(http_url: str, role: str = "student") -> str:
+    """
+    Convert a proctor HTTP URL into a WebSocket URL for /ws/voice.
+    Role is passed as a query param (?role=...) — matches VoiceClient in voice_bridge.py.
+
+    Rules:
+      - Cloudflare  https://xxx.trycloudflare.com  → wss://xxx.trycloudflare.com/ws/voice
+        (NO port suffix — Cloudflare only accepts 443)
+      - LAN         http://192.168.x.x:6000        → ws://192.168.x.x:6000/ws/voice
+      - Any https   https://host                   → wss://host/ws/voice
+
+    VoiceClient appends ?role=... automatically via its _connect_loop.
+    """
+    import re as _bre
+    url = http_url.rstrip("/")
+    if "trycloudflare.com" in url or "cloudflare" in url:
+        # Strip any port — Cloudflare only accepts 443
+        url = _bre.sub(r":\d+$", "", url)
+        url = url.replace("https://", "wss://").replace("http://", "wss://")
+    elif url.startswith("https://"):
+        url = url.replace("https://", "wss://")
+    else:
+        url = url.replace("http://", "ws://")
+    return f"{url}/ws/voice"
+
 # Keep InterviewAudio as a thin shim so any remaining references don't break
 class InterviewAudio:
     """Legacy shim — delegates to VoiceClient."""
@@ -767,7 +792,7 @@ class InterviewAudio:
         if not _VOICE_BRIDGE_AVAILABLE or not self.remote_url:
             print(f"[Audio] VoiceBridge unavailable — audio disabled for {self.role}")
             return
-        ws_url = make_ws_url(self.remote_url, ws_port=6001)
+        ws_url = _build_voice_ws_url(self.remote_url)
         self._client = VoiceClient(role=self.role, bridge_url=ws_url)
         self._client.start()
 
@@ -2126,7 +2151,7 @@ class InterviewStudentWindow:
         # ── Two-way voice (WebSocket, low-latency) ─────────────────────────
         global _voice_student
         if proctor_url and _VOICE_BRIDGE_AVAILABLE and _SOUNDDEVICE_AVAILABLE and _FLASK_SOCK_AVAILABLE:
-            ws_url = make_ws_url(proctor_url, ws_port=6001)
+            ws_url = _build_voice_ws_url(proctor_url)
             _voice_student = VoiceClient(role="student", bridge_url=ws_url)
             _voice_student.start()
             print(f"[Voice] Student voice client started  ws_url={ws_url}")
@@ -2488,70 +2513,75 @@ class InterviewStudentWindow:
         self._body.columnconfigure(0, weight=1)
         self._body.rowconfigure(0, weight=1)
 
-        # Video tile area — fills body, tiles split 50/50 width, full height
+        # ── Video area: interviewer fills full space, "You" is a PiP overlay ──
+        # This mirrors the proctor layout: big main feed + small self-view corner.
         self._tile_area = tk.Frame(self._body, bg=GM_BG)
         self._tile_area.grid(row=0, column=0, sticky="nsew", padx=4, pady=4)
-        # Both columns equal weight → always 50/50 split regardless of sidebar state
-        self._tile_area.columnconfigure(0, weight=1, uniform="tile")
-        self._tile_area.columnconfigure(1, weight=1, uniform="tile")
+        self._tile_area.columnconfigure(0, weight=1)
         self._tile_area.rowconfigure(0, weight=1)
 
-        # Name-bar height constant
-        _NAME_BAR_H = 28
-
-        # Self tile — column 0, never spans 2 columns (interviewer always beside you)
-        self_tile = tk.Frame(self._tile_area, bg="#1a1a1d",
-                             highlightthickness=1, highlightbackground="#3c4043")
-        self_tile.grid(row=0, column=0, sticky="nsew", padx=4, pady=4)
-        self_tile.grid_propagate(False)
-
-        # Name bar — packed at BOTTOM so it never pushes the camera label down
-        self_name = tk.Frame(self_tile, bg="#1a1a1d", height=_NAME_BAR_H)
-        self_name.pack(side="bottom", fill="x")
-        self_name.pack_propagate(False)
-        tk.Label(self_name, text="  You", font=("Helvetica",9,"bold"),
-                 bg="#1a1a1d", fg=GM_TEXT).pack(side="left", padx=8, pady=4)
-        self._self_mic_icon = tk.Label(self_name, text="🎤",
-                                        font=("Segoe UI Emoji",10), bg="#1a1a1d", fg=GM_GREEN)
-        self._self_mic_icon.pack(side="right", padx=8)
-
-        # Camera label fills the remaining space above the name bar
-        self.cam_self = tk.Label(self_tile, bg="#1a1a1d",
-                                  text="Starting camera…", fg="#5f6368",
-                                  font=("Helvetica",10))
-        self.cam_self.pack(side="top", fill="both", expand=True)
-
-        # Interviewer tile — column 1, always shown (placeholder text until proctor joins)
+        # ── MAIN tile: Interviewer camera fills everything ─────────────────────
         pro_tile = tk.Frame(self._tile_area, bg="#1a1a1d",
-                            highlightthickness=1, highlightbackground="#3c4043")
-        pro_tile.grid(row=0, column=1, sticky="nsew", padx=4, pady=4)
+                            highlightthickness=2, highlightbackground="#3c4043")
+        pro_tile.grid(row=0, column=0, sticky="nsew", padx=4, pady=4)
         pro_tile.grid_propagate(False)
-
-        # Name bar at bottom
-        pro_name = tk.Frame(pro_tile, bg="#1a1a1d", height=_NAME_BAR_H)
-        pro_name.pack(side="bottom", fill="x")
-        pro_name.pack_propagate(False)
-        tk.Label(pro_name, text="  Interviewer", font=("Helvetica",9,"bold"),
-                 bg="#1a1a1d", fg="#ffd93d").pack(side="left", padx=8, pady=4)
+        pro_tile.columnconfigure(0, weight=1)
+        pro_tile.rowconfigure(0, weight=1)
 
         _pro_wait_text = "Waiting for interviewer…" if self.proctor_url else "No interviewer connected"
         self.cam_pro = tk.Label(pro_tile, bg="#1a1a1d",
                                  text=_pro_wait_text, fg="#5f6368",
-                                 font=("Helvetica",10))
-        self.cam_pro.pack(side="top", fill="both", expand=True)
+                                 font=("Helvetica",11))
+        self.cam_pro.grid(row=0, column=0, sticky="nsew")
 
-        # Resize handler — both tiles always get exactly equal half-width
+        # Name bar at bottom of main tile
+        pro_name = tk.Frame(pro_tile, bg="#1a1a1d")
+        pro_name.grid(row=1, column=0, sticky="ew")
+        tk.Label(pro_name, text="  Interviewer", font=("Helvetica",9,"bold"),
+                 bg="#1a1a1d", fg="#ffd93d").pack(side="left", padx=8, pady=4)
+
+        # ── PiP overlay: "You" camera — bottom-left corner of pro_tile ─────────
+        # Use place() so it floats over the main feed, just like Google Meet's self-view
+        _PIP_W, _PIP_H, _PIP_PAD = 200, 150, 12   # pip size & margin from edge
+        self_tile = tk.Frame(pro_tile, bg="#1a1a1d",
+                             highlightthickness=2, highlightbackground="#ffd93d")
+        self_tile.place(x=_PIP_PAD, rely=1.0, y=-(_PIP_H + _PIP_PAD + 36),
+                        width=_PIP_W, height=_PIP_H)  # 36 = name bar height approx
+
+        self.cam_self = tk.Label(self_tile, bg="#1a1a1d",
+                                  text="Starting camera…", fg="#5f6368",
+                                  font=("Helvetica",8))
+        self.cam_self.place(x=0, y=0, relwidth=1.0, relheight=1.0)
+
+        # Name label inside PiP
+        pip_name = tk.Frame(self_tile, bg="#000000")
+        pip_name.place(relx=0.0, rely=1.0, y=-20, relwidth=1.0, height=20)
+        tk.Label(pip_name, text="  You", font=("Helvetica",8,"bold"),
+                 bg="#000000", fg=GM_TEXT).pack(side="left", padx=4)
+        self._self_mic_icon = tk.Label(pip_name, text="🎤",
+                                        font=("Segoe UI Emoji",8), bg="#000000", fg=GM_GREEN)
+        self._self_mic_icon.pack(side="right", padx=4)
+
+        # Store pip constants for use in _poll_cam resize
+        self._pip_w = _PIP_W
+        self._pip_h = _PIP_H
+        self._pip_pad = _PIP_PAD
+
+        # Resize handler — main tile fills everything; pip stays anchored bottom-left
         self._s_self_tile = self_tile
         self._s_pro_tile  = pro_tile
         def _on_tile_area_resize(event):
             try:
-                total_h = max(100, event.height - 8)
-                # Always 50/50 — uniform="tile" in columnconfigure handles the split,
-                # but we also set explicit dimensions so grid_propagate(False) frames
-                # scale their camera labels correctly.
-                tw = max(100, (event.width - 20) // 2)
-                self._s_self_tile.configure(width=tw, height=total_h)
-                self._s_pro_tile.configure(width=tw,  height=total_h)
+                tw = max(200, event.width  - 8)
+                th = max(200, event.height - 8)
+                self._s_pro_tile.configure(width=tw, height=th)
+                # Re-anchor PiP so it stays bottom-left regardless of window size
+                self_tile.place_configure(
+                    x=_PIP_PAD,
+                    rely=1.0,
+                    y=-(_PIP_H + _PIP_PAD + 36),
+                    width=_PIP_W,
+                    height=_PIP_H)
             except Exception:
                 pass
         self._tile_area.bind("<Configure>", _on_tile_area_resize)
@@ -2750,6 +2780,19 @@ class InterviewStudentWindow:
         cropped = resized[y0:y0+lh, x0:x0+lw]
         return ImageTk.PhotoImage(Image.fromarray(cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB)))
 
+    @staticmethod
+    def _fast_frame_to_photo_sized(frame, lw, lh):
+        """Crop-to-fill BGR frame into explicit pixel size (used for PiP overlay)."""
+        h, w = frame.shape[:2]
+        if lw < 1: lw = w
+        if lh < 1: lh = h
+        scale = max(lw / w, lh / h)
+        nw = max(1, int(w * scale)); nh = max(1, int(h * scale))
+        resized = cv2.resize(frame, (nw, nh), interpolation=cv2.INTER_LINEAR)
+        y0 = (nh - lh) // 2; x0 = (nw - lw) // 2
+        cropped = resized[y0:y0+lh, x0:x0+lw]
+        return ImageTk.PhotoImage(Image.fromarray(cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB)))
+
     def _poll_cam(self):
         try:
             if not self.root.winfo_exists(): return
@@ -2759,13 +2802,16 @@ class InterviewStudentWindow:
             sf = _iv_hub.get_student_frame()
             if sf is not None:
                 try:
-                    img = self._fast_frame_to_photo(sf, self.cam_self)
+                    # PiP self-view: use stored pip dimensions for crop-to-fill
+                    pw = getattr(self, "_pip_w", 200)
+                    ph = getattr(self, "_pip_h", 150)
+                    img = self._fast_frame_to_photo_sized(sf, pw, ph)
                     self.cam_self.configure(image=img, text="")
                     self.cam_self.image = img
                 except Exception as e:
                     print(f"[student cam] {e}")
 
-            # Only render interviewer camera when actually connected to a remote proctor
+            # Render interviewer camera in the main (large) tile
             if self.proctor_url:
                 pf = _iv_hub.get_proctor_frame()
                 if pf is not None:
@@ -4061,6 +4107,56 @@ def start_network_server(port=6000):
             mode         = "interview" if _iv_hub else "exam",
         )
 
+    # ── /ws/voice  — in-process voice relay (no separate port needed) ────────
+    # VoiceClient (voice_bridge.py) connects as:
+    #   ws://host:6000/ws/voice?role=student   (student machine)
+    #   ws://host:6000/ws/voice?role=proctor   (proctor machine, localhost)
+    # Role is passed as a query parameter — matches voice_bridge.py make_ws_url exactly.
+    # Works through Cloudflare tunnels because everything is on port 6000/443.
+    _voice_peers      = {}          # role → ws connection
+    _voice_peers_lock = threading.Lock()
+
+    if _FLASK_SOCK_AVAILABLE:
+        _sock_ext = _FlaskSock(app)
+
+        def _voice_relay_handler(ws, role):
+            """Relay raw audio bytes between student and proctor."""
+            if role not in ("student", "proctor"):
+                print(f"[VoiceRelay] Unknown role '{role}' — rejected")
+                return
+            with _voice_peers_lock:
+                _voice_peers[role] = ws
+            peer_role = "proctor" if role == "student" else "student"
+            print(f"[VoiceRelay] {role} connected  (peers: {list(_voice_peers.keys())})")
+            try:
+                while True:
+                    try:
+                        data = ws.receive(timeout=30)
+                    except Exception:
+                        break
+                    if data is None:
+                        break
+                    # Forward to the other peer
+                    with _voice_peers_lock:
+                        peer = _voice_peers.get(peer_role)
+                    if peer:
+                        try:
+                            peer.send(data)
+                        except Exception:
+                            with _voice_peers_lock:
+                                _voice_peers.pop(peer_role, None)
+            finally:
+                with _voice_peers_lock:
+                    if _voice_peers.get(role) is ws:
+                        _voice_peers.pop(role, None)
+                print(f"[VoiceRelay] {role} disconnected")
+
+        @_sock_ext.route("/ws/voice")
+        def ws_voice(ws):
+            # VoiceClient sends role as query param: ?role=student / ?role=proctor
+            role = request.args.get("role", "").strip().lower()
+            _voice_relay_handler(ws, role)
+
     def _run():
         app.run(host="0.0.0.0", port=port, threaded=True)
 
@@ -4115,19 +4211,15 @@ def start_network_server(port=6000):
         except Exception as e:
             print(f"[cloudflared] Could not open tunnel: {e}")
 
-    # ── Start the WebSocket voice bridge on port 6001 ────────────────────
-    _voice_bridge_port = port + 1   # 6001 by default
-    if _VOICE_BRIDGE_AVAILABLE:
-        start_voice_bridge(port=_voice_bridge_port)
-        # Expose the voice bridge port as a module-level for UI use
-        global _VOICE_BRIDGE_PORT
-        _VOICE_BRIDGE_PORT = _voice_bridge_port
-    else:
-        print("[⚠] voice_bridge.py missing — voice chat disabled")
+    # Voice relay is now served at /ws/voice on the main Flask app (port 6000).
+    # No separate port 6001 needed — works through Cloudflare tunnels automatically.
+    _voice_bridge_port = port   # same port as main app now
+    if not _FLASK_SOCK_AVAILABLE:
+        print("[⚠] flask-sock not installed — voice chat disabled. Run: pip install flask-sock")
 
     print(f"\n{'═'*60}")
     print(f"  🌐  ExamShield v3 Network Server started on port {port}")
-    print(f"  🎙  Voice Bridge (WebSocket) on port {_voice_bridge_port}")
+    print(f"  🎙  Voice relay at ws://...:{port}/ws/voice (same port as main app)")
     print(f"  📡  Local IP  →  {local_ip}:{port}  (LAN only)")
     if _public_url:
         print(f"  🌍  Public URL (cloudflared)  →  {_public_url}")
@@ -4186,7 +4278,7 @@ class MultiStudentProctorWindow:
             # Proctor connects to their OWN bridge server (ws://localhost:6001)
             _voice_proctor = VoiceClient(
                 role="proctor",
-                bridge_url=f"ws://127.0.0.1:{getattr(self, '_voice_port', 6001)}"
+                bridge_url="ws://127.0.0.1:6000/ws/voice"
             )
             def _on_proctor_voice_status(connected, info):
                 try:
@@ -4198,7 +4290,7 @@ class MultiStudentProctorWindow:
                     pass
             _voice_proctor.on_status_change = _on_proctor_voice_status
             _voice_proctor.start()
-            print("[Voice] Proctor voice client started (ws://localhost:6001)")
+            print("[Voice] Proctor voice client started (ws://localhost:6000/ws/voice/proctor)")
         elif mode == "interview":
             missing = []
             if not _VOICE_BRIDGE_AVAILABLE: missing.append("voice_bridge.py")
@@ -4252,7 +4344,7 @@ class MultiStudentProctorWindow:
                     _voice_proctor.stop()
                 _voice_proctor = VoiceClient(
                     role="proctor",
-                    bridge_url=f"ws://127.0.0.1:{getattr(self, '_voice_port', 6001)}")
+                    bridge_url="ws://127.0.0.1:6000/ws/voice")
                 _voice_proctor.start()
             self._btn_audio_toggle.configure(text="🔊  Audio ON",  bg="#0be881", fg="#0d1117")
             self._lbl_audio_status.configure(text="🎤 Mic active", fg="#0be881")
