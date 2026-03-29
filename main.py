@@ -193,7 +193,8 @@ def init_db():
         answer TEXT, marks INTEGER DEFAULT 1, category TEXT DEFAULT 'General')""")
     c.execute("""CREATE TABLE IF NOT EXISTS violations(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        student_id TEXT, timestamp TEXT, event TEXT, detail TEXT)""")
+        student_id TEXT, timestamp TEXT, event TEXT, detail TEXT,
+        session_code TEXT DEFAULT '')""")
     c.execute("""CREATE TABLE IF NOT EXISTS proctor_sessions(
         session_code TEXT PRIMARY KEY,
         proctor_id   TEXT,
@@ -225,6 +226,9 @@ def init_db():
         sent_at      TEXT)""")
     # Migrate older DBs that lack the options column
     try: c.execute("ALTER TABLE runtime_questions ADD COLUMN options TEXT DEFAULT ''")
+    except Exception: pass
+    # Migrate older DBs that lack the session_code column on violations
+    try: c.execute("ALTER TABLE violations ADD COLUMN session_code TEXT DEFAULT ''")
     except Exception: pass
     try: c.execute("INSERT INTO proctors VALUES('admin','admin123')")
     except: pass
@@ -309,8 +313,9 @@ def db_delete_question(qid):
 
 def db_log_violation(student_id, event, detail=""):
     conn = sqlite3.connect(DB)
-    conn.execute("INSERT INTO violations(student_id,timestamp,event,detail) VALUES(?,?,?,?)",
-                 (student_id,time.strftime("%H:%M:%S"),event,detail))
+    sc = _PROCTOR_SESSION_CODE or _STUDENT_SESSION_CODE or ""
+    conn.execute("INSERT INTO violations(student_id,timestamp,event,detail,session_code) VALUES(?,?,?,?,?)",
+                 (student_id,time.strftime("%H:%M:%S"),event,detail,sc))
     conn.commit(); conn.close()
 
 # ─────────────────── Session helpers ─────────────────────────────────────────
@@ -1311,8 +1316,8 @@ def _ask_session_code(parent_root, student_id):
                 status_lbl2.configure(text="❌ Rejected by proctor.", fg="#ff4444")
                 win2.after(1500, win2.destroy)
             else:
-                win2.after(1500, _poll_local)
-        win2.after(1000, _poll_local)
+                win2.after(600, _poll_local)
+        win2.after(600, _poll_local)
         parent_root.wait_window(win2)
         return result2[0]
 
@@ -1454,11 +1459,11 @@ def _ask_session_code(parent_root, student_id):
                     status_lbl.configure(text="❌  Proctor rejected your request.", fg="#ff4444")
                     btn_join.configure(state="normal")
                 else:
-                    win.after(2000, _poll)
+                    win.after(600, _poll)
             except Exception:
-                win.after(2000, _poll)
+                win.after(600, _poll)
 
-        win.after(2000, _poll)
+        win.after(600, _poll)
 
     btn_row = tk.Frame(win, bg="#0d1117"); btn_row.pack(pady=(12, 0))
     btn_join = tk.Button(btn_row, text="Request to Join ▶", font=("Helvetica", 10, "bold"),
@@ -1604,6 +1609,9 @@ class MainLogin(BaseWindow):
                 return   # user cancelled
             proctor_url, session_code = session_info
 
+            global _STUDENT_SESSION_CODE
+            _STUDENT_SESSION_CODE = session_code
+
             if mode=="exam":
                 self.animating=False; self.root.destroy()
                 ExamWindow(uid, proctor_url=proctor_url, session_code=session_code).run()
@@ -1748,10 +1756,10 @@ class ExamWindow:
                         if frame is not None:
                             try:
                                 # Downscale before encoding to reduce wire size
-                                small = cv2.resize(frame, (480, 360),
+                                small = cv2.resize(frame, (640, 480),
                                                    interpolation=cv2.INTER_LINEAR)
                                 ok, buf = cv2.imencode(".jpg", small,
-                                                       [cv2.IMWRITE_JPEG_QUALITY, 45])
+                                                       [cv2.IMWRITE_JPEG_QUALITY, 70])
                                 if ok:
                                     _requests.post(
                                         f"{self.proctor_url}/push_student_frame",
@@ -1765,7 +1773,7 @@ class ExamWindow:
                 self._push_in_flight = False
         self._push_in_flight = True
         threading.Thread(target=_push, daemon=True).start()
-        self.root.after(50, self._push_frame_loop)   # ~20 fps — avoids localhost queuing
+        self.root.after(33, self._push_frame_loop)   # ~30 fps
 
     def _push_stats_loop(self):
         """Push stats at low frequency (1 s) — never blocks camera frame push."""
@@ -1791,7 +1799,7 @@ class ExamWindow:
                         }, timeout=1)
             except Exception: pass
         threading.Thread(target=_do, daemon=True).start()
-        self.root.after(1000, self._push_stats_loop)
+        self.root.after(500, self._push_stats_loop)
 
     # ── Push violation to proctor server ─────────────────────────────────────
     def _push_violation_remote(self, event, detail=""):
@@ -1822,7 +1830,7 @@ class ExamWindow:
                         self.root.after(0, lambda qdata=q: self._show_runtime_question(qdata))
             except Exception: pass
         threading.Thread(target=_fetch, daemon=True).start()
-        self.root.after(5000, self._poll_runtime_questions)
+        self.root.after(2000, self._poll_runtime_questions)
 
     # ── Show runtime question popup ───────────────────────────────────────────
     def _show_runtime_question(self, qdata):
@@ -2340,7 +2348,7 @@ class InterviewStudentWindow:
                 self._pro_pull_in_flight = False
         self._pro_pull_in_flight = True
         threading.Thread(target=_fetch, daemon=True).start()
-        self.root.after(80, self._poll_proctor_frame_loop)  # ~12 fps pull
+        self.root.after(40, self._poll_proctor_frame_loop)  # ~25 fps pull
 
     # ── Push student cam frame to proctor server ─────────────────────────────
     def _push_frame_loop(self):
@@ -2349,18 +2357,18 @@ class InterviewStudentWindow:
         except Exception: return
         if not self.proctor_url or not _REQUESTS_AVAILABLE: return
         if getattr(self, "_push_in_flight", False):
-            self.root.after(50, self._push_frame_loop)
+            self.root.after(33, self._push_frame_loop)
             return
         cam_off = getattr(self, "_cam_off", False)
         def _push():
             try:
                 if _iv_hub:
                     if cam_off:
-                        # Camera off — send a black 480×360 JPEG so proctor sees
+                        # Camera off — send a black 640×480 JPEG so proctor sees
                         # a black tile with "Camera off" text, not a frozen frame
-                        black = np.zeros((360, 480, 3), dtype=np.uint8)
+                        black = np.zeros((480, 640, 3), dtype=np.uint8)
                         cv2.putText(black, "Camera off",
-                                    (480//2 - 65, 360//2 + 8),
+                                    (640//2 - 75, 480//2 + 8),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.9, (80, 80, 80), 2)
                         ok, buf = cv2.imencode(".jpg", black,
                                               [cv2.IMWRITE_JPEG_QUALITY, 30])
@@ -2368,10 +2376,10 @@ class InterviewStudentWindow:
                         frame = _iv_hub.get_student_frame()
                         if frame is None:
                             return
-                        small = cv2.resize(frame, (480, 360),
+                        small = cv2.resize(frame, (640, 480),
                                            interpolation=cv2.INTER_LINEAR)
                         ok, buf = cv2.imencode(".jpg", small,
-                                              [cv2.IMWRITE_JPEG_QUALITY, 45])
+                                              [cv2.IMWRITE_JPEG_QUALITY, 70])
                     if ok:
                         _requests.post(
                             f"{self.proctor_url}/push_student_frame",
@@ -2386,10 +2394,10 @@ class InterviewStudentWindow:
                 self._push_in_flight = False
         self._push_in_flight = True
         threading.Thread(target=_push, daemon=True).start()
-        self.root.after(50, self._push_frame_loop)
+        self.root.after(33, self._push_frame_loop)   # ~30 fps
 
     def _push_stats_loop(self):
-        """Push stats at lower frequency (every 1 s) so it never blocks cam push."""
+        """Push stats at lower frequency (every 500 ms) so it never blocks cam push."""
         try:
             if not self.root.winfo_exists(): return
         except Exception: return
@@ -2411,7 +2419,7 @@ class InterviewStudentWindow:
                         }, timeout=1)
             except Exception: pass
         threading.Thread(target=_do, daemon=True).start()
-        self.root.after(1000, self._push_stats_loop)
+        self.root.after(500, self._push_stats_loop)
 
     def _push_violation_remote(self, event, detail=""):
         if not self.proctor_url or not _REQUESTS_AVAILABLE: return
@@ -2440,7 +2448,7 @@ class InterviewStudentWindow:
                         self.root.after(0, lambda qdata=q: self._show_runtime_question(qdata))
             except Exception: pass
         threading.Thread(target=_fetch, daemon=True).start()
-        self.root.after(5000, self._poll_runtime_questions)
+        self.root.after(2000, self._poll_runtime_questions)
 
     def _show_runtime_question(self, qdata):
         qid     = qdata["id"]
@@ -3508,6 +3516,7 @@ class ProctorWindow:
         # Always read from DB so both local and remote sessions get live data.
         # Only fetch rows newer than the last one we already displayed.
         last_id = getattr(self, "_vio_last_db_id", 0)
+        sc = _PROCTOR_SESSION_CODE or ""
         # For interview mode the hub student_id tells us which student to filter.
         hub = _hub if self.mode == "exam" else _iv_hub
         sid = getattr(hub, "student_id", None) if hub else None
@@ -3516,17 +3525,17 @@ class ProctorWindow:
             if sid:
                 rows = conn.execute(
                     "SELECT id,timestamp,event,detail FROM violations "
-                    "WHERE student_id=? AND id>? ORDER BY id ASC LIMIT 200",
-                    (sid, last_id)).fetchall()
+                    "WHERE student_id=? AND session_code=? AND id>? ORDER BY id ASC LIMIT 200",
+                    (sid, sc, last_id)).fetchall()
             else:
                 rows = conn.execute(
                     "SELECT id,student_id||' | '||timestamp,event,detail FROM violations "
-                    "WHERE id>? ORDER BY id ASC LIMIT 200",
-                    (last_id,)).fetchall()
+                    "WHERE session_code=? AND id>? ORDER BY id ASC LIMIT 200",
+                    (sc, last_id)).fetchall()
             conn.close()
         except Exception as e:
             print(f"[ViolationPoll] DB: {e}")
-            self.root.after(800, self._poll_violations)
+            self.root.after(500, self._poll_violations)
             return
 
         if rows:
@@ -3551,7 +3560,7 @@ class ProctorWindow:
             except Exception as e:
                 print(f"[ViolationPoll] UI: {e}")
 
-        self.root.after(800, self._poll_violations)
+        self.root.after(500, self._poll_violations)
 
     # ── Add Question ──────────────────────────────────────────────────────
     def _build_add_q(self, parent):
@@ -4126,17 +4135,17 @@ def start_network_server(port=6000):
     # ── /violations/<student_id> (GET) ─────────────────────────────────────────
     @app.route("/violations/<student_id>")
     def violations(student_id):
-        hub = _hub or _iv_hub
-        if hub and getattr(hub, 'student_id', None) == student_id:
-            with hub._lock:
-                viols = list(hub.violations)
-            return jsonify(violations=viols)
-        with _student_data_lock:
-            slot = _student_data.get(student_id)
-        if slot is None:
-            return jsonify(violations=[])
-        with slot["lock"]:
-            viols = list(slot["violations"])
+        sc = _PROCTOR_SESSION_CODE or ""
+        try:
+            conn = sqlite3.connect(DB)
+            rows = conn.execute(
+                "SELECT timestamp,event,detail FROM violations "
+                "WHERE student_id=? AND session_code=? ORDER BY id ASC LIMIT 400",
+                (student_id, sc)).fetchall()
+            conn.close()
+            viols = [f"[{r[0]}] {r[1]}: {r[2]}" for r in rows]
+        except Exception:
+            viols = []
         return jsonify(violations=viols)
 
     # ── /push_proctor_frame (POST) — proctor cam → student (interview) ────────
@@ -4298,18 +4307,32 @@ def start_network_server(port=6000):
             f = hub.get_student_frame()
         if f is None:
             return Response("no frame", status=204)
-        ok, buf = cv2.imencode(".jpg", f, [cv2.IMWRITE_JPEG_QUALITY, 62])
+        ok, buf = cv2.imencode(".jpg", f, [cv2.IMWRITE_JPEG_QUALITY, 75])
         if not ok:
             return Response("encode error", status=500)
         return Response(buf.tobytes(), mimetype="image/jpeg")
 
     @app.route("/violations")
     def violations_legacy():
+        sc = _PROCTOR_SESSION_CODE or ""
         hub = _hub or _iv_hub
-        if hub is None:
-            return jsonify(violations=[])
-        with hub._lock:
-            viols = list(hub.violations)
+        sid = getattr(hub, 'student_id', None) if hub else None
+        try:
+            conn = sqlite3.connect(DB)
+            if sid:
+                rows = conn.execute(
+                    "SELECT timestamp,event,detail FROM violations "
+                    "WHERE student_id=? AND session_code=? ORDER BY id ASC LIMIT 400",
+                    (sid, sc)).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT timestamp,event,detail FROM violations "
+                    "WHERE session_code=? ORDER BY id ASC LIMIT 400",
+                    (sc,)).fetchall()
+            conn.close()
+            viols = [f"[{r[0]}] {r[1]}: {r[2]}" for r in rows]
+        except Exception:
+            viols = []
         return jsonify(violations=viols)
 
     @app.route("/stats")
@@ -4682,7 +4705,7 @@ class MultiStudentProctorWindow:
                         self._pro_latest_frame = display_frame.copy()
                     if self._cam_on and not _pro_push_in_flight[0]:
                         ok, buf = cv2.imencode(
-                            ".jpg", display_frame, [cv2.IMWRITE_JPEG_QUALITY, 45])
+                            ".jpg", display_frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
                         if ok and _REQUESTS_AVAILABLE:
                             raw = buf.tobytes()
                             # Always update the module-level JPEG cache so GET /proctor_frame works
@@ -4711,7 +4734,7 @@ class MultiStudentProctorWindow:
                                 finally:
                                     _pro_push_in_flight[0] = False
                             threading.Thread(target=_push_pro, daemon=True).start()
-                time.sleep(0.040)   # ~25 fps — lower rate reduces localhost queue
+                time.sleep(0.033)   # ~30 fps
             cap.release()
             self._pro_cap = None
             self._pro_latest_frame = None
@@ -5655,11 +5678,12 @@ class MultiStudentProctorWindow:
                     cam.image = lbl.image
             # Append only new violations — never wipe the log
             try:
+                sc = _PROCTOR_SESSION_CODE or ""
                 conn = sqlite3.connect(DB)
                 rows = conn.execute(
                     "SELECT id,timestamp,event,detail FROM violations "
-                    "WHERE student_id=? AND id>? ORDER BY id ASC LIMIT 100",
-                    (sid, _modal_last_vio_id[0])).fetchall()
+                    "WHERE student_id=? AND session_code=? AND id>? ORDER BY id ASC LIMIT 100",
+                    (sid, sc, _modal_last_vio_id[0])).fetchall()
                 conn.close()
                 if rows:
                     vlog.configure(state="normal")
@@ -5713,14 +5737,15 @@ class MultiStudentProctorWindow:
 
     # ── Live violation poll (exam proctor) ────────────────────────────────────
     def _poll_violations_live(self):
-        """Append only new DB violation rows every 800 ms — never clears the log."""
+        """Append only new DB violation rows every 500 ms — never clears the log."""
         try:
             if not self.root.winfo_exists(): return
         except Exception: return
         if not hasattr(self, 'vlog'): 
-            self.root.after(800, self._poll_violations_live); return
+            self.root.after(500, self._poll_violations_live); return
 
         sid = getattr(self, "_selected_sid", None)
+        sc  = _PROCTOR_SESSION_CODE or ""
         last_id = getattr(self, "_last_vio_db_id", 0)
         # If the student filter changed, wipe log and reset tracker
         if getattr(self, "_last_vio_sid", "___UNSET___") != sid:
@@ -5737,17 +5762,17 @@ class MultiStudentProctorWindow:
             if sid:
                 rows = conn.execute(
                     "SELECT id,timestamp,event,detail FROM violations "
-                    "WHERE student_id=? AND id>? ORDER BY id ASC LIMIT 200",
-                    (sid, last_id)).fetchall()
+                    "WHERE student_id=? AND session_code=? AND id>? ORDER BY id ASC LIMIT 200",
+                    (sid, sc, last_id)).fetchall()
             else:
                 rows = conn.execute(
                     "SELECT id,student_id||' | '||timestamp,event,detail FROM violations "
-                    "WHERE id>? ORDER BY id ASC LIMIT 200",
-                    (last_id,)).fetchall()
+                    "WHERE session_code=? AND id>? ORDER BY id ASC LIMIT 200",
+                    (sc, last_id)).fetchall()
             conn.close()
         except Exception as e:
             print(f"[VioLive] DB: {e}")
-            self.root.after(800, self._poll_violations_live); return
+            self.root.after(500, self._poll_violations_live); return
 
         if rows:
             try:
@@ -5770,7 +5795,7 @@ class MultiStudentProctorWindow:
             except Exception as e:
                 print(f"[VioLive] UI: {e}")
 
-        self.root.after(800, self._poll_violations_live)
+        self.root.after(500, self._poll_violations_live)
 
     # ── Violations panel ──────────────────────────────────────────────────────
     def _build_violations_panel(self, p):
@@ -5823,18 +5848,19 @@ class MultiStudentProctorWindow:
     def _append_new_violations(self, sid=None):
         """Append only DB rows newer than _last_vio_db_id — no clearing, no flicker."""
         last_id = getattr(self, "_last_vio_db_id", 0)
+        sc = _PROCTOR_SESSION_CODE or ""
         try:
             conn = sqlite3.connect(DB)
             if sid:
                 rows = conn.execute(
                     "SELECT id,timestamp,event,detail FROM violations "
-                    "WHERE student_id=? AND id>? ORDER BY id ASC LIMIT 200",
-                    (sid, last_id)).fetchall()
+                    "WHERE student_id=? AND session_code=? AND id>? ORDER BY id ASC LIMIT 200",
+                    (sid, sc, last_id)).fetchall()
             else:
                 rows = conn.execute(
                     "SELECT id,student_id||' | '||timestamp,event,detail FROM violations "
-                    "WHERE id>? ORDER BY id ASC LIMIT 200",
-                    (last_id,)).fetchall()
+                    "WHERE session_code=? AND id>? ORDER BY id ASC LIMIT 200",
+                    (sc, last_id)).fetchall()
             conn.close()
         except Exception as e:
             print(f"[Violations] DB error: {e}")
@@ -5863,15 +5889,18 @@ class MultiStudentProctorWindow:
             print(f"[Violations] {e}")
 
     def _show_all_violations(self, sid=None):
+        sc = _PROCTOR_SESSION_CODE or ""
         conn = sqlite3.connect(DB)
         if sid:
             rows = conn.execute(
-                "SELECT id,timestamp,event,detail FROM violations WHERE student_id=? ORDER BY id ASC LIMIT 200",
-                (sid,)).fetchall()
+                "SELECT id,timestamp,event,detail FROM violations "
+                "WHERE student_id=? AND session_code=? ORDER BY id ASC LIMIT 200",
+                (sid, sc)).fetchall()
         else:
             rows = conn.execute(
-                "SELECT id,student_id||' | '||timestamp,event,detail FROM violations ORDER BY id ASC LIMIT 200"
-            ).fetchall()
+                "SELECT id,student_id||' | '||timestamp,event,detail FROM violations "
+                "WHERE session_code=? ORDER BY id ASC LIMIT 200",
+                (sc,)).fetchall()
         conn.close()
 
         # Full reload — clear existing log and reset the incremental tracker
@@ -6194,11 +6223,12 @@ class MultiStudentProctorWindow:
             # ── Fix 1: Refresh mini violations log on each tile ──
             try:
                 # Pull from DB (works for both local & remote; DB is always on this machine)
+                sc = _PROCTOR_SESSION_CODE or ""
                 conn = sqlite3.connect(DB)
                 rows = conn.execute(
                     "SELECT timestamp,event,detail FROM violations "
-                    "WHERE student_id=? ORDER BY id DESC LIMIT 8",
-                    (sid,)).fetchall()
+                    "WHERE student_id=? AND session_code=? ORDER BY id DESC LIMIT 8",
+                    (sid, sc)).fetchall()
                 conn.close()
                 rows = list(reversed(rows))   # chronological order
                 _VIOL_COLORS = {
@@ -6307,7 +6337,7 @@ class MultiStudentProctorWindow:
                     alive = False
                 if not alive:
                     self._pending_notified.discard(sid)
-        self.root.after(2000, self._poll_join_requests)
+        self.root.after(800, self._poll_join_requests)
 
     def _show_join_request(self, student_id):
         if not hasattr(self, '_join_request_windows'):
