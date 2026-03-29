@@ -4134,11 +4134,20 @@ def start_network_server(port=6000):
                 and never block indefinitely — prevents the 30s idle disconnect.
               • None / timeout returns are treated as keepalive ticks, not errors.
               • Only a genuine exception (socket closed) breaks the loop.
+              • Bytes are forwarded as binary frames (send_binary) so flask-sock
+                never re-encodes them as UTF-8 text, which would corrupt audio.
             """
             if role not in ("student", "proctor"):
                 print(f"[VoiceRelay] Unknown role '{role}' — rejected")
                 return
             with _voice_peers_lock:
+                # Close any stale connection occupying this role slot
+                old = _voice_peers.get(role)
+                if old and old is not ws:
+                    try:
+                        old.close()
+                    except Exception:
+                        pass
                 _voice_peers[role] = ws
             peer_role = "proctor" if role == "student" else "student"
             print(f"[VoiceRelay] {role} connected  (peers: {list(_voice_peers.keys())})")
@@ -4157,20 +4166,24 @@ def start_network_server(port=6000):
                         # None = timeout tick or ping frame — NOT a close signal.
                         # Just loop back; the VoiceClient ping_interval handles keepalive.
                         continue
-                    # Forward audio bytes to the other peer
+                    # Forward audio bytes to the other peer as a binary frame.
+                    # IMPORTANT: use send() for bytes — flask-sock sends bytes as
+                    # binary frames automatically; do NOT call send_binary separately.
                     with _voice_peers_lock:
                         peer = _voice_peers.get(peer_role)
-                    if peer:
+                    if peer and isinstance(data, (bytes, bytearray)):
                         try:
                             peer.send(data)
                         except Exception:
                             with _voice_peers_lock:
-                                _voice_peers.pop(peer_role, None)
+                                if _voice_peers.get(peer_role) is peer:
+                                    _voice_peers.pop(peer_role, None)
+                            print(f"[VoiceRelay] {peer_role} send failed — removed from peers")
             finally:
                 with _voice_peers_lock:
                     if _voice_peers.get(role) is ws:
                         _voice_peers.pop(role, None)
-                print(f"[VoiceRelay] {role} disconnected")
+                print(f"[VoiceRelay] {role} disconnected  (peers: {list(_voice_peers.keys())})")
 
         @_sock_ext.route("/ws/voice")
         def ws_voice(ws):

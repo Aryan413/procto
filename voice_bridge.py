@@ -141,7 +141,7 @@ class VoiceClient:
         self._muted      = False
         self._volume     = 1.0
         self._ws         = None
-        self._play_q: queue.Queue = queue.Queue(maxsize=8)
+        self._play_q: queue.Queue = queue.Queue(maxsize=20)
         self.on_status_change = None   # optional callback(connected: bool, info: str)
 
     # ── Public API ─────────────────────────────────────────────────────────────
@@ -206,10 +206,20 @@ class VoiceClient:
         """Received audio chunk from the bridge — queue for playback."""
         if not isinstance(data, (bytes, bytearray)):
             return
+        chunk = bytes(data)
         try:
-            self._play_q.put_nowait(bytes(data))
+            self._play_q.put_nowait(chunk)
         except queue.Full:
-            pass   # drop oldest — prefer low latency over completeness
+            # Queue full — drop the OLDEST chunk to keep latency low,
+            # then enqueue the freshest audio we just received.
+            try:
+                self._play_q.get_nowait()
+            except queue.Empty:
+                pass
+            try:
+                self._play_q.put_nowait(chunk)
+            except queue.Full:
+                pass
 
     def _on_error(self, ws, error):
         self._notify_status(False, str(error))
@@ -230,14 +240,22 @@ class VoiceClient:
                 dtype=DTYPE,
                 blocksize=CHUNK_FRAMES,
             ) as stream:
-                while self._running and ws.sock and ws.sock.connected:
-                    chunk, _ = stream.read(CHUNK_FRAMES)
+                while self._running:
+                    # ── Safe connection check ─────────────────────────────────
+                    # ws.sock / ws.sock.connected is unreliable across versions
+                    # of websocket-client — check _running and catch send errors
+                    # instead of reading the internal socket state.
+                    chunk, overflowed = stream.read(CHUNK_FRAMES)
+                    if overflowed:
+                        # Input buffer overflowed — discard and keep going
+                        continue
                     if self._muted:
                         continue
                     raw = chunk.tobytes()
                     try:
                         ws.send_binary(raw)
                     except Exception:
+                        # Socket closed — exit capture; _connect_loop will reconnect
                         break
         except Exception as e:
             print(f"[VoiceClient/{self.role}] Capture error: {e}")
@@ -248,6 +266,7 @@ class VoiceClient:
         """Drain the play queue and send chunks to the speaker."""
         if not _SD_OK:
             return
+        import numpy as np   # import once, outside the hot loop
         try:
             with _sd.OutputStream(
                 samplerate=SAMPLE_RATE,
@@ -257,10 +276,13 @@ class VoiceClient:
             ) as stream:
                 while self._running:
                     try:
-                        data = self._play_q.get(timeout=0.5)
+                        data = self._play_q.get(timeout=0.2)
                     except queue.Empty:
+                        # Write silence to keep the stream alive and prevent
+                        # the output buffer from underrunning / glitching.
+                        silence = np.zeros(CHUNK_FRAMES, dtype=DTYPE)
+                        stream.write(silence)
                         continue
-                    import numpy as np
                     samples = np.frombuffer(data, dtype=DTYPE).copy()
                     if self._volume != 1.0:
                         samples = np.clip(
