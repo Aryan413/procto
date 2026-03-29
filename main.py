@@ -1585,22 +1585,6 @@ class MainLogin(BaseWindow):
         uid=self.eid.get().strip(); pwd=self.epw.get().strip()
         if not uid or not pwd: messagebox.showerror("Error","Fill both fields"); return
         if db_register(uid,pwd):
-            try:
-                from face_auth import capture_face_registration, init_face_db
-                init_face_db()   # ensure face_data column exists
-                ans = messagebox.askyesno(
-                    "Face Registration",
-                    f"Account '{uid}' created!\n\n"
-                    "Register your face now for biometric login?\n\n"
-                    "YES → camera opens (recommended)\n"
-                    "NO  → skip (face check bypassed at login)")
-                if ans:
-                    self.root.withdraw()
-                    capture_face_registration(uid)
-                    self.root.deiconify()
-            except ImportError:
-                messagebox.showwarning("Face Auth",
-                    "face_auth.py not found — face registration skipped.")
             messagebox.showinfo("Success", "Registration complete! You can now log in.")
         else:
             messagebox.showerror("Error","ID already exists.")
@@ -1614,13 +1598,6 @@ class MainLogin(BaseWindow):
             messagebox.showerror("Login Failed","Wrong ID or password."); return
 
         if role=="student":
-            # Face verification
-            try:
-                from face_auth import verify_face
-                self.root.withdraw(); ok=verify_face(uid); self.root.deiconify()
-                if not ok: messagebox.showerror("Denied","Face verification failed!"); return
-            except ImportError: pass
-
             # Ask for proctor session code
             session_info = _ask_session_code(self.root, uid)
             if session_info is None:
@@ -6466,11 +6443,6 @@ class MultiStudentProctorWindow:
 
 if __name__ == "__main__":
     init_db()
-    try:
-        from face_auth import init_face_db
-        init_face_db()
-    except ImportError:
-        pass
 
     # Dependency warnings
     if not _KEYBOARD_HOOK_AVAILABLE:
