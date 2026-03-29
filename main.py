@@ -3387,7 +3387,7 @@ class ProctorWindow:
             self.vlog.configure(state="normal")
             self.vlog.delete("1.0","end")
             self.vlog.configure(state="disabled")
-            self._vio_seen_count = 0  # reset so new violations still appear after clear
+            self._vio_last_db_id = 0  # reset so new violations keep appearing after clear
         except Exception: pass
 
     # ── Camera poll — REMOTE or LOCAL ────────────────────────────────────
@@ -3505,40 +3505,51 @@ class ProctorWindow:
             if not self.root.winfo_exists(): return
         except Exception: return
 
-        if self.remote_url:
-            # ── REMOTE: read from background thread cache ─────────────
-            with self._r_lock:
-                viols = list(self._r_violations)
-        else:
-            # ── LOCAL: read from in-process hub ──────────────────────
-            hub = _hub if self.mode=="exam" else _iv_hub
-            viols = list(hub.violations) if hub else []
+        # Always read from DB so both local and remote sessions get live data.
+        # Only fetch rows newer than the last one we already displayed.
+        last_id = getattr(self, "_vio_last_db_id", 0)
+        # For interview mode the hub student_id tells us which student to filter.
+        hub = _hub if self.mode == "exam" else _iv_hub
+        sid = getattr(hub, "student_id", None) if hub else None
+        try:
+            conn = sqlite3.connect(DB)
+            if sid:
+                rows = conn.execute(
+                    "SELECT id,timestamp,event,detail FROM violations "
+                    "WHERE student_id=? AND id>? ORDER BY id ASC LIMIT 200",
+                    (sid, last_id)).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT id,student_id||' | '||timestamp,event,detail FROM violations "
+                    "WHERE id>? ORDER BY id ASC LIMIT 200",
+                    (last_id,)).fetchall()
+            conn.close()
+        except Exception as e:
+            print(f"[ViolationPoll] DB: {e}")
+            self.root.after(800, self._poll_violations)
+            return
 
-        # Only append NEW entries — never clear existing log so proctor
-        # always sees the full live history without flicker.
-        if viols is not None:
-            seen = getattr(self, "_vio_seen_count", 0)
-            new_viols = viols[seen:]
-            if new_viols:
-                try:
-                    self.vlog.configure(state="normal")
-                    for v in new_viols:
-                        vu = v.upper()
-                        if   "STRIKE"      in vu: tag = "strike"
-                        elif "TERMINATED"  in vu: tag = "strike"
-                        elif "WARNING"     in vu: tag = "warn"
-                        elif "BLOCKED_APP" in vu: tag = "blocked"
-                        elif "TAB_SWITCH"  in vu: tag = "blocked"
-                        elif "KEYSTROKE"   in vu: tag = "keystroke"
-                        elif "APP_WARNING" in vu: tag = "appwarn"
-                        elif "START"       in vu: tag = "ok"
-                        else:                     tag = "info"
-                        self.vlog.insert("end", v + "\n", tag)
-                    self.vlog.configure(state="disabled")
-                    self.vlog.see("end")
-                    self._vio_seen_count = seen + len(new_viols)
-                except Exception as e:
-                    print(f"[ViolationPoll] {e}")
+        if rows:
+            try:
+                self.vlog.configure(state="normal")
+                for row in rows:
+                    row_id, ts, ev, det = row
+                    vu = ev.upper()
+                    if   "STRIKE"      in vu: tag = "strike"
+                    elif "TERMINATED"  in vu: tag = "strike"
+                    elif "WARNING"     in vu: tag = "warn"
+                    elif "BLOCKED_APP" in vu: tag = "blocked"
+                    elif "TAB_SWITCH"  in vu: tag = "blocked"
+                    elif "KEYSTROKE"   in vu: tag = "keystroke"
+                    elif "APP_WARNING" in vu: tag = "appwarn"
+                    elif "START"       in vu: tag = "ok"
+                    else:                     tag = "info"
+                    self.vlog.insert("end", f"[{ts}] {ev}: {det}\n", tag)
+                    self._vio_last_db_id = row_id
+                self.vlog.configure(state="disabled")
+                self.vlog.see("end")
+            except Exception as e:
+                print(f"[ViolationPoll] UI: {e}")
 
         self.root.after(800, self._poll_violations)
 
@@ -4520,6 +4531,7 @@ class MultiStudentProctorWindow:
         self._poll_cameras()
         self._poll_join_requests()
         self._show_session_info()
+        self._poll_violations_live()   # dedicated live violation log — never clears
 
         # ── Start proctor voice (WebSocket bridge) for interview mode ──────
         global _voice_proctor
@@ -5627,6 +5639,9 @@ class MultiStudentProctorWindow:
             win.after(2000, _poll_chat_modal)
 
         # ── Shared modal update loop (camera + violations + chat polling) ──
+        # Per-modal violation tracker
+        _modal_last_vio_id = [0]
+
         def _update_modal():
             try:
                 if not win.winfo_exists(): return
@@ -5638,24 +5653,28 @@ class MultiStudentProctorWindow:
                 if hasattr(lbl, "image") and lbl.image:
                     cam.configure(image=lbl.image, text="")
                     cam.image = lbl.image
-            # Update violations
+            # Append only new violations — never wipe the log
             try:
                 conn = sqlite3.connect(DB)
                 rows = conn.execute(
-                    "SELECT timestamp,event,detail FROM violations "
-                    "WHERE student_id=? ORDER BY id DESC LIMIT 100", (sid,)).fetchall()
+                    "SELECT id,timestamp,event,detail FROM violations "
+                    "WHERE student_id=? AND id>? ORDER BY id ASC LIMIT 100",
+                    (sid, _modal_last_vio_id[0])).fetchall()
                 conn.close()
-                vlog.configure(state="normal"); vlog.delete("1.0","end")
-                for ts, ev, det in rows:
-                    vu = ev.upper()
-                    tag = ("strike" if "STRIKE" in vu or "TERMINATED" in vu
-                           else "warn" if "WARNING" in vu
-                           else "blocked" if "BLOCKED" in vu or "TAB" in vu
-                           else "ok" if "START" in vu else "info")
-                    vlog.insert("end", f"[{ts}] {ev}: {det}\n", tag)
-                vlog.configure(state="disabled"); vlog.see("end")
+                if rows:
+                    vlog.configure(state="normal")
+                    for row_id, ts, ev, det in rows:
+                        vu = ev.upper()
+                        tag = ("strike" if "STRIKE" in vu or "TERMINATED" in vu
+                               else "warn" if "WARNING" in vu
+                               else "blocked" if "BLOCKED" in vu or "TAB" in vu
+                               else "ok" if "START" in vu else "info")
+                        vlog.insert("end", f"[{ts}] {ev}: {det}\n", tag)
+                        _modal_last_vio_id[0] = row_id
+                    vlog.configure(state="disabled")
+                    vlog.see("end")
             except Exception: pass
-            win.after(100, _update_modal)   # 10fps for modal
+            win.after(500, _update_modal)   # 2fps is enough for violation log
 
         win.after(50, _update_modal)
         win.after(100, _poll_chat_modal)
@@ -5692,6 +5711,67 @@ class MultiStudentProctorWindow:
                 try: self._student_count_lbl.configure(text="(0 online)")
                 except Exception: pass
 
+    # ── Live violation poll (exam proctor) ────────────────────────────────────
+    def _poll_violations_live(self):
+        """Append only new DB violation rows every 800 ms — never clears the log."""
+        try:
+            if not self.root.winfo_exists(): return
+        except Exception: return
+        if not hasattr(self, 'vlog'): 
+            self.root.after(800, self._poll_violations_live); return
+
+        sid = getattr(self, "_selected_sid", None)
+        last_id = getattr(self, "_last_vio_db_id", 0)
+        # If the student filter changed, wipe log and reset tracker
+        if getattr(self, "_last_vio_sid", "___UNSET___") != sid:
+            self._last_vio_sid = sid
+            self._last_vio_db_id = 0
+            last_id = 0
+            try:
+                self.vlog.configure(state="normal")
+                self.vlog.delete("1.0", "end")
+                self.vlog.configure(state="disabled")
+            except Exception: pass
+        try:
+            conn = sqlite3.connect(DB)
+            if sid:
+                rows = conn.execute(
+                    "SELECT id,timestamp,event,detail FROM violations "
+                    "WHERE student_id=? AND id>? ORDER BY id ASC LIMIT 200",
+                    (sid, last_id)).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT id,student_id||' | '||timestamp,event,detail FROM violations "
+                    "WHERE id>? ORDER BY id ASC LIMIT 200",
+                    (last_id,)).fetchall()
+            conn.close()
+        except Exception as e:
+            print(f"[VioLive] DB: {e}")
+            self.root.after(800, self._poll_violations_live); return
+
+        if rows:
+            try:
+                self.vlog.configure(state="normal")
+                for row_id, ts, ev, det in rows:
+                    vu = ev.upper()
+                    if   "STRIKE"      in vu: tag = "strike"
+                    elif "TERMINATED"  in vu: tag = "strike"
+                    elif "WARNING"     in vu: tag = "warn"
+                    elif "BLOCKED_APP" in vu: tag = "blocked"
+                    elif "TAB_SWITCH"  in vu: tag = "blocked"
+                    elif "KEYSTROKE"   in vu: tag = "keystroke"
+                    elif "APP_WARNING" in vu: tag = "appwarn"
+                    elif "START"       in vu: tag = "ok"
+                    else:                     tag = "info"
+                    self.vlog.insert("end", f"[{ts}] {ev}: {det}\n", tag)
+                    self._last_vio_db_id = row_id
+                self.vlog.configure(state="disabled")
+                self.vlog.see("end")
+            except Exception as e:
+                print(f"[VioLive] UI: {e}")
+
+        self.root.after(800, self._poll_violations_live)
+
     # ── Violations panel ──────────────────────────────────────────────────────
     def _build_violations_panel(self, p):
         top = tk.Frame(p, bg="#0d1117"); top.pack(fill="x", padx=8, pady=(8,2))
@@ -5726,27 +5806,19 @@ class MultiStudentProctorWindow:
                   command=lambda: (self.vlog.configure(state="normal"),
                                    self.vlog.delete("1.0","end"),
                                    self.vlog.configure(state="disabled"),
-                                   setattr(self, "_last_vio_db_id", 0))).pack(pady=(0,6))
+                                   setattr(self, "_last_vio_db_id", 0),
+                                   setattr(self, "_last_vio_sid", "___UNSET___"))).pack(pady=(0,6))
 
     def _refresh_violations(self):
-        if not hasattr(self, 'vlog'): return   # interview mode has no violations panel
-        sid = self._selected_sid
+        if not hasattr(self, 'vlog'): return
+        # Force-reload the filter label; actual log appending is handled by _poll_violations_live
+        sid = getattr(self, "_selected_sid", None)
         if sid:
             self._sel_lbl.configure(text=f"Showing violations for: {sid}")
         else:
             self._sel_lbl.configure(text="All students (select a student to filter)")
-        # On a filter/student change, do a full reload; otherwise append only new rows.
-        new_sid = sid
-        if getattr(self, "_last_vio_sid", "___UNSET___") != new_sid:
-            self._last_vio_sid = new_sid
-            self._last_vio_db_id = 0
-            try:
-                self.vlog.configure(state="normal")
-                self.vlog.delete("1.0", "end")
-                self.vlog.configure(state="disabled")
-            except Exception:
-                pass
-        self._append_new_violations(sid)
+        # Changing _last_vio_sid forces _poll_violations_live to wipe+reload on next tick
+        self._last_vio_sid = "___UNSET___"
 
     def _append_new_violations(self, sid=None):
         """Append only DB rows newer than _last_vio_db_id — no clearing, no flicker."""
@@ -6036,7 +6108,6 @@ class MultiStudentProctorWindow:
                 if sid not in self._student_tiles:
                     self._add_student_tile(sid)
                     self._update_rq_student_menu()
-            self._refresh_violations()
 
         # 2. Update each student tile
         _STALE_TIMEOUT = 12   # seconds without a heartbeat → student has closed the app
