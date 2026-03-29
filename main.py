@@ -1012,6 +1012,11 @@ class InterviewHub:
                     if yolo.names[int(box.cls[0])]=="cell phone" and float(box.conf[0])>0.45:
                         x1,y1,x2,y2=map(int,box.xyxy[0])
                         last_boxes.append((x1,y1,x2,y2,float(box.conf[0])))
+
+            # Save a clean copy NOW — before any cv2 drawings go onto frame_s.
+            # Student PiP gets this; proctor gets the fully annotated frame_s.
+            frame_s_clean = frame_s.copy()
+
             for x1,y1,x2,y2,cf in last_boxes:
                 cv2.rectangle(frame_s,(x1,y1),(x2,y2),(0,60,255),2)
                 cv2.putText(frame_s,f"PHONE {cf:.0%}",(x1,y1-8),cv2.FONT_HERSHEY_SIMPLEX,0.6,(0,60,255),2)
@@ -1059,10 +1064,6 @@ class InterviewHub:
                     self._log(f"STRIKE {self.strike_count}","Phone detected")
             else:
                 phone_t = None
-
-            # Save a clean copy BEFORE drawing any overlays.
-            # The student must never see gaze/face/strike info in their PiP.
-            frame_s_clean = frame_s.copy()
 
             h,w=frame_s.shape[:2]
             ov=frame_s.copy(); cv2.rectangle(ov,(0,0),(w,60),(10,10,10),-1)
