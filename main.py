@@ -4117,10 +4117,24 @@ def start_network_server(port=6000):
     _voice_peers_lock = threading.Lock()
 
     if _FLASK_SOCK_AVAILABLE:
+        # PING_INTERVAL must be shorter than Cloudflare's 100s WS timeout
+        # and shorter than VoiceClient's ping_interval (20s) so the relay
+        # keeps the connection alive from the server side too.
         _sock_ext = _FlaskSock(app)
+        try:
+            _sock_ext.ping_interval = 15   # send server-side ping every 15s
+        except Exception:
+            pass  # older flask-sock versions may not support this attribute
 
         def _voice_relay_handler(ws, role):
-            """Relay raw audio bytes between student and proctor."""
+            """Relay raw audio bytes between student and proctor.
+
+            Key design decisions:
+              • receive(timeout=5) with a short timeout so we loop frequently
+                and never block indefinitely — prevents the 30s idle disconnect.
+              • None / timeout returns are treated as keepalive ticks, not errors.
+              • Only a genuine exception (socket closed) breaks the loop.
+            """
             if role not in ("student", "proctor"):
                 print(f"[VoiceRelay] Unknown role '{role}' — rejected")
                 return
@@ -4131,12 +4145,19 @@ def start_network_server(port=6000):
             try:
                 while True:
                     try:
-                        data = ws.receive(timeout=30)
+                        # Short timeout: loops back quickly, keeps connection alive,
+                        # and doesn't block forwarding in the other direction.
+                        data = ws.receive(timeout=5)
+                    except ConnectionError:
+                        break          # client actually disconnected
                     except Exception:
-                        break
+                        # TimeoutError / other transient errors — keep looping
+                        continue
                     if data is None:
-                        break
-                    # Forward to the other peer
+                        # None = timeout tick or ping frame — NOT a close signal.
+                        # Just loop back; the VoiceClient ping_interval handles keepalive.
+                        continue
+                    # Forward audio bytes to the other peer
                     with _voice_peers_lock:
                         peer = _voice_peers.get(peer_role)
                     if peer:
@@ -4153,7 +4174,7 @@ def start_network_server(port=6000):
 
         @_sock_ext.route("/ws/voice")
         def ws_voice(ws):
-            # VoiceClient sends role as query param: ?role=student / ?role=proctor
+            # VoiceClient (voice_bridge.py) connects with ?role=student or ?role=proctor
             role = request.args.get("role", "").strip().lower()
             _voice_relay_handler(ws, role)
 
@@ -4290,7 +4311,7 @@ class MultiStudentProctorWindow:
                     pass
             _voice_proctor.on_status_change = _on_proctor_voice_status
             _voice_proctor.start()
-            print("[Voice] Proctor voice client started (ws://localhost:6000/ws/voice/proctor)")
+            print("[Voice] Proctor voice client started → ws://localhost:6000/ws/voice")
         elif mode == "interview":
             missing = []
             if not _VOICE_BRIDGE_AVAILABLE: missing.append("voice_bridge.py")
