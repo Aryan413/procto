@@ -1912,6 +1912,19 @@ class ExamWindow:
         if self._my_hub and self._my_hub.terminated:
             self._force_terminate()
             return
+        # Also poll the proctor server to detect a proctor-side kick (remote mode).
+        if self.proctor_url and _REQUESTS_AVAILABLE:
+            def _poll_kick():
+                try:
+                    r = _requests.get(f"{self.proctor_url}/kick_status",
+                                      params={"student_id": self.sid,
+                                              "session_code": self.session_code},
+                                      timeout=1)
+                    if r.json().get("kicked"):
+                        self.root.after(0, self._force_terminate)
+                except Exception:
+                    pass
+            threading.Thread(target=_poll_kick, daemon=True).start()
         self.root.after(500, self._check_termination)
 
     def _force_terminate(self):
@@ -2260,6 +2273,13 @@ class InterviewStudentWindow:
                     frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
                     if frame is not None:
                         _iv_hub.set_proctor_frame(frame)
+                elif r.status_code == 204 and _iv_hub:
+                    # 204 = proctor cam is off — wipe the cached frame so the
+                    # student tile shows "Camera off" instead of a frozen still.
+                    with _iv_hub._lock:
+                        _iv_hub._pf_a = None
+                        _iv_hub._pf_b = None
+                        _iv_hub.proctor_frame = None
             except Exception:
                 pass
             finally:
@@ -2494,7 +2514,20 @@ class InterviewStudentWindow:
         except Exception: return
         if _iv_hub and _iv_hub.terminated:
             self._force_end(); return
-        self.root.after(500,self._check_terminate)
+        # Also poll the proctor server to detect a proctor-side kick (remote mode).
+        if self.proctor_url and _REQUESTS_AVAILABLE:
+            def _poll_kick():
+                try:
+                    r = _requests.get(f"{self.proctor_url}/kick_status",
+                                      params={"student_id": self.sid,
+                                              "session_code": self.session_code},
+                                      timeout=1)
+                    if r.json().get("kicked"):
+                        self.root.after(0, self._force_end)
+                except Exception:
+                    pass
+            threading.Thread(target=_poll_kick, daemon=True).start()
+        self.root.after(500, self._check_terminate)
 
     def _force_end(self):
         self._sec.stop()
@@ -2913,10 +2946,13 @@ class InterviewStudentWindow:
                     except Exception as e:
                         print(f"[proctor cam] {e}")
                 else:
+                    # No frame in buffer — either not yet connected or proctor turned cam off.
+                    # Clear the label so we don't show a frozen still image.
                     try:
                         self.cam_pro.configure(image="",
-                            text="Waiting for interviewer\nto connect their camera…",
-                            fg="#3a3a5a")
+                            text="📷 Interviewer camera off",
+                            fg="#5f6368")
+                        self.cam_pro.image = None
                     except Exception: pass
 
         self.root.after(16, self._poll_cam)   # ~60 fps display
@@ -3841,6 +3877,16 @@ def start_network_server(port=6000):
         _get_or_create_student_slot(student_id)
         return jsonify(ok=True, status="pending")
 
+    # ── /kick_status (GET) — student polls to detect if proctor kicked them ─────
+    @app.route("/kick_status")
+    def kick_status():
+        student_id   = request.args.get("student_id", "")
+        session_code = request.args.get("session_code", "")
+        if not student_id or not session_code:
+            return jsonify(kicked=False)
+        status = db_get_join_request(session_code, student_id) or "pending"
+        return jsonify(kicked=(status == "rejected"))
+
     # ── /join_status (GET) — student polls until accepted/rejected ───────────
     @app.route("/join_status")
     def join_status():
@@ -4507,6 +4553,8 @@ class MultiStudentProctorWindow:
         if self._pro_cam_running:
             return
         self._pro_cam_running = True
+        # Use a threading.Event for instant wakeup on stop (avoids blocking in cap.read)
+        self._pro_cam_stop_evt = threading.Event()
         # Initialise frame store once; preserve across restart cycles
         if not hasattr(self, '_pro_frame_lock'):
             self._pro_frame_lock   = threading.Lock()
@@ -4518,9 +4566,10 @@ class MultiStudentProctorWindow:
             cap.set(cv2.CAP_PROP_FRAME_WIDTH,  640)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
             cap.set(cv2.CAP_PROP_FPS, 30)
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)   # keep buffer small for low latency
             self._pro_cap = cap
             _pro_push_in_flight = [False]   # mutable flag for inner closure
-            while self._pro_cam_running:
+            while self._pro_cam_running and not self._pro_cam_stop_evt.is_set():
                 ret, frame = cap.read()
                 if ret:
                     # Downscale proctor self-view to 480x360 before storing (faster render)
@@ -4568,6 +4617,31 @@ class MultiStudentProctorWindow:
 
     def _stop_pro_cam(self):
         self._pro_cam_running = False
+        # Signal the capture thread to exit immediately without waiting for cap.read()
+        evt = getattr(self, "_pro_cam_stop_evt", None)
+        if evt is not None:
+            evt.set()
+        # Clear the module-level JPEG cache immediately so students see "Camera Off"
+        # instead of a frozen last frame from the proctor's camera.
+        with _proctor_jpeg_lock:
+            _proctor_jpeg_cache[0] = None
+        # Push a black "Camera off" frame into the self-view label so the proctor's
+        # own tile goes dark instantly instead of showing a frozen still.
+        try:
+            lbl = self._pro_self_lbl
+            lw = max(100, lbl.winfo_width())
+            lh = max(75,  lbl.winfo_height())
+            black = np.zeros((lh, lw, 3), dtype=np.uint8)
+            cv2.putText(black, "Camera off",
+                        (max(0, lw // 2 - 55), lh // 2 + 5),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (80, 80, 80), 1)
+            import PIL.Image as _PIL_Image
+            import PIL.ImageTk as _PIL_ImageTk
+            img = _PIL_ImageTk.PhotoImage(_PIL_Image.fromarray(black))
+            lbl.configure(image=img, text="")
+            lbl.image = img
+        except Exception:
+            pass
 
     # ── Build UI ──────────────────────────────────────────────────────────────
     def _build(self):
@@ -5487,7 +5561,17 @@ class MultiStudentProctorWindow:
 
     def _kick_student(self, sid):
         if messagebox.askyesno("Kick Student", f"Remove {sid} from session?", parent=self.root):
+            # Write to DB first so the student's poll loop sees "rejected" immediately.
             db_set_join_status(_PROCTOR_SESSION_CODE, sid, "rejected")
+            # Also POST via the local HTTP server so remote-student kick_status polls return fast.
+            def _notify():
+                try:
+                    if _REQUESTS_AVAILABLE:
+                        _requests.post("http://127.0.0.1:6000/reject_student",
+                                       json={"student_id": sid}, timeout=1)
+                except Exception:
+                    pass
+            threading.Thread(target=_notify, daemon=True).start()
             tile = self._student_tiles.pop(sid, None)
             if tile:
                 tile["card"].grid_forget()
@@ -6098,25 +6182,53 @@ class MultiStudentProctorWindow:
 
     # ── Logout / close ─────────────────────────────────────────────────────────
     def _logout(self):
-        db_close_session(_PROCTOR_SESSION_CODE or "")
+        # Destroy the window immediately to avoid UI lag, then clean up in background.
         self._stop_pro_cam()
-        if _hub:    _hub.stop()
-        if _iv_hub: _iv_hub.stop()
-        global _audio_proctor, _voice_proctor
-        if _audio_proctor:  _audio_proctor.stop();  _audio_proctor = None
-        if _voice_proctor:  _voice_proctor.stop();   _voice_proctor = None
         self.root.destroy()
+        def _cleanup():
+            try: db_close_session(_PROCTOR_SESSION_CODE or "")
+            except Exception: pass
+            if _hub:
+                try: _hub.stop()
+                except Exception: pass
+            if _iv_hub:
+                try: _iv_hub.stop()
+                except Exception: pass
+            global _audio_proctor, _voice_proctor
+            if _audio_proctor:
+                try: _audio_proctor.stop()
+                except Exception: pass
+                _audio_proctor = None
+            if _voice_proctor:
+                try: _voice_proctor.stop()
+                except Exception: pass
+                _voice_proctor = None
+        threading.Thread(target=_cleanup, daemon=True).start()
         MainLogin().run()
 
     def _close(self):
-        db_close_session(_PROCTOR_SESSION_CODE or "")
+        # Destroy the window immediately to avoid UI lag, then clean up in background.
         self._stop_pro_cam()
-        if _hub:    _hub.stop()
-        if _iv_hub: _iv_hub.stop()
-        global _audio_proctor, _voice_proctor
-        if _audio_proctor:  _audio_proctor.stop();  _audio_proctor = None
-        if _voice_proctor:  _voice_proctor.stop();   _voice_proctor = None
         self.root.destroy()
+        def _cleanup():
+            try: db_close_session(_PROCTOR_SESSION_CODE or "")
+            except Exception: pass
+            if _hub:
+                try: _hub.stop()
+                except Exception: pass
+            if _iv_hub:
+                try: _iv_hub.stop()
+                except Exception: pass
+            global _audio_proctor, _voice_proctor
+            if _audio_proctor:
+                try: _audio_proctor.stop()
+                except Exception: pass
+                _audio_proctor = None
+            if _voice_proctor:
+                try: _voice_proctor.stop()
+                except Exception: pass
+                _voice_proctor = None
+        threading.Thread(target=_cleanup, daemon=True).start()
 
     def run(self): self.root.mainloop()
 

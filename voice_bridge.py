@@ -163,6 +163,18 @@ class VoiceClient:
     VAD_RMS_MIN  = 150      # below this post-AEC = no voice
     VAD_HOLD_MS  = 300      # hold window after voice stops (ms)
 
+    # ── Per-role echo-cancellation overrides ──────────────────────────────────
+    # The proctor is typically on a laptop with the speaker right next to the mic.
+    # A stronger AEC strength + higher noise gate prevents speaker bleed from being
+    # re-transmitted as echo back to the student.
+    _ROLE_OVERRIDES = {
+        "proctor": {
+            "AEC_STRENGTH":   0.97,   # much more aggressive echo removal
+            "NOISE_GATE_RMS": 200,    # higher gate — laptop speakers are louder
+            "VAD_RMS_MIN":    250,    # only pass clear speech (not echo remnants)
+        }
+    }
+
     def __init__(self, role: str, bridge_url: str):
         self.role        = role
         self.bridge_url  = bridge_url
@@ -178,6 +190,11 @@ class VoiceClient:
         self._aec_lock  = threading.Lock()
 
         self.on_status_change = None
+
+        # Apply per-role overrides (e.g. proctor gets stronger AEC to kill echo)
+        overrides = self._ROLE_OVERRIDES.get(role, {})
+        for attr, val in overrides.items():
+            setattr(self, attr, val)
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
