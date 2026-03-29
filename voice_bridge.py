@@ -189,7 +189,7 @@ class VoiceClient:
                     on_close   = self._on_close,
                 )
                 self._ws = ws
-                ws.run_forever(ping_interval=20, ping_timeout=10)
+                ws.run_forever(ping_interval=15, ping_timeout=8)
             except Exception as e:
                 self._notify_status(False, str(e))
             if self._running:
@@ -290,18 +290,31 @@ def make_ws_url(http_url: str, ws_port: int = 6001) -> str:
     """
     Convert an HTTP proctor URL into a WebSocket voice bridge URL.
 
+    For Cloudflare tunnels (trycloudflare.com) the voice relay is served
+    on the SAME port as the main Flask app (port 6000 / 443) at /ws/voice.
+    Cloudflare does not allow custom ports — appending :6001 breaks the connection.
+
+    For plain LAN/localhost URLs the original port is preserved (port 6000)
+    since the relay is also on port 6000 now.
+
     Examples:
-      "http://192.168.1.5:6000"  →  "ws://192.168.1.5:6001/ws/voice"
-      "https://abc.ngrok.io"     →  "wss://abc.ngrok.io/ws/voice"
-      "http://127.0.0.1:6000"   →  "ws://127.0.0.1:6001/ws/voice"
+      "https://abc.trycloudflare.com"  →  "wss://abc.trycloudflare.com/ws/voice"
+      "http://192.168.1.5:6000"        →  "ws://192.168.1.5:6000/ws/voice"
+      "http://127.0.0.1:6000"          →  "ws://127.0.0.1:6000/ws/voice"
     """
-    url = http_url.rstrip("/")
-    # Strip existing port
     import re
-    url = re.sub(r":\d+$", "", url)
-    # Swap scheme
+    url = http_url.rstrip("/")
+    # Cloudflare tunnel — drop any port, use standard wss (443)
+    if "trycloudflare.com" in url or "cloudflare" in url:
+        url = re.sub(r":\d+$", "", url)
+        if url.startswith("https://"):
+            base = "wss://" + url[len("https://"):]
+        else:
+            base = "wss://" + url[len("http://"):]
+        return f"{base}/ws/voice"
+    # LAN / localhost — keep existing port, swap scheme only
     if url.startswith("https://"):
         base = "wss://" + url[len("https://"):]
     else:
         base = "ws://" + url[len("http://"):]
-    return f"{base}:{ws_port}/ws/voice"
+    return f"{base}/ws/voice"
