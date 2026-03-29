@@ -1608,8 +1608,8 @@ class MainLogin(BaseWindow):
                 self.animating=False; self.root.destroy()
                 ExamWindow(uid, proctor_url=proctor_url, session_code=session_code).run()
             else:
-                _iv_hub=InterviewHub(uid); _iv_hub.start()
                 self.animating=False; self.root.destroy()
+                _iv_hub=InterviewHub(uid); _iv_hub.start()
                 InterviewStudentWindow(uid, proctor_url=proctor_url, session_code=session_code).run()
 
         else:
