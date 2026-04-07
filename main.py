@@ -1777,6 +1777,7 @@ class ExamWindow:
         self._focus_grace_until = time.time() + 5.0
         self._tick()
         self._check_termination()
+        self._poll_exam_cam()   # student self-view thumbnail in strike bar
         if proctor_url:
             self._push_frame_loop()
             self._push_stats_loop()
@@ -2064,6 +2065,11 @@ class ExamWindow:
         self.lbl_strikes_disp.pack(side="left",padx=14)
         tk.Label(self.strike_bar,text="🔒 Camera Active  |  Tab-Switch Monitored  |  Apps Blocked",
             font=("Helvetica",7),bg="#0d1117",fg="#1a3a1a").pack(side="right",padx=14)
+        # Small student self-view thumbnail (right side of strike bar)
+        self._exam_self_cam = tk.Label(
+            self.strike_bar, bg="#0d1117", text="📷", fg="#2a4a2a",
+            font=("Helvetica", 7), width=10, relief="flat")
+        self._exam_self_cam.pack(side="right", padx=(0, 6))
 
         self.pbar=tk.Canvas(self.root,height=4,bg="#21262d",highlightthickness=0)
         self.pbar.pack(fill="x")
@@ -2293,6 +2299,25 @@ class ExamWindow:
         try: self.root.destroy()
         except Exception: pass
 
+    def _poll_exam_cam(self):
+        """Update the small student self-view thumbnail in the strike bar (~10 fps)."""
+        try:
+            if not self.root.winfo_exists(): return
+        except Exception: return
+        hub = self._my_hub
+        if hub:
+            frame = hub.get_frame()
+            if frame is not None:
+                try:
+                    small = cv2.resize(frame, (80, 22), interpolation=cv2.INTER_LINEAR)
+                    img = ImageTk.PhotoImage(
+                        Image.fromarray(cv2.cvtColor(small, cv2.COLOR_BGR2RGB)))
+                    self._exam_self_cam.configure(image=img, text="")
+                    self._exam_self_cam.image = img
+                except Exception:
+                    pass
+        self.root.after(100, self._poll_exam_cam)
+
     def _tick(self):
         try:
             if not self.root.winfo_exists(): return
@@ -2316,9 +2341,6 @@ class ExamWindow:
             self.root.destroy()
 
     def run(self): self.root.mainloop()
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  INTERVIEW STUDENT WINDOW  (unchanged)
 # ══════════════════════════════════════════════════════════════════════════════
 class InterviewStudentWindow:
     def __init__(self, student_id, proctor_url=None, session_code=None):
@@ -4748,9 +4770,25 @@ class MultiStudentProctorWindow:
             self._pro_frame_lock   = threading.Lock()
             self._pro_latest_frame = None
         def _run():
-            cap = cv2.VideoCapture(1)    # prefer external cam
-            if not cap.isOpened():
-                cap = cv2.VideoCapture(0)
+            # Try cam index 0 first (built-in/default), then 1 (external).
+            # Attempting index 1 first can stall on machines with no external cam.
+            cap = None
+            for _idx in (0, 1):
+                _c = cv2.VideoCapture(_idx)
+                if _c.isOpened():
+                    cap = _c
+                    break
+                _c.release()
+            if cap is None or not cap.isOpened():
+                print("[ProctorCam] ⚠ No camera found on indices 0 or 1 — cam disabled")
+                self._pro_cam_running = False
+                # Show an error message in the self-view tile
+                try:
+                    self.root.after(0, lambda: self._pro_self_lbl.configure(
+                        text="⚠ No camera found", fg="#ff4444", image=""))
+                except Exception:
+                    pass
+                return
             cap.set(cv2.CAP_PROP_FRAME_WIDTH,  640)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
             cap.set(cv2.CAP_PROP_FPS, 30)
@@ -5607,6 +5645,32 @@ class MultiStudentProctorWindow:
         except Exception: pass
         try: self._update_participants_panel()
         except Exception: pass
+
+    def _reflow_tiles(self):
+        """Re-grid all remaining student tiles after one has been removed."""
+        tiles = list(self._student_tiles.items())
+        # Remove all tiles from the grid without destroying them
+        for widget in self._cam_inner.grid_slaves():
+            try:
+                widget.grid_forget()
+            except Exception:
+                pass
+        # Re-place each remaining tile in order
+        for idx, (sid, tile) in enumerate(tiles):
+            r, c = divmod(idx, self._grid_cols)
+            try:
+                tile["card"].grid(row=r, column=c, padx=4, pady=4, sticky="nsew")
+                if self.mode == "interview":
+                    self._cam_inner.rowconfigure(r, weight=1)
+            except Exception:
+                pass
+        # Update participant count label
+        try:
+            n = len(self._student_tiles)
+            self._student_count_lbl.configure(
+                text=f"{n} participant{'s' if n != 1 else ''}")
+        except Exception:
+            pass
 
     def _open_student_modal(self, sid):
         """Open a full-screen modal showing this student's camera feed + violations + chat."""
