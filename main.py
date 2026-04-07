@@ -663,6 +663,26 @@ class CameraHub:
                 self.violations = self.violations[-400:]
         db_log_violation(self.student_id, event, detail)
         print(msg)
+        # Push to proctor server so remote violation log stays in sync
+        self._push_violation_remote(event, detail)
+
+    def _push_violation_remote(self, event, detail=""):
+        """Push violation event to proctor's Flask server (non-blocking)."""
+        if not _REQUESTS_AVAILABLE:
+            return
+        # Resolve proctor URL: use student session's proctor URL global
+        proctor_url = _PROCTOR_SERVER_URL
+        if not proctor_url:
+            return
+        sid = self.student_id
+        def _do():
+            try:
+                _requests.post(f"{proctor_url}/push_violation",
+                               json={"student_id": sid, "event": event, "detail": detail},
+                               timeout=2)
+            except Exception:
+                pass
+        threading.Thread(target=_do, daemon=True).start()
 
     def _run(self):
         from gaze_tracking import GazeTracking
@@ -996,6 +1016,25 @@ class InterviewHub:
             self.violations.append(msg)
             if len(self.violations)>400: self.violations=self.violations[-400:]
         db_log_violation(self.student_id, event, detail); print(msg)
+        # Push to proctor server so remote violation log stays in sync
+        self._push_violation_remote(event, detail)
+
+    def _push_violation_remote(self, event, detail=""):
+        """Push violation event to proctor's Flask server (non-blocking)."""
+        if not _REQUESTS_AVAILABLE:
+            return
+        proctor_url = _PROCTOR_SERVER_URL
+        if not proctor_url:
+            return
+        sid = self.student_id
+        def _do():
+            try:
+                _requests.post(f"{proctor_url}/push_violation",
+                               json={"student_id": sid, "event": event, "detail": detail},
+                               timeout=2)
+            except Exception:
+                pass
+        threading.Thread(target=_do, daemon=True).start()
 
     def _run(self):
         from gaze_tracking import GazeTracking
@@ -1651,6 +1690,10 @@ class MainLogin(BaseWindow):
 
             global _STUDENT_SESSION_CODE
             _STUDENT_SESSION_CODE = session_code
+
+            # Store the proctor URL globally so CameraHub / InterviewHub can push violations
+            global _PROCTOR_SERVER_URL
+            _PROCTOR_SERVER_URL = proctor_url
 
             # Clear ALL past violations for this student immediately at login —
             # ensures proctor sees only the current session from the very first event.
