@@ -663,6 +663,26 @@ class CameraHub:
                 self.violations = self.violations[-400:]
         db_log_violation(self.student_id, event, detail)
         print(msg)
+        # Push to proctor server so remote violation log stays in sync
+        self._push_violation_remote(event, detail)
+
+    def _push_violation_remote(self, event, detail=""):
+        """Push violation event to proctor's Flask server (non-blocking)."""
+        if not _REQUESTS_AVAILABLE:
+            return
+        # Resolve proctor URL: use student session's proctor URL global
+        proctor_url = _PROCTOR_SERVER_URL
+        if not proctor_url:
+            return
+        sid = self.student_id
+        def _do():
+            try:
+                _requests.post(f"{proctor_url}/push_violation",
+                               json={"student_id": sid, "event": event, "detail": detail},
+                               timeout=2)
+            except Exception:
+                pass
+        threading.Thread(target=_do, daemon=True).start()
 
     def _run(self):
         from gaze_tracking import GazeTracking
@@ -996,6 +1016,25 @@ class InterviewHub:
             self.violations.append(msg)
             if len(self.violations)>400: self.violations=self.violations[-400:]
         db_log_violation(self.student_id, event, detail); print(msg)
+        # Push to proctor server so remote violation log stays in sync
+        self._push_violation_remote(event, detail)
+
+    def _push_violation_remote(self, event, detail=""):
+        """Push violation event to proctor's Flask server (non-blocking)."""
+        if not _REQUESTS_AVAILABLE:
+            return
+        proctor_url = _PROCTOR_SERVER_URL
+        if not proctor_url:
+            return
+        sid = self.student_id
+        def _do():
+            try:
+                _requests.post(f"{proctor_url}/push_violation",
+                               json={"student_id": sid, "event": event, "detail": detail},
+                               timeout=2)
+            except Exception:
+                pass
+        threading.Thread(target=_do, daemon=True).start()
 
     def _run(self):
         from gaze_tracking import GazeTracking
@@ -1652,6 +1691,10 @@ class MainLogin(BaseWindow):
             global _STUDENT_SESSION_CODE
             _STUDENT_SESSION_CODE = session_code
 
+            # Store the proctor URL globally so CameraHub / InterviewHub can push violations
+            global _PROCTOR_SERVER_URL
+            _PROCTOR_SERVER_URL = proctor_url
+
             # Clear ALL past violations for this student immediately at login —
             # ensures proctor sees only the current session from the very first event.
             try:
@@ -1973,12 +2016,10 @@ class ExamWindow:
     def _on_security_event(self, event, detail):
         if event == "APP_WARNING":
             if self._my_hub: self._my_hub._log("APP_WARNING", detail)
-            self._push_violation_remote("APP_WARNING", detail)
             self._flash_warning(f"🔔 {detail}", color="#4a3800", duration=2000)
             return
         if event == "KEYSTROKE":
             if self._my_hub: self._my_hub._log("KEYSTROKE_BLOCKED", detail)
-            self._push_violation_remote("KEYSTROKE_BLOCKED", detail)
             self._flash_warning(f"🚫 {detail}", color="#1a1a4a", duration=1500)
             return
         if self._my_hub:
@@ -2618,12 +2659,10 @@ class InterviewStudentWindow:
     def _on_sec(self, event, detail):
         if event == "APP_WARNING":
             if _iv_hub: _iv_hub._log("APP_WARNING", detail)
-            self._push_violation_remote("APP_WARNING", detail)
             # Silent in interview mode — proctor sees it in violation log
             return
         if event == "KEYSTROKE":
             if _iv_hub: _iv_hub._log("KEYSTROKE_BLOCKED", detail)
-            self._push_violation_remote("KEYSTROKE_BLOCKED", detail)
             # Silent in interview mode — don't interrupt the live interview
             return
         # Strike — log and push to proctor silently (no popup during interview)
@@ -4620,9 +4659,9 @@ class MultiStudentProctorWindow:
         self.root.title(f"IRIS v3 — Proctor Dashboard  [{proctor_id}]  "
                         f"{'📝 EXAM' if mode=='exam' else '🎙 INTERVIEW'}"
                         f"  |  Session: {_PROCTOR_SESSION_CODE}")
-        self.root.geometry("1440x860")
+        self.root.geometry("1280x800")
         self.root.resizable(True, True)
-        self.root.minsize(1000, 650)
+        self.root.minsize(900, 600)
         self.root.configure(bg="#0d1117")
         self.root.protocol("WM_DELETE_WINDOW", self._close)
 
@@ -4937,7 +4976,7 @@ class MultiStudentProctorWindow:
 
         # ── Right: detail panel (violations, Q bank, runtime Q, results) ──
         right = tk.Frame(paned, bg="#0d1117")
-        paned.add(right, minsize=460)
+        paned.add(right, minsize=360)
 
         style = ttk.Style(); style.theme_use("clam")
         style.configure("P.TNotebook", background="#0d1117", borderwidth=0)
@@ -5606,14 +5645,14 @@ class MultiStudentProctorWindow:
 
         # ── Stats row ──
         stats_row = tk.Frame(card, bg=_stats_bg); stats_row.pack(fill="x")
-        faces_lbl   = tk.Label(stats_row, text="Faces:—", font=("Helvetica",7,"bold"),
-                               bg=_stats_bg, fg="#0be881")
+        faces_lbl   = tk.Label(stats_row, text="Faces:—", font=("Helvetica", 10, "bold"),
+                               bg=_stats_bg, fg="#00ff88")
         faces_lbl.pack(side="left", padx=4)
-        gaze_lbl    = tk.Label(stats_row, text="Gaze:—", font=("Helvetica",7,"bold"),
-                               bg=_stats_bg, fg="#0be881")
+        gaze_lbl    = tk.Label(stats_row, text="Gaze:—", font=("Helvetica", 10, "bold"),
+                               bg=_stats_bg, fg="#00ff88")
         gaze_lbl.pack(side="left", padx=4)
-        strikes_lbl = tk.Label(stats_row, text="Strikes:0", font=("Helvetica",7,"bold"),
-                               bg=_stats_bg, fg="#0be881")
+        strikes_lbl = tk.Label(stats_row, text="Strikes:0", font=("Helvetica", 10, "bold"),
+                               bg=_stats_bg, fg="#00ff88")
         strikes_lbl.pack(side="left", padx=4)
 
         # ── Live result summary (appears as soon as _result.csv is written) ──
@@ -5622,12 +5661,13 @@ class MultiStudentProctorWindow:
         result_lbl.pack(fill="x", padx=4)
 
         # ── Mini violations log (last 4 events, colour-coded) ──
-        viol_frame = tk.Frame(card, bg="#0b0b13"); viol_frame.pack(fill="x", padx=2, pady=(1,3))
+        viol_frame = tk.Frame(card, bg="#0b0b13"); viol_frame.pack(fill="x", padx=2, pady=(2,4))
         viol_labels = []
         for _ in range(4):
-            lbl = tk.Label(viol_frame, text="", font=("Courier",6),
-                           bg="#0b0b13", fg="#3a3a5a", anchor="w", justify="left")
-            lbl.pack(fill="x", padx=3)
+            lbl = tk.Label(viol_frame, text="", font=("Courier", 11, "bold"),
+                           bg="#0b0b13", fg="#ff3333", anchor="w", justify="left",
+                           wraplength=320)
+            lbl.pack(fill="x", padx=4, pady=1)
             viol_labels.append(lbl)
 
         self._student_tiles[sid] = {
@@ -5705,21 +5745,16 @@ class MultiStudentProctorWindow:
         tk.Label(vf, text="⚠ Violations", font=("Helvetica",9,"bold"),
                  bg="#0d1117", fg="#ff6b9d").pack(anchor="w", padx=6, pady=(4,2))
         scr = tk.Scrollbar(vf); scr.pack(side="right", fill="y")
-        vlog = tk.Text(vf, font=("Courier",10), bg="#060610", fg="#c9d1d9",
+        vlog = tk.Text(vf, font=("Courier",8), bg="#060610", fg="#c9d1d9",
                        bd=0, relief="flat", wrap="word",
-                       yscrollcommand=scr.set, state="disabled",
-                       spacing1=2, spacing3=2)
+                       yscrollcommand=scr.set, state="disabled")
         vlog.pack(fill="both", expand=True, padx=(6,0))
         scr.configure(command=vlog.yview)
-        vlog.tag_configure("strike",    foreground="#ff4444", background="#2a0808",
-                           font=("Courier",10,"bold"))
-        vlog.tag_configure("warn",      foreground="#ffd700", background="#1e1600")
-        vlog.tag_configure("blocked",   foreground="#ff8c00", background="#1a0e00")
-        vlog.tag_configure("keystroke", foreground="#a0b4ff", background="#0a0e28",
-                           font=("Courier",10,"bold"))
-        vlog.tag_configure("appwarn",   foreground="#ffd93d", background="#161000")
-        vlog.tag_configure("ok",        foreground="#0be881", background="#001a0e")
-        vlog.tag_configure("info",      foreground="#8b949e")
+        vlog.tag_configure("strike",   foreground="#ff4444", font=("Courier",8,"bold"))
+        vlog.tag_configure("warn",     foreground="#ffaa00")
+        vlog.tag_configure("blocked",  foreground="#ff8c00")
+        vlog.tag_configure("ok",       foreground="#0be881")
+        vlog.tag_configure("info",     foreground="#8b949e")
 
         # ── Chat panel (proctor side) ─────────────────────────────────────
         cf = tk.Frame(main, bg="#161b22"); cf.grid(row=0, column=2, sticky="nsew")
@@ -5824,14 +5859,10 @@ class MultiStudentProctorWindow:
                     vlog.configure(state="normal")
                     for row_id, ts, ev, det in rows:
                         vu = ev.upper()
-                        if   "STRIKE"      in vu or "TERMINATED" in vu: tag = "strike"
-                        elif "WARNING"     in vu: tag = "warn"
-                        elif "BLOCKED_APP" in vu: tag = "blocked"
-                        elif "TAB"         in vu: tag = "blocked"
-                        elif "KEYSTROKE"   in vu: tag = "keystroke"
-                        elif "APP_WARNING" in vu: tag = "appwarn"
-                        elif "START"       in vu: tag = "ok"
-                        else:                     tag = "info"
+                        tag = ("strike" if "STRIKE" in vu or "TERMINATED" in vu
+                               else "warn" if "WARNING" in vu
+                               else "blocked" if "BLOCKED" in vu or "TAB" in vu
+                               else "ok" if "START" in vu else "info")
                         vlog.insert("end", f"[{ts}] {ev}: {det}\n", tag)
                         _modal_last_vio_id[0] = row_id
                     vlog.configure(state="disabled")
@@ -5953,21 +5984,19 @@ class MultiStudentProctorWindow:
         self._sel_lbl.pack(anchor="w", padx=10)
 
         scr = tk.Scrollbar(p); scr.pack(side="right", fill="y")
-        self.vlog = tk.Text(p, font=("Courier",10), bg="#060610", fg="#c9d1d9",
+        self.vlog = tk.Text(p, font=("Courier", 13), bg="#060610", fg="#e0e0e0",
                             bd=0, relief="flat", wrap="word",
-                            yscrollcommand=scr.set, state="disabled",
-                            spacing1=2, spacing3=2)
+                            yscrollcommand=scr.set, state="disabled")
         self.vlog.pack(fill="both", expand=True, padx=8, pady=(0,4))
         scr.configure(command=self.vlog.yview)
-        self.vlog.tag_configure("strike",    foreground="#ff4444", background="#2a0808",
-                                font=("Courier",10,"bold"))
-        self.vlog.tag_configure("warn",      foreground="#ffd700", background="#1e1600")
-        self.vlog.tag_configure("blocked",   foreground="#ff8c00", background="#1a0e00")
-        self.vlog.tag_configure("keystroke", foreground="#a0b4ff", background="#0a0e28",
-                                font=("Courier",10,"bold"))
-        self.vlog.tag_configure("appwarn",   foreground="#ffd93d", background="#161000")
-        self.vlog.tag_configure("ok",        foreground="#0be881", background="#001a0e")
-        self.vlog.tag_configure("info",      foreground="#8b949e")
+        # RGB-highlighted violation tags — large, bold, clearly distinct
+        self.vlog.tag_configure("strike",    foreground="#ff2222", font=("Courier", 13, "bold"))   # bright red
+        self.vlog.tag_configure("warn",      foreground="#ffcc00", font=("Courier", 13, "bold"))   # yellow
+        self.vlog.tag_configure("blocked",   foreground="#ff6600", font=("Courier", 13, "bold"))   # orange
+        self.vlog.tag_configure("keystroke", foreground="#5599ff", font=("Courier", 13, "bold"))   # blue
+        self.vlog.tag_configure("appwarn",   foreground="#ffdd55", font=("Courier", 13, "bold"))   # amber
+        self.vlog.tag_configure("ok",        foreground="#00ff88", font=("Courier", 13))           # green
+        self.vlog.tag_configure("info",      foreground="#aaaaaa", font=("Courier", 13))
         tk.Button(p, text="Clear Log", font=("Helvetica",8),
                   bg="#21262d", fg="#8b949e", bd=0, relief="flat", cursor="hand2",
                   command=lambda: (self.vlog.configure(state="normal"),
@@ -6374,18 +6403,22 @@ class MultiStudentProctorWindow:
                 conn.close()
                 rows = list(reversed(rows))   # chronological order
                 _VIOL_COLORS = {
-                    "STRIKE": "#ff4444", "WARNING": "#ffaa00",
-                    "TAB_SWITCH": "#ff8800", "SESSION_START": "#0be881",
+                    "STRIKE": "#ff2222", "WARNING": "#ffcc00",
+                    "TAB_SWITCH": "#ff6600", "SESSION_START": "#00ff88",
+                    "BLOCKED_APP": "#ff6600", "APP_WARNING": "#ffdd55",
+                    "KEYSTROKE": "#5599ff", "PHONE": "#ff2222",
+                    "NO_FACE": "#ff2222", "MULTI_FACE": "#ffcc00",
+                    "GAZE_AWAY": "#ffaa00",
                 }
                 viol_labels = tile.get("viol_labels", [])
                 for i, lbl in enumerate(viol_labels):
                     if i < len(rows):
                         ts, ev, det = rows[i]
-                        color = _VIOL_COLORS.get(ev, "#8b949e")
-                        text = f"[{ts}] {ev}: {det}"[:52]
+                        color = _VIOL_COLORS.get(ev, "#cccccc")
+                        text = f"[{ts}] {ev}: {det}"
                         lbl.configure(text=text, fg=color)
                     else:
-                        lbl.configure(text="", fg="#3a3a5a")
+                        lbl.configure(text="", fg="#444466")
             except Exception: pass
 
             # ── Live result summary from _result.csv (local or remote) ──
